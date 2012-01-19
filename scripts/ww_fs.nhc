@@ -1,0 +1,47 @@
+# NHC - Warewulf Filesystem Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 15 December 2010
+#
+# $Id$
+#
+
+# Check to make sure a filesystem ($1) is mounted.  Includes optional
+# checks for source ($2), filesystem type ($3), and a regular
+# expression for mount options ($4).
+function check_fs_mount() {
+    local FS=$1
+    local SRC=$2
+    local FSTYPE=$3
+    local OPTIONS=$4
+
+    while read DEV MOUNT TYPE OPTS JUNK ; do
+        if [ "$MOUNT" = "$FS" ]; then
+            if [ "$SRC" != "" ]; then
+                if ! mcheck "$DEV" "$SRC" ; then
+                    die 1 "$FUNCNAME:  $FS mounted from $DEV (should be $SRC)"
+                fi
+            fi
+            if [ "$FSTYPE" != "" ]; then
+                if ! mcheck "$TYPE" "$FSTYPE" ; then
+                    die 1 "$FUNCNAME:  $FS has incorrect type $TYPE (should be $FSTYPE)"
+                fi
+            fi
+            if [ "$OPTIONS" != "" ]; then
+                if ! mcheck "$OPTS" "$OPTIONS" ; then
+                    die 1 "$FUNCNAME:  $FS mount options incorrect"
+                fi
+            fi
+            return 0
+        fi
+    done < /proc/mounts
+    die 1 "$FUNCNAME:  $FS not mounted"
+}
+
+# Some shortcuts that use check_fs_mount()
+function check_fs_mount_rw() {
+    check_fs_mount "$1" "$2" "$3" '/(^|,)rw($|,)/'
+}
+function check_fs_mount_ro() {
+    check_fs_mount "$1" "$2" "$3" '/(^|,)ro($|,)/'
+}

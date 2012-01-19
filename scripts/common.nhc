@@ -1,0 +1,157 @@
+# NHC - Common functions
+#
+# Michael Jennings <mej@lbl.gov>
+# 15 December 2010
+#
+# $Id$
+#
+
+PWUID_UIDS=( )
+PWUID_USER=( )
+PWUID_GID=( )
+PWUID_GECOS=( )
+PWUID_HOME=( )
+PWUID_SHELL=( )
+
+PWDATA_USERS=( )
+PWDATA_SYSTEM_USERS=( )
+PWDATA_USERID_MAP='||'
+
+# Define regexp match check conditionally based on bash version.
+if [ "${BASH_VERSINFO[0]}" != "" -a ${BASH_VERSINFO[0]} -ge 3 ]; then
+    # Check to see if parameter ($1) matches regexp ($2)
+    function mcheck_regexp() {
+        if [[ "$1" =~ "$2" ]]; then
+            dbg "Regexp match check (internal):  $1 matches /$2/"
+            return 0
+        else
+            dbg "Regexp match check (internal):  $1 does not match /$2/"
+            return -1
+        fi
+    }
+else
+    # Check to see if parameter ($1) matches regexp ($2) using egrep
+    function mcheck_regexp() {
+        if (echo "$1" | grep -E "$2" >/dev/null 2>&1); then
+            dbg "Regexp match check (internal):  $1 matches /$2/"
+            return 0
+        else
+            dbg "Regexp match check (internal):  $1 does not match /$2/"
+            return -1
+        fi
+    }
+fi
+
+# Check to see if parameter ($1) matches glob ($2)
+function mcheck_glob() {
+    case "$1" in
+        $2) dbg "Glob match check:  $1 matches $2" ; return 0 ;;
+        *)  dbg "Glob match check:  $1 does not match $2" ; return -1 ;;
+    esac
+}
+
+# Detect either regexp match (/.../) or glob match (no slashes) and
+# call the appropriate mcheck_*() function above.
+function mcheck() {
+    local STRING="$1"
+    local MATCH="$2"
+
+    # Check to see if the current host matches the check we just read.
+    if [ "${MATCH#/}" != "$MATCH" -a "${MATCH%/}" != "$MATCH" ]; then
+        # Regexp match syntax.  Strip slashes, then match.
+        MATCH="${MATCH#/}"
+        MATCH="${MATCH%/}"
+        if mcheck_regexp "$STRING" "$MATCH" ; then
+            return 0
+        fi
+    else
+        # Glob match syntax
+        if mcheck_glob "$STRING" "$MATCH" ; then
+            return 0
+        fi
+    fi
+    return -1
+}
+
+# Load configuration file from ($1)
+function nhc_load_conf() {
+    local CONFFILE="$1"
+    local LINE TARGET CHECK
+
+    # Load configuration file and match lines to current hostname.
+    dbg "Loading configuration from $CONFFILE."
+    while read LINE ; do
+        TARGET="${LINE/%||*}"
+        CHECK="${LINE/#*||}"
+
+        # Trim whitespace.
+        while [ "${TARGET## }" != "${TARGET%% }" ]; do
+            TARGET="${TARGET## }"
+            TARGET="${TARGET%% }"
+        done
+        while [ "${CHECK## }" != "${CHECK%% }" ]; do
+            CHECK="${CHECK## }"
+            CHECK="${CHECK%% }"
+        done
+
+        # Skip comments.
+        if [ "${TARGET###}" != "$TARGET" ]; then
+            continue
+        fi
+
+        # Skip empty targets or checks.
+        test "$TARGET" = "" -o "$CHECK" = "" && continue
+
+        # Check to see if the current host matches the check we just read.
+        # If we didn't match, skip to the next line.
+        mcheck "$HOSTNAME" "$TARGET" || continue
+
+        # Add the check to our list.
+        CHECKS[${#CHECKS[*]}]="$CHECK"
+    done < "$CONFFILE"
+}
+
+# Load /etc/passwd data into arrays.
+function nhc_common_load_passwd() {
+    local IFS=':'
+    local THIS_UID
+
+    while read -a LINE ; do
+        THIS_UID=${LINE[2]}
+        PWNAM_UIDS[${#PWNAM_UIDS[*]}]=$THIS_UID
+        PWUID_USER[$THIS_UID]="${LINE[0]}"
+        PWUID_GID[$THIS_UID]=${LINE[3]}
+        PWUID_GECOS[$THIS_UID]="${LINE[4]}"
+        PWUID_HOME[$THIS_UID]="${LINE[5]}"
+        PWUID_SHELL[$THIS_UID]="${LINE[6]}"
+
+        PWDATA_USERS[${#PWDATA_USERS[*]}]="${LINE[0]}"
+        if [ $THIS_UID -lt 100 ]; then
+            PWDATA_SYSTEM_USERS[${#PWDATA_SYSTEM_USERS[*]}]="${LINE[0]}"
+        fi
+        PWDATA_USERID_MAP="$PWDATA_USERID_MAP||${LINE[0]}:$THIS_UID"
+    done < /etc/passwd
+}
+
+# Return UID for specified user ($1) into variable ($2).
+function nhc_common_get_uid() {
+    local THIS_USERID="$1"
+    local THIS_VAR="$2"
+    local THIS_UID_MAP
+
+    if mcheck_regexp "$THIS_USERID" '^[0-9]+$' ; then
+        # It's already a UID.  Just return it.
+        eval $THIS_VAR=$THIS_USERID
+        dbg "Got UID ${!THIS_VAR} for user $THIS_USERID"
+        return
+    fi
+
+    if [ "$PWDATA_USERID_MAP" = "||" ]; then
+        nhc_common_load_passwd
+    fi
+
+    THIS_UID_MAP="${PWDATA_USERID_MAP/#*||$THIS_USERID:}"
+    THIS_UID_MAP="${THIS_UID_MAP/%||*}"
+    dbg "Got UID $THIS_UID_MAP for user $THIS_USERID"
+    eval $THIS_VAR=$THIS_UID_MAP
+}

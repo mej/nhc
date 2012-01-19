@@ -1,0 +1,302 @@
+# NHC - Warewulf Hardware Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 15 December 2010
+#
+# $Id$
+#
+
+HW_SOCKETS=0
+HW_CORES=0
+HW_THREADS=0
+HW_RAM_TOTAL=0
+HW_RAM_FREE=0
+HW_SWAP_TOTAL=0
+HW_SWAP_FREE=0
+HW_IB_STATE=( )
+HW_IB_PHYS_STATE=()
+HW_IB_RATE=( )
+HW_MODULES=( )
+HW_ETH_DEV=( )
+
+# Read hardware information from /proc and /sys files.
+function nhc_hw_gather_data() {
+    local LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
+    local -a FIELD PHYS_IDS
+
+    # Gather CPU info
+    PROCESSOR=-1
+    while read -a FIELD ; do
+        if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
+            : $((PROCESSOR++))
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
+            PHYS_ID=${FIELD[3]}
+            if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
+                PHYS_IDS[$PHYS_ID]=1
+                : $((HW_SOCKETS++))
+            fi
+        elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
+            SIBLINGS=${FIELD[2]}
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
+            CORES=${FIELD[3]}
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
+            MHZ="${FIELD[3]}"
+            MHZ="${MHZ/%.*}"
+        fi
+    done < /proc/cpuinfo
+    if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
+        HW_SOCKETS=$((PROCESSOR+1))
+        HW_CORES=$HW_SOCKETS
+        HW_THREADS=$HW_SOCKETS
+    elif [[ -n "$HW_SOCKETS" && -n "$CORES" ]]; then
+        HW_CORES=$((HW_SOCKETS*CORES))
+        if [[ -n "$SIBLINGS" ]]; then
+            HW_THREADS=$((HW_SOCKETS*SIBLINGS))
+        fi
+    fi
+    dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
+
+    # Gather memory info
+    while read -a FIELD ; do
+        if [[ "${FIELD[0]}" = "MemTotal:" ]]; then
+            HW_RAM_TOTAL=${FIELD[1]}
+        elif [[ "${FIELD[0]}" = "MemFree:" ]]; then
+            : $((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "Buffers:" ]]; then
+            : $((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "Cached:" ]]; then
+            : $((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "SwapTotal:" ]]; then
+            HW_SWAP_TOTAL=${FIELD[1]}
+        elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
+            HW_SWAP_FREE=${FIELD[1]}
+        fi
+    done < /proc/meminfo
+    dbg "Found $HW_RAM_TOTAL kB RAM ($HW_RAM_FREE kB free)"
+    dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
+
+    # Gather IB info
+    for PORT in /sys/class/infiniband/*/ports/* ; do
+        test -e "$PORT" || break
+        INDEX=${#HW_IB_STATE[*]}
+        IFS=' :'
+        read LINE < $PORT/state
+        FIELD=( $LINE )
+        HW_IB_STATE[$INDEX]=${FIELD[1]}
+        read LINE < $PORT/phys_state
+        FIELD=( $LINE )
+        HW_IB_PHYS_STATE[$INDEX]=${FIELD[1]}
+        read LINE < $PORT/rate
+        FIELD=( $LINE )
+        HW_IB_RATE[$INDEX]=${FIELD[0]}
+        IFS=$' \t\n'
+        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port (${HW_IB_RATE[$INDEX]} Gb/sec)"
+    done
+    export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
+
+    # Gather kernel modules
+    while read -a FIELD ; do
+        HW_MODULES[${#HW_MODULES[*]}]=${FIELD[0]}
+        dbg "Found kernel module ${FIELD[0]}"
+    done < /proc/modules
+    export HW_MODULES
+
+    # Gather Ethernet info
+    while read -a FIELD ; do
+        if [[ ${FIELD[0]} == *:* ]]; then
+            DEV=${FIELD[0]%%:*}
+            HW_ETH_DEV[${#HW_ETH_DEV[*]}]=$DEV
+            dbg "Found Ethernet device $DEV"
+        fi
+    done < /proc/net/dev
+    export HW_ETH_DEV
+}
+
+# Check that the socket ($1), core ($2), and thread ($3) counts all match.
+function check_hw_cpuinfo() {
+    local SOCKETS=$1
+    local CORES=$2
+    local THREADS=$3
+
+    if [[ $HW_SOCKETS -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ -n "$SOCKETS" && $SOCKETS -ne $HW_SOCKETS ]]; then
+        die 1 "Actual CPU socket count ($HW_SOCKETS) does not match expected ($SOCKETS)."
+    fi
+    if [[ -n "$CORES" && $CORES -ne $HW_CORES ]]; then
+        die 1 "Actual CPU core count ($HW_CORES) does not match expected ($CORES)."
+    fi
+    if [[ -n "$THREADS" && $THREADS -ne $HW_THREADS ]]; then
+        die 1 "Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
+    fi
+    return 0
+}
+
+# Check RAM size against minimum ($1) and maximum ($2) allowable size in kB.  To
+# require an exact amount of RAM, pass the same value for both parameters.
+function check_hw_physmem() {
+    local RAM_MIN=$1
+    local RAM_MAX=$2
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ $HW_RAM_TOTAL -lt $RAM_MIN ]]; then
+        die 1 "Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
+    fi
+    if [[ $HW_RAM_TOTAL -gt $RAM_MAX ]]; then
+        die 1 "Actual RAM size ($HW_RAM_TOTAL kB) greater than maximum allowed ($RAM_MAX kB)."
+    fi
+    return 0
+}
+
+# Check swap size against minimum ($1) and maximum ($2) allowable size in kB.  To
+# require an exact amount of swap, pass the same value for both parameters.
+function check_hw_swap() {
+    local SWAP_MIN=$1
+    local SWAP_MAX=$2
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ $HW_SWAP_TOTAL -lt $SWAP_MIN ]]; then
+        die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
+    fi
+    if [[ $HW_SWAP_TOTAL -gt $SWAP_MAX ]]; then
+        die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) greater than maximum allowed ($SWAP_MAX kB)."
+    fi
+}
+
+# Check total memory (RAM + swap) against minimum ($1) and maximum ($2) allowable size
+# in kB.  To require an exact amount of memory, pass the same value for both parameters.
+function check_hw_mem() {
+    local MEM_MIN=$1
+    local MEM_MAX=$2
+    local MEM_TOTAL
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
+    if [[ $MEM_TOTAL -lt $MEM_MIN ]]; then
+        die 1 "Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
+    fi
+    if [[ $MEM_TOTAL -gt $MEM_MAX ]]; then
+        die 1 "Actual system memory ($MEM_TOTAL kB) greater than maximum allowed ($MEM_MAX kB)."
+    fi
+}
+
+# Check amount of free RAM against minimum ($1).
+function check_hw_physmem_free() {
+    local RAM_MINFREE=$1
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ $HW_RAM_FREE -lt $RAM_MINFREE ]]; then
+        die 1 "Not enough RAM free ($HW_RAM_FREE kB < $RAM_MINFREE kB)."
+    fi
+    return 0
+}
+
+# Check amount of free swap against minimum ($1).
+function check_hw_swap_free() {
+    local SWAP_MINFREE=$1
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ $HW_SWAP_FREE -lt $SWAP_MINFREE ]]; then
+        die 1 "Not enough swap free ($HW_SWAP_FREE kB < $SWAP_MINFREE kB)."
+    fi
+    return 0
+}
+
+# Check amount of free system memory (RAM + swap) against minimum ($1).
+function check_hw_mem_free() {
+    local MEM_MINFREE=$1
+    local MEM_FREE
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    MEM_FREE=$((HW_RAM_FREE + HW_SWAP_FREE))
+    if [[ $MEM_FREE -lt $MEM_MINFREE ]]; then
+        die 1 "Not enough free memory ($MEM_FREE kB < $MEM_MINFREE kB)."
+    fi
+    return 0
+}
+
+# Check if IB state, phys_state, and rate ($1) all match.
+function check_hw_ib() {
+    local STATE="ACTIVE"
+    local PHYS_STATE="LinkUp"
+    local RATE=$1
+    local i
+
+    if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
+        if [[ ${HW_IB_STATE[$i]} == $STATE && ${HW_IB_PHYS_STATE[$i]} == $PHYS_STATE && ${HW_IB_RATE[$i]} == $RATE ]]; then
+            return
+        fi
+    done
+
+    die 1 "No IB port is $STATE ($PHYS_STATE, $RATE Gb/sec)."
+}
+
+# Check if Myrinet GM device driver and device ($1) are both available.
+function check_hw_gm() {
+    local DEV=$1
+    local GM="gm"
+    local MATCH=0
+    local i j
+
+    if [[ ${#HW_MODULES[*]} -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ ${#HW_ETH_DEV[*]} -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    for ((i=0; i < ${#HW_ETH_DEV[*]}; i++)); do
+        if [[ ${HW_ETH_DEV[$i]} == $DEV ]]; then
+            for ((j=0; j < ${#HW_MODULES[*]}; j++)); do
+                if [[ ${HW_MODULES[$j]} == $GM ]]; then
+                    return
+                fi
+            done
+        fi
+    done
+
+    die 1 "GM device $DEV not active, either driver is not loaded, or interface not created."
+}
+
+# Check if arbitrary Ethernet device ($1) is available.
+function check_hw_eth() {
+    local DEV=$1
+    local i
+
+    if [[ ${#HW_ETH_DEV[*]} -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    for ((i=0; i < ${#HW_ETH_DEV[*]}; i++)); do
+        if [[ ${HW_ETH_DEV[$i]} == $DEV ]]; then
+            return
+        fi
+    done
+
+    die 1 "Ethernet device $DEV not detected."
+}

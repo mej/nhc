@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# Warewulf Node Health Check -- Node Offlining Helper
+#
+# Michael Jennings <mej@lbl.gov>
+# 16 September 2011
+#
+# $Id$
+#
+
+# This script is a simple pbsnodes wrapper that the node health check
+# can run in the background to mark nodes offline.  It will first
+# obtain the current node state information to avoid overwriting notes
+# which were not placed by NHC.  If these checks pass, the node is
+# marked offline with the note supplied.
+
+PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+PBSNODES="/usr/bin/pbsnodes"
+LEADER="NHC:"
+
+echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
+
+HOSTNAME="$1"
+shift
+NOTE="$*"
+
+LINE=( $($PBSNODES -n -l all $HOSTNAME) )
+STATUS="${LINE[1]}"
+OLD_NOTE_LEADER="${LINE[2]}"
+OLD_NOTE="${LINE[*]:3}"
+case $STATUS in
+    *down*|*offline*|*unknown*)
+        # If there's an old note that wasn't set by NHC, preserve it.
+        if [ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]; then
+            LEADER="$OLD_NOTE_LEADER"
+            NOTE="$OLD_NOTE"
+        fi
+        ;;
+esac
+
+echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
+exec $PBSNODES -o -N "$LEADER $NOTE" $HOSTNAME

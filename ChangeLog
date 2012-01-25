@@ -170,3 +170,7 @@ Output onlining/offlining of nodes to log (with timestamp).
 
 Log failure of health check to logfile as well as syslog.
 ----------------------------------------------------------------------
+Wed Jan 25 15:40:58 2012                        Michael Jennings (mej)
+
+Convert to autoconf/automake for build.
+----------------------------------------------------------------------

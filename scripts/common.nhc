@@ -21,12 +21,12 @@ PWDATA_USERID_MAP='||'
 if [ "${BASH_VERSINFO[0]}" != "" -a ${BASH_VERSINFO[0]} -ge 3 ]; then
     # Check to see if parameter ($1) matches regexp ($2)
     function mcheck_regexp() {
-        if [[ "$1" =~ "$2" ]]; then
+        if [[ "$1" =~ $2 ]]; then
             dbg "Regexp match check (internal):  $1 matches /$2/"
             return 0
         else
             dbg "Regexp match check (internal):  $1 does not match /$2/"
-            return -1
+            return 1
         fi
     }
 else
@@ -37,7 +37,7 @@ else
             return 0
         else
             dbg "Regexp match check (internal):  $1 does not match /$2/"
-            return -1
+            return 1
         fi
     }
 fi
@@ -46,7 +46,7 @@ fi
 function mcheck_glob() {
     case "$1" in
         $2) dbg "Glob match check:  $1 matches $2" ; return 0 ;;
-        *)  dbg "Glob match check:  $1 does not match $2" ; return -1 ;;
+        *)  dbg "Glob match check:  $1 does not match $2" ; return 1 ;;
     esac
 }
 
@@ -70,7 +70,7 @@ function mcheck() {
             return 0
         fi
     fi
-    return -1
+    return 1
 }
 
 # Load configuration file from ($1)

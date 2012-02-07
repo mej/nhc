@@ -16,6 +16,9 @@ function nhc_job_find_users() {
 
     JOBUSERS=( root nobody )
     for JOBFILE in /var/spool/torque/mom_priv/jobs/*.JB ; do
+        if [ ! -f $JOBFILE ]; then
+            continue
+        fi
         while read LINE ; do
             JOBUSER=${LINE##PBS_O_LOGNAME=}
             if [ ${#JOBUSER} -eq ${#LINE} ]; then
@@ -32,7 +35,7 @@ function nhc_job_find_users() {
 
 # Check to see if a user ($1) is authorized to have processes on this node.
 # Returns true (0) if user is authorized, false (non-zero) otherwise.
-function check_job_user_auth() {
+function nhc_job_user_auth() {
     local JOBUSER="$1"
     local JOBUSER_UID="$2"
 

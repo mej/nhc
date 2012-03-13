@@ -1,4 +1,4 @@
-%{!?_rel:%{expand:%%global _rel 0.r%(svnversion | sed 's/[^0-9].*$//' | grep '^[0-9][0-9]*$' || echo 0000)}}
+%{!?_rel:%{expand:%%global _rel 0.r%(test "@SVNVERSION@" != "0000" && echo "@SVNVERSION@" || svnversion | sed 's/[^0-9].*$//' | grep '^[0-9][0-9]*$' || echo 0000)}}
 
 %{!?sname:%global sname nhc}
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}
@@ -7,19 +7,17 @@
 Summary: Warewulf Node Health Check System
 Name: @PACKAGE@
 Version: @VERSION@
-#Release: %{_rel}
-Release: 1
-License: BSD
+Release: %{_rel}
+License: US Dept. of Energy (BSD-like)
 Group: Applications/System
 URL: http://warewulf.lbl.gov/
 Source: %{name}-%{version}.tar.gz
-Packager: %{?_packager:%{_packager}}%{!?_packager:Michael Jennings <mej@lbl.gov>}
-Vendor: %{?_vendorinfo:%{_vendorinfo}}%{!?_vendorinfo:Warewulf Project (http://warewulf.lbl.gov/)}
+Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@lbl.gov>}
+Vendor: %{?_vendorinfo}%{!?_vendorinfo:Warewulf Project (http://warewulf.lbl.gov/)}
 Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
-#BuildSuggests: docbook-style-dsssl
 Requires: bash
 BuildArch: noarch
-BuildRoot: %{?_tmppath}%{!?_tmppath:/tmp}/%{name}-%{version}-root
+BuildRoot: %{?_tmppath}%{!?_tmppath:/var/tmp}/%{name}-%{version}-%{release}-root
 
 %description
 This package contains the Warewulf Node Health Check system.

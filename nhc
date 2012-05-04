@@ -102,15 +102,6 @@ export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE D
 
 ### Script guts begin here.
 
-# If not root, change config paths for debugging.
-if [ $EUID -gt 100 ]; then
-    CONFDIR="$PWD"
-    CONFFILE="$CONFDIR/$NAME.conf"
-    INCDIR="$CONFDIR/scripts"
-    LOGFILE=""
-    DEBUG=1
-fi
-
 # Load settings from system-wide location.
 if [ -f $SYSCONFIGDIR/$NAME ]; then
     . $SYSCONFIGDIR/$NAME
@@ -144,7 +135,7 @@ for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
 
     # Run the check.
     log "Running check:  \"$CHECK\""
-    $CHECK
+    eval $CHECK
     RET=$?
 
     # Check for failure.

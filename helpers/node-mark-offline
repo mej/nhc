@@ -14,8 +14,8 @@
 # which were not placed by NHC.  If these checks pass, the node is
 # marked offline with the note supplied.
 
-PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-PBSNODES="/usr/bin/pbsnodes"
+PBSNODES="${PBSNODES:-pbsnodes}"
+PBSNODES_ARGS="${PBSNODES_ARGS:--o -N}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -39,4 +39,4 @@ case $STATUS in
 esac
 
 echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
-exec $PBSNODES -o -N "$LEADER $NOTE" $HOSTNAME
+exec $PBSNODES $PBSNODES_ARGS "$LEADER $NOTE" $HOSTNAME

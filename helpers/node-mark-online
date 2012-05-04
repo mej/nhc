@@ -13,8 +13,8 @@
 # previously offlined.  It will first obtain the current node state
 # information to avoid onlining nodes it didn't originally offline.
 
-PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-PBSNODES="/usr/bin/pbsnodes"
+PBSNODES="${PBSNODES:-pbsnodes}"
+PBSNODES_ARGS="${PBSNODES_ARGS:--c -N}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -34,7 +34,7 @@ case $STATUS in
             exit 0
         fi
         echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
-        exec $PBSNODES -c -N '' $HOSTNAME
+        exec $PBSNODES $PBSNODES_ARGS '' $HOSTNAME
         ;;
 esac
 echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"

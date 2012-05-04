@@ -182,3 +182,15 @@ Tue Mar 13 11:22:45 2012                        Michael Jennings (mej)
 
 Bump version.  More consistency/cleanups.
 ----------------------------------------------------------------------
+Fri May  4 11:31:47 2012                        Michael Jennings (mej)
+
+Remove debugging stuff for UIDs > 100.  I don't really use it anyway,
+and some people may want to run as other users.
+
+Convert node online/offline scripts to use variables and $PATH to
+identify where the "pbsnodes" command is and what arguments it should
+take.
+
+Add an "eval" to the execution of the check so that shell variables
+can be used or altered in config files.
+----------------------------------------------------------------------

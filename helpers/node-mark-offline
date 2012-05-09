@@ -15,7 +15,8 @@
 # marked offline with the note supplied.
 
 PBSNODES="${PBSNODES:-pbsnodes}"
-PBSNODES_ARGS="${PBSNODES_ARGS:--o -N}"
+PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
+PBSNODES_OFFLINE_ARGS="${PBSNODES_OFFLINE_ARGS:--o -N}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -24,14 +25,14 @@ HOSTNAME="$1"
 shift
 NOTE="$*"
 
-LINE=( $($PBSNODES -n -l all $HOSTNAME) )
+LINE=( $($PBSNODES $PBSNODES_LIST_ARGS $HOSTNAME) )
 STATUS="${LINE[1]}"
 OLD_NOTE_LEADER="${LINE[2]}"
 OLD_NOTE="${LINE[*]:3}"
 case $STATUS in
     *down*|*offline*|*unknown*)
         # If there's an old note that wasn't set by NHC, preserve it.
-        if [ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]; then
+        if [[ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             LEADER="$OLD_NOTE_LEADER"
             NOTE="$OLD_NOTE"
         fi
@@ -39,4 +40,4 @@ case $STATUS in
 esac
 
 echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
-exec $PBSNODES $PBSNODES_ARGS "$LEADER $NOTE" $HOSTNAME
+exec $PBSNODES $PBSNODES_OFFLINE_ARGS "$LEADER $NOTE" $HOSTNAME

@@ -7,6 +7,8 @@
 #
 
 JOBUSERS=( )
+PBS_SERVER_HOME="${PBS_SERVER_HOME:-/var/spool/torque}"
+JOBFILE_PATH="${JOBFILE_PATH:-$PBS_SERVER_HOME/mom_priv/jobs}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
@@ -15,16 +17,16 @@ function nhc_job_find_users() {
     local LINE
 
     JOBUSERS=( root nobody )
-    for JOBFILE in /var/spool/torque/mom_priv/jobs/*.JB ; do
-        if [ ! -f $JOBFILE ]; then
+    for JOBFILE in $JOBFILE_PATH/*.JB ; do
+        if [[ ! -f $JOBFILE ]]; then
             continue
         fi
         while read LINE ; do
             JOBUSER=${LINE##PBS_O_LOGNAME=}
-            if [ ${#JOBUSER} -eq ${#LINE} ]; then
+            if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
                 continue
             fi
-            if [ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]; then
+            if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
                 JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
             fi
             break
@@ -40,13 +42,13 @@ function nhc_job_user_auth() {
     local JOBUSER_UID="$2"
 
     # Initialize the data array if needed.
-    if [ ${#JOBUSERS[*]} -eq 0 ]; then
+    if [[ ${#JOBUSERS[*]} -eq 0 ]]; then
         nhc_job_find_users
     fi
 
     # Make sure the user specified appears in the array of authorized users.
-    if [ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]; then
-        if [ -z "$JOBUSER_UID" ]; then
+    if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
+        if [[ -z "$JOBUSER_UID" ]]; then
             nhc_common_get_uid "$JOBUSER" JOBUSER_UID
         fi
         if [[ -n "$JOBUSER_UID" && $JOBUSER_UID -gt $MAX_SYS_UID ]]; then

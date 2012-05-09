@@ -18,7 +18,7 @@ PWDATA_SYSTEM_USERS=( )
 PWDATA_USERID_MAP='||'
 
 # Define regexp match check conditionally based on bash version.
-if [ "${BASH_VERSINFO[0]}" != "" -a ${BASH_VERSINFO[0]} -ge 3 ]; then
+if [[ "${BASH_VERSINFO[0]}" != "" -a ${BASH_VERSINFO[0]} -ge 3 ]]; then
     # Check to see if parameter ($1) matches regexp ($2)
     function mcheck_regexp() {
         if [[ "$1" =~ $2 ]]; then
@@ -57,7 +57,7 @@ function mcheck() {
     local MATCH="$2"
 
     # Check to see if the current host matches the check we just read.
-    if [ "${MATCH#/}" != "$MATCH" -a "${MATCH%/}" != "$MATCH" ]; then
+    if [[ "${MATCH#/}" != "$MATCH" -a "${MATCH%/}" != "$MATCH" ]]; then
         # Regexp match syntax.  Strip slashes, then match.
         MATCH="${MATCH#/}"
         MATCH="${MATCH%/}"
@@ -85,17 +85,17 @@ function nhc_load_conf() {
         CHECK="${LINE/#*||}"
 
         # Trim whitespace.
-        while [ "${TARGET## }" != "${TARGET%% }" ]; do
+        while [[ "${TARGET## }" != "${TARGET%% }" ]]; do
             TARGET="${TARGET## }"
             TARGET="${TARGET%% }"
         done
-        while [ "${CHECK## }" != "${CHECK%% }" ]; do
+        while [[ "${CHECK## }" != "${CHECK%% }" ]]; do
             CHECK="${CHECK## }"
             CHECK="${CHECK%% }"
         done
 
         # Skip comments.
-        if [ "${TARGET###}" != "$TARGET" ]; then
+        if [[ "${TARGET###}" != "$TARGET" ]]; then
             continue
         fi
 
@@ -126,7 +126,7 @@ function nhc_common_load_passwd() {
         PWUID_SHELL[$THIS_UID]="${LINE[6]}"
 
         PWDATA_USERS[${#PWDATA_USERS[*]}]="${LINE[0]}"
-        if [ $THIS_UID -lt 100 ]; then
+        if [[ $THIS_UID -lt 100 ]]; then
             PWDATA_SYSTEM_USERS[${#PWDATA_SYSTEM_USERS[*]}]="${LINE[0]}"
         fi
         PWDATA_USERID_MAP="$PWDATA_USERID_MAP||${LINE[0]}:$THIS_UID"
@@ -146,7 +146,7 @@ function nhc_common_get_uid() {
         return
     fi
 
-    if [ "$PWDATA_USERID_MAP" = "||" ]; then
+    if [[ "$PWDATA_USERID_MAP" = "||" ]]; then
         nhc_common_load_passwd
     fi
 

@@ -16,18 +16,18 @@ function check_fs_mount() {
     local OPTIONS=$4
 
     while read DEV MOUNT TYPE OPTS JUNK ; do
-        if [ "$MOUNT" = "$FS" ]; then
-            if [ "$SRC" != "" ]; then
+        if [[ "$MOUNT" = "$FS" ]]; then
+            if [[ "$SRC" != "" ]]; then
                 if ! mcheck "$DEV" "$SRC" ; then
                     die 1 "$FUNCNAME:  $FS mounted from $DEV (should be $SRC)"
                 fi
             fi
-            if [ "$FSTYPE" != "" ]; then
+            if [[ "$FSTYPE" != "" ]]; then
                 if ! mcheck "$TYPE" "$FSTYPE" ; then
                     die 1 "$FUNCNAME:  $FS has incorrect type $TYPE (should be $FSTYPE)"
                 fi
             fi
-            if [ "$OPTIONS" != "" ]; then
+            if [[ "$OPTIONS" != "" ]]; then
                 if ! mcheck "$OPTS" "$OPTIONS" ; then
                     die 1 "$FUNCNAME:  $FS mount options incorrect"
                 fi

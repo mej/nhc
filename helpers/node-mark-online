@@ -14,7 +14,8 @@
 # information to avoid onlining nodes it didn't originally offline.
 
 PBSNODES="${PBSNODES:-pbsnodes}"
-PBSNODES_ARGS="${PBSNODES_ARGS:--c -N}"
+PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
+PBSNODES_ONLINE_ARGS="${PBSNODES_ONLINE_ARGS:--c -N}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -22,19 +23,19 @@ echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
 HOSTNAME="$1"
 NOTE=""
 
-LINE=( $($PBSNODES -n -l all $HOSTNAME) )
+LINE=( $($PBSNODES $PBSNODES_LIST_ARGS $HOSTNAME) )
 STATUS="${LINE[1]}"
 OLD_NOTE_LEADER="${LINE[2]}"
 OLD_NOTE="${LINE[*]:3}"
 case $STATUS in
     *offline*)
         # If there's an old note that wasn't set by NHC, do not online the node.
-        if [ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]; then
+        if [[ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  $OLD_NOTE_LEADER $OLD_NOTE"
             exit 0
         fi
         echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
-        exec $PBSNODES $PBSNODES_ARGS '' $HOSTNAME
+        exec $PBSNODES $PBSNODES_ONLINE_ARGS '' $HOSTNAME
         ;;
 esac
 echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"

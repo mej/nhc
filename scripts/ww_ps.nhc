@@ -6,6 +6,8 @@
 # $Id$
 #
 
+RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
+
 PS_PROCS=( )
 PS_USER=( )
 PS_PPID=( )
@@ -25,12 +27,12 @@ function nhc_ps_gather_data() {
     IFS=$'\n'
     LINES=( $(ps axo 'user,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
 
-    # Iterate through $LINES[] array to gather job data.
+    # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
         IFS=$' \t\n'
         LINE=( ${LINES[$i]} )
-        if [ "${LINE[0]}" = "USER" ]; then
+        if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi
         THIS_PID=${LINE[2]}
@@ -55,7 +57,7 @@ function nhc_ps_pid_lineage() {
     local THIS_PID=$1
     local PROCNAME=$2
 
-    if [ ${#PS_PROCS[*]} -eq 0 ]; then
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
     fi
 
@@ -76,18 +78,18 @@ function check_ps_daemon() {
 
     test "$ARGS" != "" && DAEMON="$DAEMON $ARGS"
 
-    if [ ${#PS_PROCS[*]} -eq 0 ]; then
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
     fi
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         dbg "Checking $THIS_PID:  $DAEMON vs. ${PS_ARGS[$THIS_PID]}"
-        if [ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]; then
+        if [[ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]]; then
             continue
         fi
         dbg "Checking $THIS_PID:  $OWNER vs. ${PS_USER[$THIS_PID]}"
-        if [ -n "$OWNER" -a "${PS_USER[$THIS_PID]}" != "$OWNER" ]; then
+        if [[ -n "$OWNER" -a "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
             continue
         fi
         # We have a matching process with the correct owner.  All is well.
@@ -109,15 +111,15 @@ function check_ps_unauth_users() {
     local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
 
-    if [ -z "$ACTIONS" ]; then
+    if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
     fi
 
-    if [ ${#PS_PROCS[*]} -eq 0 ]; then
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
     fi
 
-    if [ ${#PWNAM_USERS[*]} -eq 0 ]; then
+    if [[ ${#PWNAM_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
     fi
 
@@ -128,12 +130,12 @@ function check_ps_unauth_users() {
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
         nhc_job_user_auth "$THIS_USER" "$THIS_UID"
         IS_AUTH=$?
-        if [ $IS_AUTH -eq 0 ]; then
+        if [[ $IS_AUTH -eq 0 ]]; then
             # User is authorized.  Continue.
             continue
         fi
         # User is not authorized.  Take action(s).
-        if [ -z "$THIS_UID" ]; then
+        if [[ -z "$THIS_UID" ]]; then
             nhc_common_get_uid "$THIS_USER" THIS_UID
         fi
         UNAUTH_MSG="Unauthorized user $THIS_USER ($THIS_UID) running process $THIS_CMD ($THIS_PID)."
@@ -142,7 +144,7 @@ function check_ps_unauth_users() {
                 log )    log "$UNAUTH_MSG" ;;
                 syslog ) syslog "$UNAUTH_MSG" ;;
                 die )    die 1 "$UNAUTH_MSG" ;;
-                kill )   [ ${THIS_UID:-0} -gt $MAX_SYS_UID ] && kill -9 $THIS_PID ;;
+                kill )   [[ ${THIS_UID:-0} -gt $MAX_SYS_UID ]] && kill -9 $THIS_PID ;;
                 ignore ) break ;;
             esac
         done
@@ -155,15 +157,15 @@ function check_ps_userproc_lineage() {
     local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
 
-    if [ -z "$ACTIONS" ]; then
+    if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
     fi
 
-    if [ ${#PS_PROCS[*]} -eq 0 ]; then
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
     fi
 
-    if [ ${#PWNAM_USERS[*]} -eq 0 ]; then
+    if [[ ${#PWNAM_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
     fi
 
@@ -171,11 +173,11 @@ function check_ps_userproc_lineage() {
         THIS_PID=${PS_PROCS[$i]}
         THIS_UID=${PS_UID[$i]}
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
-        if [ ${THIS_UID:-0} -le $MAX_SYS_UID ]; then
+        if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi
         # Non-system process.  Check lineage.
-        if nhc_ps_pid_lineage $THIS_PID '/\bpbs_mom\b/' ; then
+        if nhc_ps_pid_lineage $THIS_PID $RM_DAEMON_MATCH ; then
             continue
         fi
         # Not a child of pbs_mom.  Take action.
@@ -185,7 +187,7 @@ function check_ps_userproc_lineage() {
                 log )    log "$UNAUTH_MSG" ;;
                 syslog ) syslog "$UNAUTH_MSG" ;;
                 die )    die 1 "$UNAUTH_MSG" ;;
-                kill )   [ ${THIS_UID:-0} -gt $MAX_SYS_UID ] && kill -9 $THIS_PID ;;
+                kill )   [[ ${THIS_UID:-0} -gt $MAX_SYS_UID ]] && kill -9 $THIS_PID ;;
                 ignore ) break ;;
             esac
         done
@@ -208,18 +210,18 @@ function check_ps_kswapd() {
     local i IFS ACTION KSWAPD_MSG MAX MIN
     local -a TIME KSWAPD_PROC KSWAPD_TIME
 
-    if [ -z "$ACTIONS" ]; then
+    if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
     fi
 
-    if [ ${#PS_PROCS[*]} -eq 0 ]; then
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
     fi
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         dbg "Checking $THIS_PID:  $DAEMON vs. ${PS_ARGS[$THIS_PID]}"
-        if [ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]; then
+        if [[ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]]; then
             continue
         fi
         IFS=':'
@@ -231,7 +233,7 @@ function check_ps_kswapd() {
     done
 
     # If only one NUMA node detected no checking needed.
-    if [ ${#KSWAPD_PROC[*]} -eq 1 ]; then
+    if [[ ${#KSWAPD_PROC[*]} -eq 1 ]]; then
         return 0
     fi
 
@@ -239,19 +241,19 @@ function check_ps_kswapd() {
         THIS_PID=${KSWAPD_PROC[$i]}
 
         # If any NUMA node is running above threshold, mark it.
-        if [ ${KSWAPD_TIME[$THIS_PID]} -gt $THRESHOLD ]; then
+        if [[ ${KSWAPD_TIME[$THIS_PID]} -gt $THRESHOLD ]]; then
             KSWAPD_IMB=1
             break
         # Otherwise compare the cumulative cpu time to find out min and max.
         else
-            if [ $i -eq 0 ]; then
+            if [[ $i -eq 0 ]]; then
                 MIN=${KSWAPD_TIME[$THIS_PID]}
                 MAX=${KSWAPD_TIME[$THIS_PID]}
             fi
 
-            if [ ${KSWAPD_TIME[$THIS_PID]} -gt $MAX ]; then
+            if [[ ${KSWAPD_TIME[$THIS_PID]} -gt $MAX ]]; then
                 MAX=${KSWAPD_TIME[$THIS_PID]}
-            elif [ ${KSWAPD_TIME[$THIS_PID]} -lt $MIN ]; then
+            elif [[ ${KSWAPD_TIME[$THIS_PID]} -lt $MIN ]]; then
                 MIN=${KSWAPD_TIME[$THIS_PID]}
             fi
         fi
@@ -263,7 +265,7 @@ function check_ps_kswapd() {
         KSWAPD_IMB=1
     fi
 
-    if [ $KSWAPD_IMB -eq 1 ]; then
+    if [[ $KSWAPD_IMB -eq 1 ]]; then
         # NUMA imbalance detected.  Take action.
         KSWAPD_MSG="NUMA imbalance detected among PIDs ${KSWAPD_PROC[*]}."
         for ACTION in $ACTIONS ; do

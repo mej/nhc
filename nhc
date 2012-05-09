@@ -29,11 +29,11 @@ function die() {
     log "Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
-    if [ "$MARK_OFFLINE" = "1" ]; then
+    if [[ "$MARK_OFFLINE" = "1" ]]; then
         eval '$OFFLINE_NODE "$HOSTNAME" "$*" </dev/null >/dev/null' $LOGFILE '2>&1 &'
     fi
     echo "ERROR Health check failed:  $*"
-    [ -n "$ALARM_PID" ] && kill -9 $ALARM_PID >/dev/null 2>&1
+    [[ -n "$WATCHDOG_PID" ]] && kill -9 $WATCHDOG_PID >/dev/null 2>&1
     exit $RET
 }
 trap 'die 128 Terminated by signal.' 1 2 15
@@ -41,21 +41,21 @@ trap 'die 127 Script timed out.' 14
 
 # Quick-and-dirty debugging output
 function dbg() {
-    if [ "$DEBUG" != "0" ]; then
+    if [[ "$DEBUG" != "0" ]]; then
         eval echo '"DEBUG:  $*"' $LOGFILE
     fi
 }
 
 # Quick-and-dirty log output
 function log() {
-    if [ "$SILENT" = "0" ]; then
+    if [[ "$SILENT" = "0" ]]; then
         eval echo '"$@"' $LOGFILE
     fi
 }
 
 # Store syslog output, send at end of script execution.
 function syslog() {
-    if [ -z "$LOGGER_TEXT" ]; then
+    if [[ -z "$LOGGER_TEXT" ]]; then
         LOGGER_TEXT="$*"
     else
         LOGGER_TEXT="$LOGGER_TEXT"$'\n'"$*"
@@ -63,7 +63,7 @@ function syslog() {
 }
 
 function syslog_flush() {
-    if [ -n "$LOGGER_TEXT" ]; then
+    if [[ -n "$LOGGER_TEXT" ]]; then
         echo "$LOGGER_TEXT" | logger -p daemon.err -t "$NAME[$$]"
     fi
     LOGGER_TEXT=""
@@ -82,6 +82,7 @@ HOSTNAME_S=${HOSTNAME/%.*}
 RET=0
 LOGGER_TEXT=""
 NHC_PID=$$
+WATCHDOG_PID=0
 export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S LOGGER_TEXT NHC_PID
 
 # Users should only override these settings.
@@ -103,12 +104,12 @@ export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE D
 ### Script guts begin here.
 
 # Load settings from system-wide location.
-if [ -f $SYSCONFIGDIR/$NAME ]; then
+if [[ -f $SYSCONFIGDIR/$NAME ]]; then
     . $SYSCONFIGDIR/$NAME
 fi
 
 # Check for config file before we do too much work.
-if [ ! -f "$CONFFILE" ]; then
+if [[ ! -f "$CONFFILE" ]]; then
     # Missing config means no checks.  No checks means no failures.
     exit 0
 fi
@@ -123,10 +124,14 @@ for SCRIPT in $INCDIR/* ; do
 done
 
 # Set ALARM to timeout script.
-(sleep $TIMEOUT ; kill -ALRM -$NHC_PID ; kill -TERM -$NHC_PID) &
-ALARM_PID=$!
-export ALARM_PID
-dbg "ALARM PID is $ALARM_PID, NHC PID is $NHC_PID"
+if [[ $TIMEOUT -gt 0 ]]; then
+    (sleep $TIMEOUT ; kill -ALRM -$NHC_PID ; sleep 1 ; kill -TERM -$NHC_PID) &
+    WATCHDOG_PID=$!
+    export WATCHDOG_PID
+    dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
+else
+    dbg "No watchdog, NHC PID is $NHC_PID"
+fi
 
 CHECKS=( )
 nhc_load_conf $CONFFILE
@@ -139,17 +144,17 @@ for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
     RET=$?
 
     # Check for failure.
-    if [ $RET -ne 0 ]; then
+    if [[ $RET -ne 0 ]]; then
         log "Node Health Check failed.  Check $CHECK returned $RET"
         die $RET "Check $CHECK returned $RET"
     fi
 done
 
-if [ "$MARK_OFFLINE" = "1" ]; then
+if [[ "$MARK_OFFLINE" = "1" ]]; then
     eval '$ONLINE_NODE "$HOSTNAME" </dev/null >/dev/null' $LOGFILE '2>&1 &'
 fi
 
 syslog_flush
-log "Node Health Check completed successfully (${SECONDS}s)."
-kill -9 $ALARM_PID
+log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
+[[ $WATCHDOG_PID -gt 0 ]] && kill -9 $WATCHDOG_PID
 exit 0

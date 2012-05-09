@@ -201,3 +201,7 @@ Always use [[ ]] instead of [ ] (primarily for consistency).
 Add customization of resource manager daemon match expression and
 greater control over pbsnodes commands in online/offline helpers.
 ----------------------------------------------------------------------
+Wed May  9 12:22:20 2012                        Michael Jennings (mej)
+
+Fix a couple conditional expressions from the last commit.
+----------------------------------------------------------------------

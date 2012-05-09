@@ -32,7 +32,7 @@ OLD_NOTE="${LINE[*]:3}"
 case $STATUS in
     *down*|*offline*|*unknown*)
         # If there's an old note that wasn't set by NHC, preserve it.
-        if [[ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+        if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             LEADER="$OLD_NOTE_LEADER"
             NOTE="$OLD_NOTE"
         fi

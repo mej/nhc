@@ -89,7 +89,7 @@ function check_ps_daemon() {
             continue
         fi
         dbg "Checking $THIS_PID:  $OWNER vs. ${PS_USER[$THIS_PID]}"
-        if [[ -n "$OWNER" -a "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+        if [[ -n "$OWNER" && "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
             continue
         fi
         # We have a matching process with the correct owner.  All is well.

@@ -18,7 +18,7 @@ PWDATA_SYSTEM_USERS=( )
 PWDATA_USERID_MAP='||'
 
 # Define regexp match check conditionally based on bash version.
-if [[ "${BASH_VERSINFO[0]}" != "" -a ${BASH_VERSINFO[0]} -ge 3 ]]; then
+if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
     # Check to see if parameter ($1) matches regexp ($2)
     function mcheck_regexp() {
         if [[ "$1" =~ $2 ]]; then
@@ -57,7 +57,7 @@ function mcheck() {
     local MATCH="$2"
 
     # Check to see if the current host matches the check we just read.
-    if [[ "${MATCH#/}" != "$MATCH" -a "${MATCH%/}" != "$MATCH" ]]; then
+    if [[ "${MATCH#/}" != "$MATCH" && "${MATCH%/}" != "$MATCH" ]]; then
         # Regexp match syntax.  Strip slashes, then match.
         MATCH="${MATCH#/}"
         MATCH="${MATCH%/}"

@@ -30,7 +30,7 @@ OLD_NOTE="${LINE[*]:3}"
 case $STATUS in
     *offline*)
         # If there's an old note that wasn't set by NHC, do not online the node.
-        if [[ -n "$OLD_NOTE_LEADER" -a "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+        if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  $OLD_NOTE_LEADER $OLD_NOTE"
             exit 0
         fi

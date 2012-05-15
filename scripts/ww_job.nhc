@@ -15,10 +15,12 @@ function nhc_job_find_users() {
     local JOBFILE
     local JOBUSER
     local LINE
+    local -a JOBLIST
 
     JOBUSERS=( root nobody )
-    for JOBFILE in $JOBFILE_PATH/*.JB ; do
-        if [[ ! -f $JOBFILE ]]; then
+    JOBLIST=( $JOBFILE_PATH/*.JB )
+    for JOBFILE in "${JOBLIST[@]}" ; do
+        if [[ ! -f "$JOBFILE" ]]; then
             continue
         fi
         while read LINE ; do
@@ -30,7 +32,7 @@ function nhc_job_find_users() {
                 JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
             fi
             break
-        done < $JOBFILE
+        done < "$JOBFILE"
     done
     dbg "Authorized users are:  ${JOBUSERS[*]}"
 }

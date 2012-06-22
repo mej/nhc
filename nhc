@@ -71,90 +71,123 @@ function syslog_flush() {
 
 #########################
 
-### Variable declarations
+function nhcmain_init_env() {
+    ### Variable declarations
 
-# Static variables
-PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-SYSCONFIGDIR="/etc/sysconfig"
-LIBEXECDIR="/usr/libexec"
-read HOSTNAME < /proc/sys/kernel/hostname
-HOSTNAME_S=${HOSTNAME/%.*}
-RET=0
-LOGGER_TEXT=""
-NHC_PID=$$
-WATCHDOG_PID=0
-export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S LOGGER_TEXT NHC_PID
+    # Static variables
+    PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+    SYSCONFIGDIR="/etc/sysconfig"
+    LIBEXECDIR="/usr/libexec"
+    read HOSTNAME < /proc/sys/kernel/hostname
+    HOSTNAME_S=${HOSTNAME/%.*}
+    RET=0
+    LOGGER_TEXT=""
+    NHC_PID=$$
+    WATCHDOG_PID=0
+    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S LOGGER_TEXT NHC_PID
 
-# Users should only override these settings.
-NAME=${0/#*\/}
-CONFDIR="/etc/$NAME"
-CONFFILE="$CONFDIR/$NAME.conf"
-INCDIR="$CONFDIR/scripts"
-HELPERDIR="$LIBEXECDIR/$NAME"
-ONLINE_NODE="$HELPERDIR/node-mark-online"
-OFFLINE_NODE="$HELPERDIR/node-mark-offline"
-LOGFILE=">>/var/log/$NAME.log"
-DEBUG=0
-SILENT=0
-MARK_OFFLINE=1
-TIMEOUT=5
-MAX_SYS_UID=99
-export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID
+    # Users should only override these settings.
+    NAME=${0/#*\/}
+    CONFDIR="/etc/$NAME"
+    CONFFILE="$CONFDIR/$NAME.conf"
+    INCDIR="$CONFDIR/scripts"
+    HELPERDIR="$LIBEXECDIR/$NAME"
+    ONLINE_NODE="$HELPERDIR/node-mark-online"
+    OFFLINE_NODE="$HELPERDIR/node-mark-offline"
+    LOGFILE=">>/var/log/$NAME.log"
+    DEBUG=0
+    SILENT=0
+    MARK_OFFLINE=1
+    TIMEOUT=5
+    MAX_SYS_UID=99
+    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID
+
+    if [[ -n "$NHC_ENV" ]]; then
+        eval export $NHC_ENV
+    fi
+}
+
+function nhcmain_load_sysconfig() {
+    # Load settings from system-wide location.
+    if [[ -f $SYSCONFIGDIR/$NAME ]]; then
+        . $SYSCONFIGDIR/$NAME
+    fi
+}
+
+function nhcmain_check_conffile() {
+    # Check for config file before we do too much work.
+    if [[ ! -f "$CONFFILE" ]]; then
+        # Missing config means no checks.  No checks means no failures.
+        exit 0
+    fi
+}
+
+function nhcmain_load_scripts() {
+    log "Node Health Check starting."
+
+    # Load all include scripts.
+    dbg "Loading scripts from $INCDIR..."
+    for SCRIPT in $INCDIR/* ; do
+        dbg "Loading ${SCRIPT/#*\/}"
+        . $SCRIPT
+    done
+}
+
+function nhcmain_set_watchdog() {
+    # Set ALARM to timeout script.
+    if [[ $TIMEOUT -gt 0 ]]; then
+        (sleep $TIMEOUT ; kill -ALRM -$NHC_PID ; sleep 1 ; kill -TERM -$NHC_PID) &
+        WATCHDOG_PID=$!
+        export WATCHDOG_PID
+        dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
+    else
+        dbg "No watchdog, NHC PID is $NHC_PID"
+    fi
+}
+
+function nhcmain_run_checks() {
+    CHECKS=( )
+    nhc_load_conf $CONFFILE
+    for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
+        CHECK="${CHECKS[$CNUM]}"
+
+        # Run the check.
+        log "Running check:  \"$CHECK\""
+        eval $CHECK
+        RET=$?
+
+        # Check for failure.
+        if [[ $RET -ne 0 ]]; then
+            log "Node Health Check failed.  Check $CHECK returned $RET"
+            die $RET "Check $CHECK returned $RET"
+        fi
+    done
+}
+
+function nhcmain_mark_offline() {
+    if [[ "$MARK_OFFLINE" = "1" ]]; then
+        eval '$ONLINE_NODE "$HOSTNAME" </dev/null >/dev/null' $LOGFILE '2>&1 &'
+    fi
+}
+
+function nhcmain_finish() {
+    syslog_flush
+    log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
+    [[ $WATCHDOG_PID -gt 0 ]] && kill -9 $WATCHDOG_PID
+    exit 0
+}
 
 ### Script guts begin here.
-
-# Load settings from system-wide location.
-if [[ -f $SYSCONFIGDIR/$NAME ]]; then
-    . $SYSCONFIGDIR/$NAME
-fi
-
-# Check for config file before we do too much work.
-if [[ ! -f "$CONFFILE" ]]; then
-    # Missing config means no checks.  No checks means no failures.
+if [[ -n "$NHC_LOAD_ONLY" ]]; then
+    # We're only supposed to define functions, not actually run anything.
     exit 0
 fi
 
-log "Node Health Check starting."
-
-# Load all include scripts.
-dbg "Loading scripts from $INCDIR..."
-for SCRIPT in $INCDIR/* ; do
-    dbg "Loading ${SCRIPT/#*\/}"
-    . $SCRIPT
-done
-
-# Set ALARM to timeout script.
-if [[ $TIMEOUT -gt 0 ]]; then
-    (sleep $TIMEOUT ; kill -ALRM -$NHC_PID ; sleep 1 ; kill -TERM -$NHC_PID) &
-    WATCHDOG_PID=$!
-    export WATCHDOG_PID
-    dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
-else
-    dbg "No watchdog, NHC PID is $NHC_PID"
-fi
-
-CHECKS=( )
-nhc_load_conf $CONFFILE
-for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
-    CHECK="${CHECKS[$CNUM]}"
-
-    # Run the check.
-    log "Running check:  \"$CHECK\""
-    eval $CHECK
-    RET=$?
-
-    # Check for failure.
-    if [[ $RET -ne 0 ]]; then
-        log "Node Health Check failed.  Check $CHECK returned $RET"
-        die $RET "Check $CHECK returned $RET"
-    fi
-done
-
-if [[ "$MARK_OFFLINE" = "1" ]]; then
-    eval '$ONLINE_NODE "$HOSTNAME" </dev/null >/dev/null' $LOGFILE '2>&1 &'
-fi
-
-syslog_flush
-log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
-[[ $WATCHDOG_PID -gt 0 ]] && kill -9 $WATCHDOG_PID
-exit 0
+nhcmain_init_env
+nhcmain_load_sysconfig
+nhcmain_check_conffile
+nhcmain_load_scripts
+nhcmain_set_watchdog
+nhcmain_run_checks
+nhcmain_mark_offline
+nhcmain_finish

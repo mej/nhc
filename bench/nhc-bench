@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Warewulf Node Health Check Script
+#
+# Michael Jennings <mej@lbl.gov>
+# 13 December 2010
+#
+# $Id$
+#
+
+# This script is used to perform benchmarking on the NHC driver script
+# and its built-in checks.  It should only be used by developers
+# working from the source tree.
+
+if [[ $# -eq 2 ]]; then
+    SRCDIR=$1
+    TOP_SRCDIR=$2
+else
+    SRCDIR=$(dirname $0)
+    if [[ -n "$SRCDIR" ]]; then
+        TOP_SRCDIR="$SRCDIR/.."
+    else
+        TOP_SRCDIR="$PWD/.."
+    fi
+fi
+
+exit 0

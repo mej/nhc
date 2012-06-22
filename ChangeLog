@@ -205,3 +205,23 @@ Wed May  9 12:22:20 2012                        Michael Jennings (mej)
 
 Fix a couple conditional expressions from the last commit.
 ----------------------------------------------------------------------
+Tue May 15 09:05:23 2012                        Michael Jennings (mej)
+
+Make sure nodes with no job files still work.
+----------------------------------------------------------------------
+Wed May 16 13:50:20 2012                        Michael Jennings (mej)
+
+Fix bug pointed out by Ole Holm Nielsen <ole.h.nielsen@fysik.dtu.dk>
+which caused the new "eval" of config file lines to barf on the
+regular expression with parentheses in the sample config.  Going
+forward, users will need to take care to escape shell metacharacters
+appropriately in config files.
+----------------------------------------------------------------------
+Fri Jun 22 15:26:40 2012                        Michael Jennings (mej)
+
+Add stubs for unit test and benchmarking scripts.
+
+Convert main NHC driver script to use functions so that it can be
+loaded without needing to be executed and to facilitate testing of
+some of its functionality.
+----------------------------------------------------------------------

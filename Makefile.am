@@ -1,6 +1,7 @@
 # $Id$
 
 AUTOMAKE_OPTIONS = foreign
+SUBDIRS = bench test
 
 helperdir = $(libexecdir)/nhc
 confdir = $(sysconfdir)/nhc

@@ -1,0 +1,45 @@
+#!/bin/bash
+#
+# Warewulf Node Health Check Script
+#
+# Michael Jennings <mej@lbl.gov>
+# 13 December 2010
+#
+# $Id$
+#
+
+# This script is used to perform unit testing on the NHC driver script
+# and its built-in checks.  It should only be used by developers
+# working from the source tree.  To perform the tests, run "make test"
+# from the top-level NHC source tree.
+
+function test_nhc_driver() {
+    # Load functions from NHC script.
+    export NHC_LOAD_ONLY=1
+    . $TOP_SRCDIR/nhc
+}
+
+function test_checks() {
+    local CHECKTEST
+
+    for CHECKTEST in test_*.nhc ; do
+        . $CHECKTEST
+    done
+    return 0
+}
+
+if [[ $# -eq 2 ]]; then
+    SRCDIR=$1
+    TOP_SRCDIR=$2
+else
+    SRCDIR=$(dirname $0)
+    if [[ -n "$SRCDIR" ]]; then
+        TOP_SRCDIR="$SRCDIR/.."
+    else
+        TOP_SRCDIR="$PWD/.."
+    fi
+fi
+
+test_nhc_driver || exit -1
+test_checks || exit -1
+exit 0

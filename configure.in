@@ -16,5 +16,7 @@ AC_SUBST(SVNVERSION)
 
 AC_OUTPUT([
    Makefile
+   bench/Makefile
+   test/Makefile
    warewulf-nhc.spec
 ])

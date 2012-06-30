@@ -86,32 +86,37 @@ function nhcmain_init_env() {
     WATCHDOG_PID=0
     export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S LOGGER_TEXT NHC_PID
 
-    # Users should only override these settings.
+    # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
-    CONFDIR="/etc/$NAME"
-    CONFFILE="$CONFDIR/$NAME.conf"
-    INCDIR="$CONFDIR/scripts"
-    HELPERDIR="$LIBEXECDIR/$NAME"
-    ONLINE_NODE="$HELPERDIR/node-mark-online"
-    OFFLINE_NODE="$HELPERDIR/node-mark-offline"
-    LOGFILE=">>/var/log/$NAME.log"
-    DEBUG=0
-    SILENT=0
-    MARK_OFFLINE=1
-    TIMEOUT=5
-    MAX_SYS_UID=99
-    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID
 
-    if [[ -n "$NHC_ENV" ]]; then
-        eval export $NHC_ENV
-    fi
+    # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
+    unset CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID
 }
 
 function nhcmain_load_sysconfig() {
-    # Load settings from system-wide location.
+    # Load settings from system-wide location.  NOTE:  To change value of $NAME
+    # here, the driver script must be renamed to something other than "nhc."
     if [[ -f $SYSCONFIGDIR/$NAME ]]; then
         . $SYSCONFIGDIR/$NAME
     fi
+}
+
+function nhcmain_finalize_env() {
+    # Set some variables relative to possible /etc/sysconfig/nhc
+    # modifications.  Users may have overridden some of these.
+    CONFDIR="${CONFDIR:-/etc/$NAME}"
+    CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
+    INCDIR="${INCDIR:-$CONFDIR/scripts}"
+    HELPERDIR="${HELPERDIR:-$LIBEXECDIR/$NAME}"
+    ONLINE_NODE="${ONLINE_NODE:-$HELPERDIR/node-mark-online}"
+    OFFLINE_NODE="${OFFLINE_NODE:-$HELPERDIR/node-mark-offline}"
+    LOGFILE="${LOGFILE:->>/var/log/$NAME.log}"
+    DEBUG=${DEBUG:-0}
+    SILENT=${SILENT:-0}
+    MARK_OFFLINE=${MARK_OFFLINE:-1}
+    TIMEOUT=${TIMEOUT:-5}
+    MAX_SYS_UID=${MAX_SYS_UID:-99}
+    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID
 }
 
 function nhcmain_check_conffile() {
@@ -180,11 +185,12 @@ function nhcmain_finish() {
 ### Script guts begin here.
 if [[ -n "$NHC_LOAD_ONLY" ]]; then
     # We're only supposed to define functions, not actually run anything.
-    exit 0
+    return 0 || exit 0
 fi
 
 nhcmain_init_env
 nhcmain_load_sysconfig
+nhcmain_finalize_env
 nhcmain_check_conffile
 nhcmain_load_scripts
 nhcmain_set_watchdog

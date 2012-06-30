@@ -13,17 +13,128 @@
 # working from the source tree.  To perform the tests, run "make test"
 # from the top-level NHC source tree.
 
+NHCTEST_SKIPPING=0
+NHCTEST_CHECK_SKIP='if skipping ; then skip ; return 0 ; fi'
+
+function fail() {
+    echo "FAILED:  $*" >&2
+    exit -1
+}
+
+function plan() {
+    NHCTEST_TESTS_PLANNED=$1
+    NHCTEST_TESTS_DONE=0
+    return 0
+}
+
+function unplan() {
+    plan 0
+}
+
+function planned() {
+    return $NHCTEST_TESTS_PLANNED
+}
+
+function check_plan() {
+    if [[ $NHCTEST_TESTS_PLANNED != $NHCTEST_TESTS_DONE ]]; then
+        fail "$NHCTEST_TESTS_DONE/$NHCTEST_TESTS_PLANNED tests performed."
+    fi
+    unplan
+}
+
+function skip() {
+    ((NHCTEST_TESTS_DONE+=${1:-1}))
+    return 1
+}
+
+function skip_begin() {
+    NHCTEST_SKIPPING=1
+}
+
+function skip_end() {
+    NHCTEST_SKIPPING=0
+}
+
+function skipping() {
+    return $((! NHCTEST_SKIPPING))
+}
+
+function ok() {
+    local TEST="$1" MSG="$2"
+
+    eval $NHCTEST_CHECK_SKIP
+    eval "if $TEST ; then ((NHCTEST_TESTS_DONE++)) ; else fail '$MSG ($TEST) returned false.' ; fi"
+    return 0
+}
+
+function cmp_ok() {
+    local VAL="$1" OP="$2" EXPECTED="$3" MSG="$4"
+
+    eval $NHCTEST_CHECK_SKIP
+    eval "if [[ \"$VAL\" $OP \"$EXPECTED\" ]]; then ((NHCTEST_TESTS_DONE++)) ; else fail '$MSG ($VAL $OP $EXPECTED) is false.' ; fi"
+}
+
+function is() {
+    local VAL="$1" EXPECTED="$2" MSG="$3"
+
+    eval $NHCTEST_CHECK_SKIP
+    if [[ "$VAL" == "$EXPECTED" ]]; then
+        ((NHCTEST_TESTS_DONE++))
+    else
+        fail "$MSG:  Got \"$VAL\" but expected \"$EXPECTED\""
+    fi
+}
+
+function isnt() {
+    local VAL="$1" EXPECTED="$2" MSG="$3"
+
+    eval $NHCTEST_CHECK_SKIP
+    if [[ "$VAL" != "$EXPECTED" ]]; then
+        ((NHCTEST_TESTS_DONE++))
+    else
+        fail "$MSG:  Got \"$VAL\" but expected something else"
+    fi
+}
+
 function test_nhc_driver() {
     # Load functions from NHC script.
     export NHC_LOAD_ONLY=1
     . $TOP_SRCDIR/nhc
+
+    # Initialize standard environment.
+    nhcmain_init_env
+    plan 4 && {
+        is $NHC_PID $$ "Check PID for accuracy"
+        isnt "$HOSTNAME" "" "Non-empty hostname check"
+        is $NAME nhc-test 'Validity of $NAME (1)'
+        isnt $NAME nhc 'Validity of $NAME (2)'
+    } ; check_plan
+
+    # Reset environment for testing purposes.
+    PATH="$TOP_SRCDIR:$PATH"
+    SYSCONFIGDIR="$TOP_SRCDIR"
+    LIBEXECDIR="$TOP_SRCDIR/helpers"
+    CONFDIR="$TOP_SRCDIR"
+    CONFFILE="$CONFDIR/nhc.conf"
+    INCDIR="$CONFDIR/scripts"
+    HELPERDIR="$LIBEXECDIR"
+    ONLINE_NODE="$HELPERDIR/node-mark-online"
+    OFFLINE_NODE="$HELPERDIR/node-mark-offline"
+    LOGFILE=""
+    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE
 }
 
 function test_checks() {
     local CHECKTEST
 
     for CHECKTEST in test_*.nhc ; do
+        if [[ ! -s "$CHECKTEST" ]]; then
+            continue
+        fi
         . $CHECKTEST
+        if planned ; then
+            check_plan
+        fi
     done
     return 0
 }

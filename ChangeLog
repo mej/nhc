@@ -225,3 +225,7 @@ Convert main NHC driver script to use functions so that it can be
 loaded without needing to be executed and to facilitate testing of
 some of its functionality.
 ----------------------------------------------------------------------
+Fri Jun 29 17:52:30 2012                        Michael Jennings (mej)
+
+I smell unit tests!
+----------------------------------------------------------------------

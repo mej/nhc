@@ -16,3 +16,11 @@ MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 
 CLEANFILES = 
 EXTRA_DIST = ChangeLog autogen.sh warewulf-nhc.spec
+
+test:
+	$(MAKE) -C test test
+
+bench:
+	$(MAKE) -C bench bench
+
+.PHONY:  test bench

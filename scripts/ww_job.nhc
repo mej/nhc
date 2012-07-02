@@ -33,7 +33,7 @@ function nhc_job_find_users() {
             fi
             break
         done < "$JOBFILE"
-    done
+    done 2>/dev/null || :
     dbg "Authorized users are:  ${JOBUSERS[*]}"
 }
 

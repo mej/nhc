@@ -229,3 +229,15 @@ Fri Jun 29 17:52:30 2012                        Michael Jennings (mej)
 
 I smell unit tests!
 ----------------------------------------------------------------------
+Mon Jul  2 16:33:54 2012                        Michael Jennings (mej)
+
+Move unit test framework to separate file.  Now called "SHUT."
+
+Override output functions to suppress normal NHC I/O and exception
+handling.
+
+Major refactoring of test framework to allow named tests and progress
+output.
+
+Added lots more unit tests for main nhc script.
+----------------------------------------------------------------------

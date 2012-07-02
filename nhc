@@ -36,8 +36,6 @@ function die() {
     [[ -n "$WATCHDOG_PID" ]] && kill -9 $WATCHDOG_PID >/dev/null 2>&1
     exit $RET
 }
-trap 'die 128 Terminated by signal.' 1 2 15
-trap 'die 127 Script timed out.' 14
 
 # Quick-and-dirty debugging output
 function dbg() {
@@ -84,7 +82,7 @@ function nhcmain_init_env() {
     LOGGER_TEXT=""
     NHC_PID=$$
     WATCHDOG_PID=0
-    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S LOGGER_TEXT NHC_PID
+    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT NHC_PID WATCHDOG_PID
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
@@ -123,8 +121,9 @@ function nhcmain_check_conffile() {
     # Check for config file before we do too much work.
     if [[ ! -f "$CONFFILE" ]]; then
         # Missing config means no checks.  No checks means no failures.
-        exit 0
+        return 1
     fi
+    return 0
 }
 
 function nhcmain_load_scripts() {
@@ -188,10 +187,13 @@ if [[ -n "$NHC_LOAD_ONLY" ]]; then
     return 0 || exit 0
 fi
 
+trap 'die 128 Terminated by signal.' 1 2 15
+trap 'die 127 Script timed out.' 14
+
 nhcmain_init_env
 nhcmain_load_sysconfig
 nhcmain_finalize_env
-nhcmain_check_conffile
+nhcmain_check_conffile || exit 0
 nhcmain_load_scripts
 nhcmain_set_watchdog
 nhcmain_run_checks

@@ -8,6 +8,6 @@ CLEANFILES =
 EXTRA_DIST = 
 
 test:
-	./nhc-test $(srcdir) $(top_srcdir)
+	@./nhc-test $(srcdir) $(top_srcdir)
 
 .PHONY: test

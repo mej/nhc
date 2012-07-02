@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Warewulf Node Health Check Script
+# Warewulf NHC Unit Tests
 #
 # Michael Jennings <mej@lbl.gov>
-# 13 December 2010
+# 29 June 2012
 #
 # $Id$
 #
@@ -13,115 +13,112 @@
 # working from the source tree.  To perform the tests, run "make test"
 # from the top-level NHC source tree.
 
-NHCTEST_SKIPPING=0
-NHCTEST_CHECK_SKIP='if skipping ; then skip ; return 0 ; fi'
-
-function fail() {
-    echo "FAILED:  $*" >&2
-    exit -1
-}
-
-function plan() {
-    NHCTEST_TESTS_PLANNED=$1
-    NHCTEST_TESTS_DONE=0
-    return 0
-}
-
-function unplan() {
-    plan 0
-}
-
-function planned() {
-    return $NHCTEST_TESTS_PLANNED
-}
-
-function check_plan() {
-    if [[ $NHCTEST_TESTS_PLANNED != $NHCTEST_TESTS_DONE ]]; then
-        fail "$NHCTEST_TESTS_DONE/$NHCTEST_TESTS_PLANNED tests performed."
-    fi
-    unplan
-}
-
-function skip() {
-    ((NHCTEST_TESTS_DONE+=${1:-1}))
-    return 1
-}
-
-function skip_begin() {
-    NHCTEST_SKIPPING=1
-}
-
-function skip_end() {
-    NHCTEST_SKIPPING=0
-}
-
-function skipping() {
-    return $((! NHCTEST_SKIPPING))
-}
-
-function ok() {
-    local TEST="$1" MSG="$2"
-
-    eval $NHCTEST_CHECK_SKIP
-    eval "if $TEST ; then ((NHCTEST_TESTS_DONE++)) ; else fail '$MSG ($TEST) returned false.' ; fi"
-    return 0
-}
-
-function cmp_ok() {
-    local VAL="$1" OP="$2" EXPECTED="$3" MSG="$4"
-
-    eval $NHCTEST_CHECK_SKIP
-    eval "if [[ \"$VAL\" $OP \"$EXPECTED\" ]]; then ((NHCTEST_TESTS_DONE++)) ; else fail '$MSG ($VAL $OP $EXPECTED) is false.' ; fi"
-}
-
-function is() {
-    local VAL="$1" EXPECTED="$2" MSG="$3"
-
-    eval $NHCTEST_CHECK_SKIP
-    if [[ "$VAL" == "$EXPECTED" ]]; then
-        ((NHCTEST_TESTS_DONE++))
-    else
-        fail "$MSG:  Got \"$VAL\" but expected \"$EXPECTED\""
-    fi
-}
-
-function isnt() {
-    local VAL="$1" EXPECTED="$2" MSG="$3"
-
-    eval $NHCTEST_CHECK_SKIP
-    if [[ "$VAL" != "$EXPECTED" ]]; then
-        ((NHCTEST_TESTS_DONE++))
-    else
-        fail "$MSG:  Got \"$VAL\" but expected something else"
-    fi
-}
-
 function test_nhc_driver() {
     # Load functions from NHC script.
     export NHC_LOAD_ONLY=1
     . $TOP_SRCDIR/nhc
 
+    # Redefine some functions
+    function die() { :; }
+    function dbg() { :; }
+    function log() { :; }
+    function syslog() { :; }
+    function syslog_flush() { :; }
+
     # Initialize standard environment.
     nhcmain_init_env
-    plan 4 && {
+    plan 6 "nhcmain_init_env" && {
         is $NHC_PID $$ "Check PID for accuracy"
         isnt "$HOSTNAME" "" "Non-empty hostname check"
         is $NAME nhc-test 'Validity of $NAME (1)'
         isnt $NAME nhc 'Validity of $NAME (2)'
-    } ; check_plan
+        unlike "$HOSTNAME_S" "/\./" '$HOSTNAME_S contains no dots'
+        unlike "$NAME" "/\//" '$NAME contains no slashes'
+    } ; unplan
 
     # Reset environment for testing purposes.
     PATH="$TOP_SRCDIR:$PATH"
     SYSCONFIGDIR="$TOP_SRCDIR"
     LIBEXECDIR="$TOP_SRCDIR/helpers"
     CONFDIR="$TOP_SRCDIR"
-    CONFFILE="$CONFDIR/nhc.conf"
-    INCDIR="$CONFDIR/scripts"
     HELPERDIR="$LIBEXECDIR"
-    ONLINE_NODE="$HELPERDIR/node-mark-online"
-    OFFLINE_NODE="$HELPERDIR/node-mark-offline"
-    LOGFILE=""
-    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE
+    LOGFILE=" "
+    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR HELPERDIR LOGFILE
+
+    # Finalize environment.  Make sure we get what we expect.
+    nhcmain_finalize_env
+    plan 14 "nhcmain_finalize_env" && {
+        is $SYSCONFIGDIR $TOP_SRCDIR '$SYSCONFIGDIR unchanged'
+        is $LIBEXECDIR "$TOP_SRCDIR/helpers" '$LIBEXECDIR unchanged'
+        is $HELPERDIR $LIBEXECDIR '$HELPERDIR unchanged'
+        is $CONFDIR $TOP_SRCDIR '$CONFDIR unchanged'
+        is $CONFFILE "$TOP_SRCDIR/$NAME.conf" '$CONFFILE set correctly'
+        is $INCDIR "$CONFDIR/scripts" '$INCDIR default correct'
+        is $ONLINE_NODE "$LIBEXECDIR/node-mark-online" '$ONLINE_NODE set correctly'
+        is $OFFLINE_NODE "$LIBEXECDIR/node-mark-offline" '$OFFLINE_NODE set correctly'
+        unlike $LOGFILE '/[<>|&]/' '$LOGFILE contains no redirection'
+        is $DEBUG 0 'Debugging off by default'
+        is $SILENT 0 'Silent mode off by default'
+        is $MARK_OFFLINE 1 'Nodes marked offline by default'
+        is $TIMEOUT 5 '5 second script timeout by default'
+        cmp_ok $MAX_SYS_UID "-lt" 1000 'Reasonable range for system UIDs'
+    } ; unplan
+
+    plan 1 "nhcmain_check_conffile" && {
+        nhcmain_check_conffile
+        is $? 0 'Config file exists'
+    } ; unplan
+
+    # Load scripts.  Make sure all 28 functions are present.
+    nhcmain_load_scripts
+    plan 28 "nhcmain_load_scripts" && {
+        is `type -t mcheck_regexp 2>&1` 'function' 'mcheck_regexp() loaded properly'
+        is `type -t mcheck_glob 2>&1` 'function' 'mcheck_glob() loaded properly'
+        is `type -t mcheck 2>&1` 'function' 'mcheck() loaded properly'
+        is `type -t nhc_load_conf 2>&1` 'function' 'nhc_load_conf() loaded properly'
+        is `type -t nhc_common_load_passwd 2>&1` 'function' 'nhc_common_load_passwd() loaded properly'
+        is `type -t nhc_common_get_uid 2>&1` 'function' 'nhc_common_get_uid() loaded properly'
+
+        is `type -t check_fs_mount 2>&1` 'function' 'check_fs_mount() loaded properly'
+        is `type -t check_fs_mount_rw 2>&1` 'function' 'check_fs_mount_rw() loaded properly'
+        is `type -t check_fs_mount_ro 2>&1` 'function' 'check_fs_mount_ro() loaded properly'
+
+        is `type -t nhc_hw_gather_data 2>&1` 'function' 'nhc_hw_gather_data() loaded properly'
+        is `type -t check_hw_cpuinfo 2>&1` 'function' 'check_hw_cpuinfo() loaded properly'
+        is `type -t check_hw_physmem 2>&1` 'function' 'check_hw_physmem() loaded properly'
+        is `type -t check_hw_swap 2>&1` 'function' 'check_hw_swap() loaded properly'
+        is `type -t check_hw_mem 2>&1` 'function' 'check_hw_mem() loaded properly'
+        is `type -t check_hw_physmem_free 2>&1` 'function' 'check_hw_physmem_free() loaded properly'
+        is `type -t check_hw_swap_free 2>&1` 'function' 'check_hw_swap_free() loaded properly'
+        is `type -t check_hw_mem_free 2>&1` 'function' 'check_hw_mem_free() loaded properly'
+        is `type -t check_hw_ib 2>&1` 'function' 'check_hw_ib() loaded properly'
+        is `type -t check_hw_gm 2>&1` 'function' 'check_hw_gm() loaded properly'
+        is `type -t check_hw_eth 2>&1` 'function' 'check_hw_eth() loaded properly'
+
+        is `type -t nhc_job_find_users 2>&1` 'function' 'nhc_job_find_users() loaded properly'
+        is `type -t nhc_job_user_auth 2>&1` 'function' 'nhc_job_user_auth() loaded properly'
+
+        is `type -t nhc_ps_gather_data 2>&1` 'function' 'nhc_ps_gather_data() loaded properly'
+        is `type -t nhc_ps_pid_lineage 2>&1` 'function' 'nhc_ps_pid_lineage() loaded properly'
+        is `type -t check_ps_daemon 2>&1` 'function' 'check_ps_daemon() loaded properly'
+        is `type -t check_ps_unauth_users 2>&1` 'function' 'check_ps_unauth_users() loaded properly'
+        is `type -t check_ps_userproc_lineage 2>&1` 'function' 'check_ps_userproc_lineage() loaded properly'
+        is `type -t check_ps_kswapd 2>&1` 'function' 'check_ps_kswapd() loaded properly'
+    } ; unplan
+
+    # Make sure no watchdog timer is launched.
+    TIMEOUT=0
+    plan 1 "nhcmain_set_watchdog" && {
+        nhcmain_set_watchdog
+        is $WATCHDOG_PID 0 'Watchdog should be disabled'
+    } ; unplan
+
+    # Empty config file should result in no checks.
+    nhcmain_run_checks
+    plan 2 "nhcmain_run_checks" && {
+        is $CNUM 0 'No checks were run'
+        is ${#CHECKS[*]} 0 'No checks were loaded from config'
+    } ; unplan
 }
 
 function test_checks() {
@@ -132,13 +129,12 @@ function test_checks() {
             continue
         fi
         . $CHECKTEST
-        if planned ; then
-            check_plan
-        fi
+        unplan
     done
     return 0
 }
 
+echo "Running unit tests for NHC..."
 if [[ $# -eq 2 ]]; then
     SRCDIR=$1
     TOP_SRCDIR=$2
@@ -151,6 +147,12 @@ else
     fi
 fi
 
+# Load the unit test library.
+. $SRCDIR/shut.inc.sh
+
+# Run the testing functions.
 test_nhc_driver || exit -1
 test_checks || exit -1
-exit 0
+
+# If we get this far, we're golden.
+finish

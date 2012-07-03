@@ -241,3 +241,7 @@ output.
 
 Added lots more unit tests for main nhc script.
 ----------------------------------------------------------------------
+Mon Jul  2 17:17:38 2012                        Michael Jennings (mej)
+
+Initial test files for each check script.
+----------------------------------------------------------------------

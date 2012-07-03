@@ -1,0 +1,13 @@
+# Tests for common.nhc
+#
+# $Id$
+#
+
+plan 6 "common.nhc" && {
+    is `type -t mcheck_regexp 2>&1` 'function' 'mcheck_regexp() loaded properly'
+    is `type -t mcheck_glob 2>&1` 'function' 'mcheck_glob() loaded properly'
+    is `type -t mcheck 2>&1` 'function' 'mcheck() loaded properly'
+    is `type -t nhc_load_conf 2>&1` 'function' 'nhc_load_conf() loaded properly'
+    is `type -t nhc_common_load_passwd 2>&1` 'function' 'nhc_common_load_passwd() loaded properly'
+    is `type -t nhc_common_get_uid 2>&1` 'function' 'nhc_common_get_uid() loaded properly'
+} ; unplan

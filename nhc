@@ -151,7 +151,7 @@ function nhcmain_set_watchdog() {
 
 function nhcmain_run_checks() {
     CHECKS=( )
-    nhc_load_conf $CONFFILE
+    nhc_load_conf "$CONFFILE"
     for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
         CHECK="${CHECKS[$CNUM]}"
 
@@ -168,7 +168,7 @@ function nhcmain_run_checks() {
     done
 }
 
-function nhcmain_mark_offline() {
+function nhcmain_mark_online() {
     if [[ "$MARK_OFFLINE" = "1" ]]; then
         eval '$ONLINE_NODE "$HOSTNAME" </dev/null >/dev/null' $LOGFILE '2>&1 &'
     fi
@@ -197,5 +197,5 @@ nhcmain_check_conffile || exit 0
 nhcmain_load_scripts
 nhcmain_set_watchdog
 nhcmain_run_checks
-nhcmain_mark_offline
+nhcmain_mark_online
 nhcmain_finish

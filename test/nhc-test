@@ -69,41 +69,15 @@ function test_nhc_driver() {
         is $? 0 'Config file exists'
     } ; unplan
 
-    # Load scripts.  Make sure all 28 functions are present.
-    nhcmain_load_scripts
-    plan 28 "nhcmain_load_scripts" && {
-        is `type -t mcheck_regexp 2>&1` 'function' 'mcheck_regexp() loaded properly'
-        is `type -t mcheck_glob 2>&1` 'function' 'mcheck_glob() loaded properly'
+    # Load scripts.  Check some sample functions before and after.
+    plan 6 "nhcmain_load_scripts" && {
+        isnt `type -t mcheck 2>&1` 'function' 'mcheck() loaded properly'
+        isnt `type -t nhc_common_load_passwd 2>&1` 'function' 'nhc_common_load_passwd() loaded properly'
+        isnt `type -t nhc_common_get_uid 2>&1` 'function' 'nhc_common_get_uid() loaded properly'
+        nhcmain_load_scripts
         is `type -t mcheck 2>&1` 'function' 'mcheck() loaded properly'
-        is `type -t nhc_load_conf 2>&1` 'function' 'nhc_load_conf() loaded properly'
         is `type -t nhc_common_load_passwd 2>&1` 'function' 'nhc_common_load_passwd() loaded properly'
         is `type -t nhc_common_get_uid 2>&1` 'function' 'nhc_common_get_uid() loaded properly'
-
-        is `type -t check_fs_mount 2>&1` 'function' 'check_fs_mount() loaded properly'
-        is `type -t check_fs_mount_rw 2>&1` 'function' 'check_fs_mount_rw() loaded properly'
-        is `type -t check_fs_mount_ro 2>&1` 'function' 'check_fs_mount_ro() loaded properly'
-
-        is `type -t nhc_hw_gather_data 2>&1` 'function' 'nhc_hw_gather_data() loaded properly'
-        is `type -t check_hw_cpuinfo 2>&1` 'function' 'check_hw_cpuinfo() loaded properly'
-        is `type -t check_hw_physmem 2>&1` 'function' 'check_hw_physmem() loaded properly'
-        is `type -t check_hw_swap 2>&1` 'function' 'check_hw_swap() loaded properly'
-        is `type -t check_hw_mem 2>&1` 'function' 'check_hw_mem() loaded properly'
-        is `type -t check_hw_physmem_free 2>&1` 'function' 'check_hw_physmem_free() loaded properly'
-        is `type -t check_hw_swap_free 2>&1` 'function' 'check_hw_swap_free() loaded properly'
-        is `type -t check_hw_mem_free 2>&1` 'function' 'check_hw_mem_free() loaded properly'
-        is `type -t check_hw_ib 2>&1` 'function' 'check_hw_ib() loaded properly'
-        is `type -t check_hw_gm 2>&1` 'function' 'check_hw_gm() loaded properly'
-        is `type -t check_hw_eth 2>&1` 'function' 'check_hw_eth() loaded properly'
-
-        is `type -t nhc_job_find_users 2>&1` 'function' 'nhc_job_find_users() loaded properly'
-        is `type -t nhc_job_user_auth 2>&1` 'function' 'nhc_job_user_auth() loaded properly'
-
-        is `type -t nhc_ps_gather_data 2>&1` 'function' 'nhc_ps_gather_data() loaded properly'
-        is `type -t nhc_ps_pid_lineage 2>&1` 'function' 'nhc_ps_pid_lineage() loaded properly'
-        is `type -t check_ps_daemon 2>&1` 'function' 'check_ps_daemon() loaded properly'
-        is `type -t check_ps_unauth_users 2>&1` 'function' 'check_ps_unauth_users() loaded properly'
-        is `type -t check_ps_userproc_lineage 2>&1` 'function' 'check_ps_userproc_lineage() loaded properly'
-        is `type -t check_ps_kswapd 2>&1` 'function' 'check_ps_kswapd() loaded properly'
     } ; unplan
 
     # Make sure no watchdog timer is launched.
@@ -124,7 +98,7 @@ function test_nhc_driver() {
 function test_checks() {
     local CHECKTEST
 
-    for CHECKTEST in test_*.nhc ; do
+    for CHECKTEST in $SRCDIR/test_*.nhc ; do
         if [[ ! -s "$CHECKTEST" ]]; then
             continue
         fi
@@ -134,7 +108,7 @@ function test_checks() {
     return 0
 }
 
-echo "Running unit tests for NHC..."
+echo "Running unit tests for NHC:"
 if [[ $# -eq 2 ]]; then
     SRCDIR=$1
     TOP_SRCDIR=$2

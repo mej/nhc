@@ -1,0 +1,10 @@
+# Tests for ww_fs.nhc
+#
+# $Id$
+#
+
+plan 3 "ww_fs.nhc" && {
+    is `type -t check_fs_mount 2>&1` 'function' 'check_fs_mount() loaded properly'
+    is `type -t check_fs_mount_rw 2>&1` 'function' 'check_fs_mount_rw() loaded properly'
+    is `type -t check_fs_mount_ro 2>&1` 'function' 'check_fs_mount_ro() loaded properly'
+} ; unplan

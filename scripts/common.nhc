@@ -33,10 +33,10 @@ else
     # Check to see if parameter ($1) matches regexp ($2) using egrep
     function mcheck_regexp() {
         if (echo "$1" | grep -E "$2" >/dev/null 2>&1); then
-            dbg "Regexp match check (internal):  $1 matches /$2/"
+            dbg "Regexp match check (external):  $1 matches /$2/"
             return 0
         else
-            dbg "Regexp match check (internal):  $1 does not match /$2/"
+            dbg "Regexp match check (external):  $1 does not match /$2/"
             return 1
         fi
     }

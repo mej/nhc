@@ -3,11 +3,38 @@
 # $Id$
 #
 
-plan 6 "common.nhc" && {
+plan $((6+5+5+2)) "common.nhc" && {
     is `type -t mcheck_regexp 2>&1` 'function' 'mcheck_regexp() loaded properly'
     is `type -t mcheck_glob 2>&1` 'function' 'mcheck_glob() loaded properly'
     is `type -t mcheck 2>&1` 'function' 'mcheck() loaded properly'
     is `type -t nhc_load_conf 2>&1` 'function' 'nhc_load_conf() loaded properly'
     is `type -t nhc_common_load_passwd 2>&1` 'function' 'nhc_common_load_passwd() loaded properly'
     is `type -t nhc_common_get_uid 2>&1` 'function' 'nhc_common_get_uid() loaded properly'
+
+    mcheck "This is a test." '/test/'
+    is $? 0 "Basic regexp match via mcheck()"
+    mcheck "some.hostname.com" '/\./'
+    is $? 0 "Metacharacter escape regexp match via mcheck()"
+    mcheck "hostname" '/\./'
+    is $? 1 "Failed regexp match via mcheck()"
+    mcheck "host.example.com" '/example\.(com|net|org)$/'
+    is $? 0 "Extended regexp match via mcheck()"
+    mcheck "1 2 3 4 5" '/(^| )1/'
+    is $? 0 "Boundary case regexp match via mcheck()"
+
+    mcheck "n0000.testbed" 'n*.*'
+    is $? 0 "Basic glob match via mcheck()"
+    mcheck "some*glob" '*\**'
+    is $? 0 "Metacharacter escape glob match via mcheck()"
+    mcheck "hostname" '\*'
+    is $? 1 "Failed glob match via mcheck()"
+    mcheck "host.example.com" '*.?xample.[CcNnOo][OoEeRr][MmTtGg]'
+    is $? 0 "Bracket glob match via mcheck()"
+    mcheck "1 2 3 4 5" '*1*'
+    is $? 0 "Boundary case glob match via mcheck()"
+
+    mcheck_regexp 'Testing' '/^Testing$/'
+    is $? 1 "Direct usage of mcheck_regexp() with slashes (wrong)"
+    mcheck_regexp 'Testing' '^Testing$'
+    is $? 0 "Direct usage of mcheck_regexp() without slashes (correct)"
 } ; unplan

@@ -245,3 +245,11 @@ Mon Jul  2 17:17:38 2012                        Michael Jennings (mej)
 
 Initial test files for each check script.
 ----------------------------------------------------------------------
+Thu Aug 16 18:12:36 2012                        Michael Jennings (mej)
+
+More work on unit tests:
+ - Report number of tests skipped, if any.
+ - Add tests for "common.nhc" module.
+ - Add tests for "ww_fs.nhc" module.
+ - Fix typos in external match checks.
+----------------------------------------------------------------------

@@ -18,16 +18,25 @@ SHUT_TESTS_DONE=0
 SHUT_TESTSET_NUM=0
 SHUT_TESTSET_PLANNED=0
 SHUT_TESTSET_DONE=0
+SHUT_TESTSET_SKIPPED=0
 SHUT_TESTSET_NAME=""
 
 function pass() {
     ((SHUT_TESTS_DONE++))
     ((SHUT_TESTSET_DONE++))
-    echo -e "ok $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED\r$SHUT_TESTSET_NAME...\c"
+    if [[ $SHUT_TESTSET_SKIPPED -gt 0 ]]; then
+        echo -e "ok $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED ($SHUT_TESTSET_SKIPPED skipped)\r$SHUT_TESTSET_NAME...\c"
+    else
+        echo -e "ok $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED\r$SHUT_TESTSET_NAME...\c"
+    fi
 }
 
 function fail() {
-    echo "failed"
+    if [[ $SHUT_TESTSET_SKIPPED -gt 0 ]]; then
+        echo "failed $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED ($SHUT_TESTSET_SKIPPED skipped)"
+    else
+        echo "failed $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED"
+    fi
     echo "TEST FAILED:  $*" >&2
     exit -1
 }
@@ -36,6 +45,7 @@ function plan() {
     ((SHUT_TESTSET_NUM++))
     SHUT_TESTSET_PLANNED=$1
     SHUT_TESTSET_NAME="${2:-Test set #$SHUT_TESTSET_NUM}"
+    SHUT_TESTSET_SKIPPED=0
     SHUT_TESTSET_DONE=0
     echo -e "$SHUT_TESTSET_NAME...\c"
     return 0
@@ -45,6 +55,7 @@ function unplan() {
     check_plan
     SHUT_TESTSET_PLANNED=0
     SHUT_TESTSET_NAME=""
+    SHUT_TESTSET_SKIPPED=0
     SHUT_TESTSET_DONE=0
 }
 
@@ -66,8 +77,14 @@ function check_plan() {
 }
 
 function skip() {
+    ((SHUT_TESTSET_SKIPPED+=${1:-1}))
     ((SHUT_TESTSET_DONE+=${1:-1}))
     ((SHUT_TESTS_DONE+=${1:-1}))
+    if [[ $SHUT_TESTSET_SKIPPED -gt 0 ]]; then
+        echo -e "ok $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED ($SHUT_TESTSET_SKIPPED skipped)\r$SHUT_TESTSET_NAME...\c"
+    else
+        echo -e "ok $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED\r$SHUT_TESTSET_NAME...\c"
+    fi
     return 1
 }
 

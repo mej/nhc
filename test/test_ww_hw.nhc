@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan 11 "ww_hw.nhc" && {
+plan $((11+7+7+7+7+4+4+4+5+9)) "ww_hw.nhc" && {
     is `type -t nhc_hw_gather_data 2>&1` 'function' 'nhc_hw_gather_data() loaded properly'
     is `type -t check_hw_cpuinfo 2>&1` 'function' 'check_hw_cpuinfo() loaded properly'
     is `type -t check_hw_physmem 2>&1` 'function' 'check_hw_physmem() loaded properly'
@@ -15,5 +15,166 @@ plan 11 "ww_hw.nhc" && {
     is `type -t check_hw_ib 2>&1` 'function' 'check_hw_ib() loaded properly'
     is `type -t check_hw_gm 2>&1` 'function' 'check_hw_gm() loaded properly'
     is `type -t check_hw_eth 2>&1` 'function' 'check_hw_eth() loaded properly'
+
+
+    # CPU data:  Dual-socket, 6-core Sandy Bridge system with HT on
+    HW_SOCKETS=2
+    HW_CORES=12
+    HW_THREADS=24
+
+    # Check for dual-socket 6-core with HT (e.g., Intel Patsburg/Sandy Bridge E5-2440)
+    check_hw_cpuinfo 2 12 24
+    is $? 0 "Valid test hardware:  2 sockets, 6 cores/socket, 2 threads/core"
+    # Check for dual-socket 6-core HT off (e.g., Intel Patsburg/Sandy Bridge E5-2440)
+    check_hw_cpuinfo 2 12 12
+    is $? 1 "Invalid test hardware:  2 sockets, 6 cores/socket, 1 thread/core"
+    # Check for dual-socket quad-core with HT (e.g., Intel Nehalem E5520)
+    check_hw_cpuinfo 2 8 16
+    is $? 1 "Invalid test hardware:  2 sockets, 4 cores/socket, 2 threads/core"
+    # Check for dual-socket quad-core no HT (e.g., Intel Clovertown E5345)
+    check_hw_cpuinfo 2 8 8
+    is $? 1 "Invalid test hardware:  2 sockets, 4 cores/socket, 1 thread/core"
+    # Check for dual-socket single core (e.g., Intel Lindenhurst with Irwindale Xeons)
+    check_hw_cpuinfo 2 2 2
+    is $? 1 "Invalid test hardware:  2 sockets, 1 core/socket, 1 thread/core"
+    # Check for single-socket single core (e.g., the year 1998)
+    check_hw_cpuinfo 1 1 1
+    is $? 1 "Invalid test hardware:  1 socket, 1 core/socket, 1 thread/core"
+    # Idiot-proofing
+    check_hw_cpuinfo 0 0 0
+    is $? 1 "Invalid test hardware:  Non-existent CPU"
+
+
+    # Memory data:  32GB RAM, 18GB swap
+    HW_RAM_FREE=27828840
+    HW_RAM_TOTAL=32857508
+    HW_SWAP_FREE=18480520
+    HW_SWAP_TOTAL=18563064
+
+    # Check ranges of RAM:  0, exact, max below, at max, in range, at min, min above
+    check_hw_physmem 0 0
+    is $? 1 "Bogus RAM range:  0kB - 0kB"
+    check_hw_physmem 32857508 32857508
+    is $? 0 "Non-range check equal to actual physical RAM size"
+    check_hw_physmem 1 12
+    is $? 1 "RAM range maximum is below actual physical RAM size"
+    check_hw_physmem 100 32857508
+    is $? 0 "RAM range maximum equal to actual physical RAM size"
+    check_hw_physmem 32000000 33000000
+    is $? 0 "RAM range includes actual physical RAM size"
+    check_hw_physmem 32857508 99999999
+    is $? 0 "RAM range minimum equal to actual physical RAM size"
+    check_hw_physmem 99999999 999999999
+    is $? 1 "RAM range minimum is above actual physical RAM size"
+
+    # Check ranges of swap:  0, exact, max below, at max, in range, at min, min above
+    check_hw_swap 0 0
+    is $? 1 "Bogus swap range:  0kB - 0kB"
+    check_hw_swap 18563064 18563064
+    is $? 0 "Non-range check equal to actual swap size"
+    check_hw_swap 1 12
+    is $? 1 "Swap range maximum is below actual swap size"
+    check_hw_swap 100 18563064
+    is $? 0 "Swap range maximum equal to actual swap size"
+    check_hw_swap 18000000 19000000
+    is $? 0 "Swap range includes actual swap size"
+    check_hw_swap 18563064 99999999
+    is $? 0 "Swap range minimum equal to actual swap size"
+    check_hw_swap 99999999 999999999
+    is $? 1 "Swap range minimum is above actual swap size"
+
+    # Check ranges of memory:  0, exact, max below, at max, in range, at min, min above
+    check_hw_mem 0 0
+    is $? 1 "Bogus memory range:  0kB - 0kB"
+    check_hw_mem 51420572 51420572
+    is $? 0 "Non-range check equal to actual memory size"
+    check_hw_mem 1 12
+    is $? 1 "Memory range maximum is below actual memory size"
+    check_hw_mem 100 51420572
+    is $? 0 "Memory range maximum equal to actual memory size"
+    check_hw_mem 51000000 52000000
+    is $? 0 "Memory range includes actual memory size"
+    check_hw_mem 51420572 99999999
+    is $? 0 "Memory range minimum equal to actual memory size"
+    check_hw_mem 99999999 999999999
+    is $? 1 "Memory range minimum is above actual memory size"
+
+    # Check free RAM minima:  0, below actual, exact, above actual
+    check_hw_physmem_free 0
+    is $? 0 "Free RAM - 0 (no) minimum"
+    check_hw_physmem_free 100
+    is $? 0 "Free RAM - Minimum below actual"
+    check_hw_physmem_free 27828840
+    is $? 0 "Free RAM - Minimum equal to actual"
+    check_hw_physmem_free 99999999
+    is $? 1 "Free RAM - Minimum above actual"
+
+    # Check free Swap minima:  0, below actual, exact, above actual
+    check_hw_swap_free 0
+    is $? 0 "Free Swap - 0 (no) minimum"
+    check_hw_swap_free 100
+    is $? 0 "Free Swap - Minimum below actual"
+    check_hw_swap_free 18480520
+    is $? 0 "Free Swap - Minimum equal to actual"
+    check_hw_swap_free 99999999
+    is $? 1 "Free Swap - Minimum above actual"
+
+    # Check free memory minima:  0, below actual, exact, above actual
+    check_hw_mem_free 0
+    is $? 0 "Free memory - 0 (no) minimum"
+    check_hw_mem_free 100
+    is $? 0 "Free memory - Minimum below actual"
+    check_hw_mem_free 46309360
+    is $? 0 "Free memory - Minimum equal to actual"
+    check_hw_mem_free 99999999
+    is $? 1 "Free memory - Minimum above actual"
+
+
+    # Infiniband data:  2 56Gbps 4X FDR ports, one up, one down
+    HW_IB_STATE=( "ACTIVE" "DOWN" )
+    HW_IB_PHYS_STATE=( "LinkUp" "Disabled" )
+    HW_IB_RATE=( "56" "10" )
+    # Check for EDR, FDR, QDR, DDR, and SDR 4X links
+    check_hw_ib 100
+    is $? 1 "Not present:  4X EDR Infiniband link"
+    check_hw_ib 56
+    is $? 0 "Present:  4X FDR Infiniband link"
+    check_hw_ib 40
+    is $? 1 "Not present:  4X QDR Infiniband link"
+    check_hw_ib 20
+    is $? 1 "Not present:  4X DDR Infiniband link"
+    check_hw_ib 10
+    is $? 1 "Not present:  4X SDR Infiniband link"
+
+
+    # Kernel module data:  Pared down list from 2.6.32
+    HW_MODULES=( "ext3" "jbd" "vfat" "fat" "pcspkr" "fuse" "ipv6" "cdrom" "3w_sas" "ahci" )
+    # Ethernet data:  4 1GbE NICs, 1 VM bridge, 1 Myrinet card
+    HW_ETH_DEV=( "lo" "eth0" "eth1" "eth2" "eth3" "virbr0" "virbr0-nic" "myri0" )
+
+    # Check for Myrinet interfaces.  No gm kernel module is present.
+    check_hw_gm myri0
+    is $? 1 "Myrinet interface myri0 is present, but no gm driver loaded."
+    check_hw_gm myri1
+    is $? 1 "No myri1 interface present."
+
+    # If we "add" the kernel module, it should succeed.
+    HW_MODULES[${#HWMODULES[*]}]=gm
+    check_hw_gm myri0
+    is $? 0 "Myrinet interface myri0 is present and gm driver loaded."
+
+    # Check for some NICs
+    check_hw_eth lo
+    is $? 0 "Ethernet interface lo is present."
+    check_hw_eth eth0
+    is $? 0 "Ethernet interface eth0 is present."
+    check_hw_eth eth3
+    is $? 0 "Ethernet interface eth3 is present."
+    check_hw_eth em0
+    is $? 1 "Ethernet interface em0 is not present."
+    check_hw_eth vmbr0
+    is $? 1 "Ethernet interface vmbr0 is not present."
+    check_hw_eth virbr0
+    is $? 0 "Ethernet interface virbr0 is present."
 
 } ; unplan

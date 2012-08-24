@@ -253,3 +253,7 @@ More work on unit tests:
  - Add tests for "ww_fs.nhc" module.
  - Fix typos in external match checks.
 ----------------------------------------------------------------------
+Fri Aug 24 15:29:17 2012                        Michael Jennings (mej)
+
+Finished hardware unit tests.
+----------------------------------------------------------------------

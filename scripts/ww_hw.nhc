@@ -124,12 +124,15 @@ function check_hw_cpuinfo() {
 
     if [[ -n "$SOCKETS" && $SOCKETS -ne $HW_SOCKETS ]]; then
         die 1 "Actual CPU socket count ($HW_SOCKETS) does not match expected ($SOCKETS)."
+        return 1
     fi
     if [[ -n "$CORES" && $CORES -ne $HW_CORES ]]; then
         die 1 "Actual CPU core count ($HW_CORES) does not match expected ($CORES)."
+        return 1
     fi
     if [[ -n "$THREADS" && $THREADS -ne $HW_THREADS ]]; then
         die 1 "Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
+        return 1
     fi
     return 0
 }
@@ -146,9 +149,11 @@ function check_hw_physmem() {
 
     if [[ $HW_RAM_TOTAL -lt $RAM_MIN ]]; then
         die 1 "Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
+        return 1
     fi
     if [[ $HW_RAM_TOTAL -gt $RAM_MAX ]]; then
         die 1 "Actual RAM size ($HW_RAM_TOTAL kB) greater than maximum allowed ($RAM_MAX kB)."
+        return 1
     fi
     return 0
 }
@@ -165,9 +170,11 @@ function check_hw_swap() {
 
     if [[ $HW_SWAP_TOTAL -lt $SWAP_MIN ]]; then
         die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
+        return 1
     fi
     if [[ $HW_SWAP_TOTAL -gt $SWAP_MAX ]]; then
         die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) greater than maximum allowed ($SWAP_MAX kB)."
+        return 1
     fi
 }
 
@@ -185,9 +192,11 @@ function check_hw_mem() {
     MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
     if [[ $MEM_TOTAL -lt $MEM_MIN ]]; then
         die 1 "Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
+        return 1
     fi
     if [[ $MEM_TOTAL -gt $MEM_MAX ]]; then
         die 1 "Actual system memory ($MEM_TOTAL kB) greater than maximum allowed ($MEM_MAX kB)."
+        return 1
     fi
 }
 
@@ -201,6 +210,7 @@ function check_hw_physmem_free() {
 
     if [[ $HW_RAM_FREE -lt $RAM_MINFREE ]]; then
         die 1 "Not enough RAM free ($HW_RAM_FREE kB < $RAM_MINFREE kB)."
+        return 1
     fi
     return 0
 }
@@ -215,6 +225,7 @@ function check_hw_swap_free() {
 
     if [[ $HW_SWAP_FREE -lt $SWAP_MINFREE ]]; then
         die 1 "Not enough swap free ($HW_SWAP_FREE kB < $SWAP_MINFREE kB)."
+        return 1
     fi
     return 0
 }
@@ -231,6 +242,7 @@ function check_hw_mem_free() {
     MEM_FREE=$((HW_RAM_FREE + HW_SWAP_FREE))
     if [[ $MEM_FREE -lt $MEM_MINFREE ]]; then
         die 1 "Not enough free memory ($MEM_FREE kB < $MEM_MINFREE kB)."
+        return 1
     fi
     return 0
 }
@@ -248,11 +260,12 @@ function check_hw_ib() {
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
         if [[ ${HW_IB_STATE[$i]} == $STATE && ${HW_IB_PHYS_STATE[$i]} == $PHYS_STATE && ${HW_IB_RATE[$i]} == $RATE ]]; then
-            return
+            return 0
         fi
     done
 
     die 1 "No IB port is $STATE ($PHYS_STATE, $RATE Gb/sec)."
+    return 1
 }
 
 # Check if Myrinet GM device driver and device ($1) are both available.
@@ -274,13 +287,14 @@ function check_hw_gm() {
         if [[ ${HW_ETH_DEV[$i]} == $DEV ]]; then
             for ((j=0; j < ${#HW_MODULES[*]}; j++)); do
                 if [[ ${HW_MODULES[$j]} == $GM ]]; then
-                    return
+                    return 0
                 fi
             done
         fi
     done
 
     die 1 "GM device $DEV not active, either driver is not loaded, or interface not created."
+    return 1
 }
 
 # Check if arbitrary Ethernet device ($1) is available.
@@ -294,9 +308,10 @@ function check_hw_eth() {
 
     for ((i=0; i < ${#HW_ETH_DEV[*]}; i++)); do
         if [[ ${HW_ETH_DEV[$i]} == $DEV ]]; then
-            return
+            return 0
         fi
     done
 
     die 1 "Ethernet device $DEV not detected."
+    return 1
 }

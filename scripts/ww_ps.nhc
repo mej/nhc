@@ -48,7 +48,7 @@ function nhc_ps_gather_data() {
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
         dbg "Got process $THIS_PID:  ${PS_USER[$THIS_PID]} ${PS_UID[$THIS_PID]} ${PS_PPID[$THIS_PID]} ${PS_PCPU[$THIS_PID]} ${PS_PMEM[$THIS_PID]} ${PS_RSS[$THIS_PID]} ${PS_VSZ[$THIS_PID]} ${PS_TIME[$THIS_PID]} ${PS_ARGS[$THIS_PID]}"
     done
-    export PS_PROCS PS_USER PS_PPID PS_PCPU PS_PMEM PS_RSS PS_VSZ PS_TIME PS_ARGS
+    export PS_PROCS PS_USER PS_UID PS_PPID PS_PCPU PS_PMEM PS_RSS PS_VSZ PS_TIME PS_ARGS
 }
 
 # Check the lineage (i.e., parent process tree) of a process ($1) for a particular
@@ -65,7 +65,7 @@ function nhc_ps_pid_lineage() {
         THIS_PID=${PS_PPID[$THIS_PID]}
         mcheck "${PS_ARGS[$THIS_PID]}" "$PROCNAME" && return 0
     done
-    return -1
+    return 1
 }
 
 # Check to make sure a process ($1) is running.  Includes optional
@@ -98,6 +98,7 @@ function check_ps_daemon() {
 
     # No matching process found.
     die 1 "$FUNCNAME:  Process $DAEMON ${OWNER:+owned by $OWNER }not running"
+    return 1
 
     #if ! pgrep ${OWNER:+-u $OWNER} ${ARGS:+-f} "$DAEMON" >/dev/null 2>&1 ; then
     #    die 1 "$FUNCNAME:  Process $DAEMON ${OWNER:+owned by $OWNER }not running"
@@ -143,7 +144,7 @@ function check_ps_unauth_users() {
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;
                 syslog ) syslog "$UNAUTH_MSG" ;;
-                die )    die 1 "$UNAUTH_MSG" ;;
+                die )    die 1 "$UNAUTH_MSG" ; return 1 ;;
                 kill )   [[ ${THIS_UID:-0} -gt $MAX_SYS_UID ]] && kill -9 $THIS_PID ;;
                 ignore ) break ;;
             esac
@@ -171,7 +172,7 @@ function check_ps_userproc_lineage() {
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
-        THIS_UID=${PS_UID[$i]}
+        THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
@@ -186,7 +187,7 @@ function check_ps_userproc_lineage() {
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;
                 syslog ) syslog "$UNAUTH_MSG" ;;
-                die )    die 1 "$UNAUTH_MSG" ;;
+                die )    die 1 "$UNAUTH_MSG" ; return 1 ;;
                 kill )   [[ ${THIS_UID:-0} -gt $MAX_SYS_UID ]] && kill -9 $THIS_PID ;;
                 ignore ) break ;;
             esac
@@ -272,7 +273,7 @@ function check_ps_kswapd() {
             case "$ACTION" in
                 log )    log "$KSWAPD_MSG" ;;
                 syslog ) syslog "$KSWAPD_MSG" ;;
-                die )    die 1 "$KSWAPD_MSG" ;;
+                die )    die 1 "$KSWAPD_MSG" ; return 1 ;;
                 ignore ) break ;;
             esac
         done

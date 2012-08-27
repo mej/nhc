@@ -3,12 +3,415 @@
 # $Id$
 #
 
-plan 6 "ww_ps.nhc" && {
+function populate_ps_data() {
+    # Sample process data taken from an actual compute node running an
+    # actual job.  Kernel threads and some other unrelated processes
+    # have been pruned for brevity and readability.  Names have been
+    # changed to protect the innocent.
+    PS_ARGS=(
+        [1]="/sbin/init"
+        [138]="[kswapd0]"
+        [139]="[kswapd1]"
+        [1233]="rpcbind"
+        [1251]="rpc.statd"
+        [1289]="rpc.idmapd"
+        [1351]="/usr/sbin/sshd"
+        [1373]="ntpd -u ntp:ntp -p /var/run/ntpd.pid -g"
+        [1408]="/usr/sbin/pbs_mom -d /var/spool/torque/cluster/n0018 -L /local/torque/mom_logs/n0018.cluster.log -q"
+        [1416]="/usr/sbin/provisiond -i 300 10.0.0.1 ready"
+        [1431]="/usr/sbin/trqauthd"
+        [1441]="/usr/sbin/wulfd -m 10.0.0.1"
+        [1448]="/sbin/rsyslogd -i /var/run/syslogd.pid -c 5"
+        [19197]="-bash"
+        [19198]="pbs_demux"
+        [19217]="/bin/csh /var/spool/torque/cluster/n0018/mom_priv/jobs/11235.master.cluster.example.com.SC"
+        [19233]="mpirun -np 96 ./wrf.exe"
+        [19234]="./wrf.exe"
+        [19235]="./wrf.exe"
+        [19236]="./wrf.exe"
+        [19237]="./wrf.exe"
+        [19238]="./wrf.exe"
+        [19239]="./wrf.exe"
+        [19240]="./wrf.exe"
+        [19241]="./wrf.exe"
+        [19242]="./wrf.exe"
+        [19243]="./wrf.exe"
+        [19244]="./wrf.exe"
+        [19245]="./wrf.exe"
+    )
+    PS_PCPU=(
+        [1]="0.0"
+        [138]="0.0"
+        [139]="0.0"
+        [1233]="0.0"
+        [1251]="0.0"
+        [1289]="0.0"
+        [1351]="0.0"
+        [1373]="0.0"
+        [1408]="0.0"
+        [1416]="0.0"
+        [1431]="0.0"
+        [1441]="0.1"
+        [1448]="0.0"
+        [19197]="0.0"
+        [19198]="0.0"
+        [19217]="0.0"
+        [19233]="0.0"
+        [19234]="94.0"
+        [19235]="98.8"
+        [19236]="98.8"
+        [19237]="98.8"
+        [19238]="98.8"
+        [19239]="98.7"
+        [19240]="98.9"
+        [19241]="98.7"
+        [19242]="98.9"
+        [19243]="98.9"
+        [19244]="98.7"
+        [19245]="98.7"
+    )
+    PS_PMEM=(
+        [1]="0.0"
+        [138]="0.0"
+        [139]="0.0"
+        [1233]="0.0"
+        [1251]="0.0"
+        [1289]="0.0"
+        [1351]="0.0"
+        [1373]="0.0"
+        [1408]="0.0"
+        [1416]="0.0"
+        [1431]="0.0"
+        [1441]="0.0"
+        [1448]="0.0"
+        [19197]="0.0"
+        [19198]="0.0"
+        [19217]="0.0"
+        [19233]="0.0"
+        [19234]="1.2"
+        [19235]="1.1"
+        [19236]="1.1"
+        [19237]="1.1"
+        [19238]="1.1"
+        [19239]="1.1"
+        [19240]="1.1"
+        [19241]="1.0"
+        [19242]="1.1"
+        [19243]="1.2"
+        [19244]="1.3"
+        [19245]="1.2"
+    )
+    PS_PPID=(
+        [1]="0"
+        [138]="2"
+        [139]="2"
+        [1233]="1"
+        [1251]="1"
+        [1289]="1"
+        [1351]="1"
+        [1373]="1"
+        [1408]="1"
+        [1416]="1"
+        [1431]="1"
+        [1441]="1"
+        [1448]="1"
+        [19197]="1408"
+        [19198]="19197"
+        [19217]="19197"
+        [19233]="19217"
+        [19234]="19233"
+        [19235]="19233"
+        [19236]="19233"
+        [19237]="19233"
+        [19238]="19233"
+        [19239]="19233"
+        [19240]="19233"
+        [19241]="19233"
+        [19242]="19233"
+        [19243]="19233"
+        [19244]="19233"
+        [19245]="19233"
+    )
+    PS_PROCS=(
+        [0]="1"
+        [1]="138"
+        [2]="139"
+        [3]="1233"
+        [4]="1251"
+        [5]="1289"
+        [6]="1351"
+        [7]="1373"
+        [8]="1408"
+        [9]="1416"
+        [10]="1431"
+        [11]="1441"
+        [12]="1448"
+        [13]="19197"
+        [14]="19198"
+        [15]="19217"
+        [16]="19233"
+        [17]="19234"
+        [18]="19235"
+        [19]="19236"
+        [20]="19237"
+        [21]="19238"
+        [22]="19239"
+        [23]="19240"
+        [24]="19241"
+        [25]="19242"
+        [26]="19243"
+        [27]="19244"
+        [28]="19245"
+    )
+    PS_RSS=(
+        [1]="1448"
+        [138]="0"
+        [139]="0"
+        [1233]="744"
+        [1251]="936"
+        [1289]="548"
+        [1351]="1064"
+        [1373]="1172"
+        [1408]="17552"
+        [1416]="368"
+        [1431]="1004"
+        [1441]="452"
+        [1448]="1224"
+        [19197]="1656"
+        [19198]="2148"
+        [19217]="1864"
+        [19233]="4856"
+        [19234]="304132"
+        [19235]="292072"
+        [19236]="293688"
+        [19237]="289112"
+        [19238]="289172"
+        [19239]="293988"
+        [19240]="288940"
+        [19241]="263272"
+        [19242]="292312"
+        [19243]="319464"
+        [19244]="322036"
+        [19245]="315392"
+    )
+    PS_TIME=(
+        [1]="00:00:14"
+        [138]="00:01:06"
+        [139]="00:00:23"
+        [1233]="00:00:03"
+        [1251]="00:00:00"
+        [1289]="00:00:00"
+        [1351]="00:00:02"
+        [1373]="00:00:03"
+        [1408]="00:34:32"
+        [1416]="00:00:16"
+        [1431]="00:00:06"
+        [1441]="01:38:43"
+        [1448]="00:00:00"
+        [19197]="00:00:00"
+        [19198]="00:00:00"
+        [19217]="00:00:00"
+        [19233]="00:00:00"
+        [19234]="00:35:50"
+        [19235]="00:37:39"
+        [19236]="00:37:41"
+        [19237]="00:37:41"
+        [19238]="00:37:40"
+        [19239]="00:37:39"
+        [19240]="00:37:41"
+        [19241]="00:37:38"
+        [19242]="00:37:43"
+        [19243]="00:37:42"
+        [19244]="00:37:39"
+        [19245]="00:37:39"
+    )
+    PS_UID=(
+        [1]="0"
+        [138]="0"
+        [139]="0"
+        [1233]="32"
+        [1251]="29"
+        [1289]="0"
+        [1351]="0"
+        [1373]="38"
+        [1408]="0"
+        [1416]="0"
+        [1431]="0"
+        [1441]="0"
+        [1448]="0"
+        [19197]="12345"
+        [19198]="12345"
+        [19217]="12345"
+        [19233]="12345"
+        [19234]="12345"
+        [19235]="12345"
+        [19236]="12345"
+        [19237]="12345"
+        [19238]="12345"
+        [19239]="12345"
+        [19240]="12345"
+        [19241]="12345"
+        [19242]="12345"
+        [19243]="12345"
+        [19244]="12345"
+        [19245]="12345"
+    )
+    PS_USER=(
+        [1]="root"
+        [138]="root"
+        [139]="root"
+        [1233]="rpc"
+        [1251]="rpcuser"
+        [1289]="root"
+        [1351]="root"
+        [1373]="ntp"
+        [1408]="root"
+        [1416]="root"
+        [1431]="root"
+        [1441]="root"
+        [1448]="root"
+        [19197]="someuser"
+        [19198]="someuser"
+        [19217]="someuser"
+        [19233]="someuser"
+        [19234]="someuser"
+        [19235]="someuser"
+        [19236]="someuser"
+        [19237]="someuser"
+        [19238]="someuser"
+        [19239]="someuser"
+        [19240]="someuser"
+        [19241]="someuser"
+        [19242]="someuser"
+        [19243]="someuser"
+        [19244]="someuser"
+        [19245]="someuser"
+    )
+    PS_VSZ=(
+        [1]="19304"
+        [138]="0"
+        [139]="0"
+        [1233]="18956"
+        [1251]="23132"
+        [1289]="27368"
+        [1351]="50016"
+        [1373]="25924"
+        [1408]="60696"
+        [1416]="4044"
+        [1431]="123868"
+        [1441]="4056"
+        [1448]="249044"
+        [19197]="110216"
+        [19198]="48308"
+        [19217]="115016"
+        [19233]="109056"
+        [19234]="557288"
+        [19235]="546040"
+        [19236]="548736"
+        [19237]="542536"
+        [19238]="543840"
+        [19239]="549144"
+        [19240]="545348"
+        [19241]="519768"
+        [19242]="550780"
+        [19243]="580420"
+        [19244]="582984"
+        [19245]="576804"
+    )
+
+    # Also need passwd data for process tests
+    PWNAM_UIDS=( 0 29 32 38 12345 )
+    PWUID_USER=( [0]="root" [29]="rpcuser" [32]="rpc" [38]="ntp" [12345]="someuser" )
+    PWUID_GID=( [0]="0" [29]="29" [32]="32" [38]="38" [12345]="12345" )
+    PWUID_GECOS=( [0]="root" [29]="RPC Service User" [32]="Rpcbind Daemon" [38]="" [12345]="Some User" )
+    PWUID_HOME=( [0]="/root" [29]="/var/lib/nfs" [32]="/var/cache/rpcbind" [38]="/etc/ntp" [12345]="/home/someuser" )
+    PWUID_SHELL=( [0]="/bin/bash" [29]="/sbin/nologin" [32]="/sbin/nologin" [38]="/sbin/nologin" [12345]="/bin/bash" )
+    PWDATA_USERS=( "root" "rpcuser" "rpc" "ntp" "someuser" )
+    PWDATA_SYSTEM_USERS=( "root" "rpcuser" "rpc" "ntp" )
+    PWDATA_USERID_MAP="||root:0||rpcuser:29||rpc:32||ntp:38||someuser:12345"
+
+    # Fake job data so we don't need /var/spool/torque/mom_priv/jobs/*.JB
+    JOBUSERS=( "root" "nobody" "someuser" )
+
+    # Since our sample data is TORQUE-based, make sure we're matching on it.
+    RM_DAEMON_MATCH="/\bpbs_mom\b/"
+}
+
+function insert_naughty_procs() {
+    local BAD_PID=31337
+
+    PS_PROCS[${#PS_PROCS[*]}]=$BAD_PID
+    PS_USER[$BAD_PID]="badguy"
+    PS_UID[$BAD_PID]="31337"
+    PS_PPID[$BAD_PID]="1"
+    PS_PCPU[$BAD_PID]="0.1"
+    PS_PMEM[$BAD_PID]="1.1"
+    PS_RSS[$BAD_PID]="32768"
+    PS_VSZ[$BAD_PID]="1048576"
+    PS_TIME[$BAD_PID]="01:23:45"
+    PS_ARGS[$BAD_PID]="/home/badguy/badstuff"
+}
+
+plan $((6+10+4+6)) "ww_ps.nhc" && {
     is `type -t nhc_ps_gather_data 2>&1` 'function' 'nhc_ps_gather_data() loaded properly'
     is `type -t nhc_ps_pid_lineage 2>&1` 'function' 'nhc_ps_pid_lineage() loaded properly'
     is `type -t check_ps_daemon 2>&1` 'function' 'check_ps_daemon() loaded properly'
     is `type -t check_ps_unauth_users 2>&1` 'function' 'check_ps_unauth_users() loaded properly'
     is `type -t check_ps_userproc_lineage 2>&1` 'function' 'check_ps_userproc_lineage() loaded properly'
     is `type -t check_ps_kswapd 2>&1` 'function' 'check_ps_kswapd() loaded properly'
+
+    # Fake process listing data for testing
+    populate_ps_data
+
+    # Checks for common daemons like sshd, ntpd, trqauthd, wulfd, provisiond
+    # We don't check for pbs_mom since we're typically run from there.
+    check_ps_daemon sshd root
+    is $? 0 "Daemon sshd running, owned by root"
+    check_ps_daemon ntpd ntp
+    is $? 0 "Daemon ntpd running, owned by ntp"
+    check_ps_daemon trqauthd root
+    is $? 0 "Daemon trqauthd running, owned by root"
+    check_ps_daemon wulfd root
+    is $? 0 "Daemon wulfd running, owned by root"
+    check_ps_daemon provisiond root
+    is $? 0 "Daemon provisiond running, owned by root"
+    check_ps_daemon rsyslogd root
+    is $? 0 "Daemon rsyslogd running, owned by root"
+    check_ps_daemon httpd
+    is $? 1 "Daemon httpd not running"
+    check_ps_daemon named
+    is $? 1 "Daemon named not running"
+    check_ps_daemon nntpd
+    is $? 1 "Daemon nntpd not running"
+    check_ps_daemon pbs_server
+    is $? 1 "Daemon pbs_server not running"
+
+    # Check all processes to make sure they're owned by authorized users.
+    check_ps_unauth_users die
+    is $? 0 "All processes on node are authorized"
+    # Make sure all non-system processes are children of the RM daemon
+    check_ps_userproc_lineage die
+    is $? 0 "All user processes are children of RM daemon"
+    # Add a process that shouldn't be there...
+    insert_naughty_procs
+    # ...and make sure we see it now.
+    check_ps_unauth_users die
+    is $? 1 "We now detect the unauthorized process"
+    check_ps_userproc_lineage die
+    is $? 1 "We now detect the non-job process"
+
+    # Make sure there is no NUMA node imbalance
+    check_ps_kswapd 1800 5
+    is $? 0 "All kswapd processes are within tolerance (30 min, 5:1 ratio)"
+    check_ps_kswapd 900 4
+    is $? 0 "All kswapd processes are within tolerance (15 min, 4:1 ratio)"
+    check_ps_kswapd 600 3
+    is $? 0 "All kswapd processes are within tolerance (10 min, 3:1 ratio)"
+    check_ps_kswapd 300 2
+    is $? 0 "All kswapd processes are within tolerance (5 min, 2:1 ratio)"
+    check_ps_kswapd 60 2
+    is $? 1 "kswapd processes tripped threshold (1 min)"
+    check_ps_kswapd 300 1
+    is $? 1 "kswapd processes tripped discrepancy (1:1 ratio)"
 
 } ; unplan

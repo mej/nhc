@@ -257,3 +257,11 @@ Fri Aug 24 15:29:17 2012                        Michael Jennings (mej)
 
 Finished hardware unit tests.
 ----------------------------------------------------------------------
+Mon Aug 27 14:52:27 2012                        Michael Jennings (mej)
+
+Unit tests are finally done!  Should be 100% coverage on end-user
+checks too, though I don't know of any "gcov" equivalents for
+bash....  ;-)
+
+TODO:  More checks!
+----------------------------------------------------------------------

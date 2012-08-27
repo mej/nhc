@@ -265,3 +265,9 @@ bash....  ;-)
 
 TODO:  More checks!
 ----------------------------------------------------------------------
+Mon Aug 27 16:39:47 2012                        Michael Jennings (mej)
+
+Build fixes, alternative skip syntax, and unit test changes to allow
+"make test" in the spec file.  Tested on RHEL4, 5, and 6 and in chroot
+jails and VNFS images.
+----------------------------------------------------------------------

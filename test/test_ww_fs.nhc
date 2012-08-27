@@ -11,97 +11,96 @@ TESTWWFS_SAMPLE_NFS=( )
 TESTWWFS_SAMPLE_PROC=( )
 
 TESTWWFS_SAMPLE_NFS_VER=0
+TESTWWFS_SKIP_ALL=0
 
 # Throughout the below, we only want to use filesystems whose mountpoints start with a '/'.
-while read -a TESTWWFS_LINE ; do
-    # If we don't currently have a read-only filesystem to test with, see if this is one.
-    if [[ ${#TESTWWFS_SAMPLE_RO[*]} -eq 0 ]]; then
-        if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'ro,*' ; then
-            TESTWWFS_SAMPLE_RO=( ${TESTWWFS_LINE[*]} )
+if [[ -r /proc/mounts ]]; then
+    while read -a TESTWWFS_LINE ; do
+        # If we don't currently have a read-only filesystem to test with, see if this is one.
+        if [[ ${#TESTWWFS_SAMPLE_RO[*]} -eq 0 ]]; then
+            if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'ro,*' ; then
+                TESTWWFS_SAMPLE_RO=( ${TESTWWFS_LINE[*]} )
+            fi
+        # If we don't currently have a read/write filesystem to test with, see if this is one.
+        elif [[ ${#TESTWWFS_SAMPLE_RW[*]} -eq 0 ]]; then
+            if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'rw,*' ; then
+                TESTWWFS_SAMPLE_RW=( ${TESTWWFS_LINE[*]} )
+            fi
         fi
-    # If we don't currently have a read/write filesystem to test with, see if this is one.
-    elif [[ ${#TESTWWFS_SAMPLE_RW[*]} -eq 0 ]]; then
-        if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'rw,*' ; then
-            TESTWWFS_SAMPLE_RW=( ${TESTWWFS_LINE[*]} )
+        # Next, look for an NFS filesystem
+        if [[ ${#TESTWWFS_SAMPLE_NFS[*]} -eq 0 ]] && mcheck "${TESTWWFS_LINE[0]}" '/*' ; then
+            if [[ "${TESTWWFS_LINE[2]}" == "nfs" ]]; then
+                TESTWWFS_SAMPLE_NFS=( ${TESTWWFS_LINE[*]} )
+            fi
+            if mcheck "${TESTWWFS_LINE[3]}" '*,vers=3' ; then
+                TESTWWFS_SAMPLE_NFS_VER="vers=3"
+            elif mcheck "${TESTWWFS_LINE[3]}" '*,vers=4' ; then
+                TESTWWFS_SAMPLE_NFS_VER="vers=4"
+            fi
+        # And a proc filesystem.
+        elif [[ ${#TESTWWFS_SAMPLE_PROC[*]} -eq 0 ]]; then
+            if mcheck "${TESTWWFS_LINE[0]}" '/*' && [[ "${TESTWWFS_LINE[2]}" == "proc" ]]; then
+                TESTWWFS_SAMPLE_PROC=( ${TESTWWFS_LINE[*]} )
+            fi
         fi
-    fi
-    # Next, look for an NFS filesystem
-    if [[ ${#TESTWWFS_SAMPLE_NFS[*]} -eq 0 ]] && mcheck "${TESTWWFS_LINE[0]}" '/*' ; then
-        if [[ "${TESTWWFS_LINE[2]}" == "nfs" ]]; then
-            TESTWWFS_SAMPLE_NFS=( ${TESTWWFS_LINE[*]} )
-        fi
-        if mcheck "${TESTWWFS_LINE[3]}" '*,vers=3' ; then
-            TESTWWFS_SAMPLE_NFS_VER="vers=3"
-        elif mcheck "${TESTWWFS_LINE[3]}" '*,vers=4' ; then
-            TESTWWFS_SAMPLE_NFS_VER="vers=4"
-        fi
-    # And a proc filesystem.
-    elif [[ ${#TESTWWFS_SAMPLE_PROC[*]} -eq 0 ]]; then
-        if mcheck "${TESTWWFS_LINE[0]}" '/*' && [[ "${TESTWWFS_LINE[2]}" == "proc" ]]; then
-            TESTWWFS_SAMPLE_PROC=( ${TESTWWFS_LINE[*]} )
-        fi
-    fi
-done < /proc/mounts
+    done < /proc/mounts
+else
+    TESTWWFS_SKIP_ALL=1
+fi
 
 plan $((3+5+5+5+3)) "ww_fs.nhc" && {
     is `type -t check_fs_mount 2>&1` 'function' 'check_fs_mount() loaded properly'
     is `type -t check_fs_mount_rw 2>&1` 'function' 'check_fs_mount_rw() loaded properly'
     is `type -t check_fs_mount_ro 2>&1` 'function' 'check_fs_mount_ro() loaded properly'
 
-    check_fs_mount /
-    is $? 0 "check_fs_mount() for /"
-    check_fs_mount / "" "" ""
-    is $? 0 "check_fs_mount() for / (blank args)"
-    check_fs_mount /FAKE/filesystem/NAME
-    is $? 1 "check_fs_mount() for bogus filesystem"
-    check_fs_mount /FAKE/filesystem/NAME "" "" ""
-    is $? 1 "check_fs_mount() for bogus filesystem (blank args)"
-    if [[ "${#TESTWWFS_SAMPLE_PROC[*]}" -eq 0 ]]; then
-        skip_begin
-    fi
-    check_fs_mount ${TESTWWFS_SAMPLE_PROC[0]} "" ${TESTWWFS_SAMPLE_PROC[2]}
-    is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument)"
-    skip_end
+    [[ $TESTWWFS_SKIP_ALL -eq 1 ]] && skip_begin ; {
+        check_fs_mount /
+        is $? 0 "check_fs_mount() for /"
+        check_fs_mount / "" "" ""
+        is $? 0 "check_fs_mount() for / (blank args)"
+        check_fs_mount /FAKE/filesystem/NAME
+        is $? 1 "check_fs_mount() for bogus filesystem"
+        check_fs_mount /FAKE/filesystem/NAME "" "" ""
+        is $? 1 "check_fs_mount() for bogus filesystem (blank args)"
+    } ; skip_end
 
-    if [[ "${#TESTWWFS_SAMPLE_RO[*]}" -eq 0 ]]; then
-        skip_begin
-    fi
-    check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]}
-    is $? 0 "check_fs_mount_ro(), single argument (known good)"
-    check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]}
-    is $? 0 "check_fs_mount_ro(), two arguments (known good)"
-    check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} ${TESTWWFS_SAMPLE_RO[2]}
-    is $? 0 "check_fs_mount_ro(), three arguments (known good)"
-    check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RO[2]}
-    is $? 1 "check_fs_mount_ro(), three arguments (2nd bad)"
-    check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} FAKEfstype
-    is $? 1 "check_fs_mount_ro(), three arguments (3rd bad)"
-    skip_end
+    [[ "${#TESTWWFS_SAMPLE_PROC[*]}" -eq 0 ]] && skip_begin ; {
+        check_fs_mount ${TESTWWFS_SAMPLE_PROC[0]} "" ${TESTWWFS_SAMPLE_PROC[2]}
+        is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument)"
+    } ; skip_end
 
-    if [[ "${#TESTWWFS_SAMPLE_RW[*]}" -eq 0 ]]; then
-        skip_begin
-    fi
-    check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]}
-    is $? 0 "check_fs_mount_rw(), single argument (known good)"
-    check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]}
-    is $? 0 "check_fs_mount_rw(), two arguments (known good)"
-    check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} ${TESTWWFS_SAMPLE_RW[2]}
-    is $? 0 "check_fs_mount_rw(), three arguments (known good)"
-    check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RW[2]}
-    is $? 1 "check_fs_mount_rw(), three arguments (2nd bad)"
-    check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} FAKEfstype
-    is $? 1 "check_fs_mount_rw(), three arguments (3rd bad)"
-    skip_end
+    [[ "${#TESTWWFS_SAMPLE_RO[*]}" -eq 0 ]] && skip_begin ; {
+        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]}
+        is $? 0 "check_fs_mount_ro(), single argument (known good)"
+        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]}
+        is $? 0 "check_fs_mount_ro(), two arguments (known good)"
+        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} ${TESTWWFS_SAMPLE_RO[2]}
+        is $? 0 "check_fs_mount_ro(), three arguments (known good)"
+        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RO[2]}
+        is $? 1 "check_fs_mount_ro(), three arguments (2nd bad)"
+        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} FAKEfstype
+        is $? 1 "check_fs_mount_ro(), three arguments (3rd bad)"
+    } ; skip_end
 
-    if [[ "${#TESTWWFS_SAMPLE_NFS[*]}" -eq 0 ]]; then
-        skip_begin
-    fi
-    check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} ${TESTWWFS_SAMPLE_NFS[1]} nfs
-    is $? 0 "check_fs_mount() for NFS (source/type)"
-    check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "*,${TESTWWFS_SAMPLE_NFS_VER}*"
-    is $? 0 "check_fs_mount() for NFS version (glob)"
-    check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "/(^|,)${TESTWWFS_SAMPLE_NFS_VER}(,|\$)/"
-    is $? 0 "check_fs_mount() for NFS version (regex)"
-    skip_end
+    [[ "${#TESTWWFS_SAMPLE_RW[*]}" -eq 0 ]] && skip_begin ; {
+        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]}
+        is $? 0 "check_fs_mount_rw(), single argument (known good)"
+        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]}
+        is $? 0 "check_fs_mount_rw(), two arguments (known good)"
+        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} ${TESTWWFS_SAMPLE_RW[2]}
+        is $? 0 "check_fs_mount_rw(), three arguments (known good)"
+        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RW[2]}
+        is $? 1 "check_fs_mount_rw(), three arguments (2nd bad)"
+        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} FAKEfstype
+        is $? 1 "check_fs_mount_rw(), three arguments (3rd bad)"
+    } ; skip_end
 
+    [[ "${#TESTWWFS_SAMPLE_NFS[*]}" -eq 0 ]] && skip_begin ; {
+        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} ${TESTWWFS_SAMPLE_NFS[1]} nfs
+        is $? 0 "check_fs_mount() for NFS (source/type)"
+        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "*,${TESTWWFS_SAMPLE_NFS_VER}*"
+        is $? 0 "check_fs_mount() for NFS version (glob)"
+        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "/(^|,)${TESTWWFS_SAMPLE_NFS_VER}(,|\$)/"
+        is $? 0 "check_fs_mount() for NFS version (regex)"
+    } ; skip_end
 } ; unplan

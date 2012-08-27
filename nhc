@@ -76,7 +76,11 @@ function nhcmain_init_env() {
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
     SYSCONFIGDIR="/etc/sysconfig"
     LIBEXECDIR="/usr/libexec"
-    read HOSTNAME < /proc/sys/kernel/hostname
+    if [[ -r /proc/sys/kernel/hostname ]]; then
+        read HOSTNAME < /proc/sys/kernel/hostname
+    else
+        HOSTNAME="localhost"
+    fi
     HOSTNAME_S=${HOSTNAME/%.*}
     RET=0
     LOGGER_TEXT=""

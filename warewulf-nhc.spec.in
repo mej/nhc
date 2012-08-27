@@ -43,6 +43,10 @@ which checks should be run on which nodes.
 %{__make} install DESTDIR=$RPM_BUILD_ROOT %{?mflags_install}
 
 
+%check
+%{__make} test
+
+
 %clean
 test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 

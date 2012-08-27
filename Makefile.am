@@ -15,7 +15,7 @@ dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 
 CLEANFILES = 
-EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh warewulf-nhc.spec
+EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc-test.conf warewulf-nhc.spec
 
 test:
 	$(MAKE) -C test test

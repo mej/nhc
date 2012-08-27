@@ -90,10 +90,12 @@ function skip() {
 
 function skip_begin() {
     SHUT_SKIPPING=1
+    return 0
 }
 
 function skip_end() {
     SHUT_SKIPPING=0
+    return 0
 }
 
 function skipping() {

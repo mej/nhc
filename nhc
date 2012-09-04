@@ -78,7 +78,7 @@ function nhcmain_init_env() {
     LIBEXECDIR="/usr/libexec"
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
-    else
+    elif [[ -z "$HOSTNAME" ]]; then
         HOSTNAME="localhost"
     fi
     HOSTNAME_S=${HOSTNAME/%.*}

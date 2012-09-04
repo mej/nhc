@@ -271,3 +271,9 @@ Build fixes, alternative skip syntax, and unit test changes to allow
 "make test" in the spec file.  Tested on RHEL4, 5, and 6 and in chroot
 jails and VNFS images.
 ----------------------------------------------------------------------
+Tue Sep  4 13:01:10 2012                        Michael Jennings (mej)
+
+Initial support for the nVidia HealthMon tool for checking the status
+of nVidia CUDA GPU devices.  More information can be found with the
+Tesla Deployment Kit version 3 (currently in RC status).
+----------------------------------------------------------------------

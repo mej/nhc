@@ -353,12 +353,12 @@ function insert_naughty_procs() {
 }
 
 plan $((6+10+4+6)) "ww_ps.nhc" && {
-    is `type -t nhc_ps_gather_data 2>&1` 'function' 'nhc_ps_gather_data() loaded properly'
-    is `type -t nhc_ps_pid_lineage 2>&1` 'function' 'nhc_ps_pid_lineage() loaded properly'
-    is `type -t check_ps_daemon 2>&1` 'function' 'check_ps_daemon() loaded properly'
-    is `type -t check_ps_unauth_users 2>&1` 'function' 'check_ps_unauth_users() loaded properly'
-    is `type -t check_ps_userproc_lineage 2>&1` 'function' 'check_ps_userproc_lineage() loaded properly'
-    is `type -t check_ps_kswapd 2>&1` 'function' 'check_ps_kswapd() loaded properly'
+    is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
+    is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
+    is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
+    is "`type -t check_ps_unauth_users 2>&1`" 'function' 'check_ps_unauth_users() loaded properly'
+    is "`type -t check_ps_userproc_lineage 2>&1`" 'function' 'check_ps_userproc_lineage() loaded properly'
+    is "`type -t check_ps_kswapd 2>&1`" 'function' 'check_ps_kswapd() loaded properly'
 
     # Fake process listing data for testing
     populate_ps_data

@@ -49,9 +49,9 @@ else
 fi
 
 plan $((3+5+5+5+3)) "ww_fs.nhc" && {
-    is `type -t check_fs_mount 2>&1` 'function' 'check_fs_mount() loaded properly'
-    is `type -t check_fs_mount_rw 2>&1` 'function' 'check_fs_mount_rw() loaded properly'
-    is `type -t check_fs_mount_ro 2>&1` 'function' 'check_fs_mount_ro() loaded properly'
+    is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
+    is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
+    is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
 
     [[ $TESTWWFS_SKIP_ALL -eq 1 ]] && skip_begin ; {
         check_fs_mount /

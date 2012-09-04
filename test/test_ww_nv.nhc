@@ -1,0 +1,107 @@
+# Tests for ww_nv.nhc
+#
+# $Id$
+#
+
+function populate_nv_data_good() {
+    NV_HEALTHMON_LINES=(
+        [0]="Loading Config: SUCCESS"
+        [1]="Global Tests"
+        [2]="   Black-Listed Drivers: SUCCESS"
+        [3]="   Load NVML: SUCCESS"
+        [4]="   Load CUDA: SUCCESS"
+        [5]="   NVML Sanity: SUCCESS"
+        [6]="   Tesla Devices Count: SKIPPED"
+        [7]="   Global Test Results: 4 success, 0 errors, 0 warnings, 1 did not run"
+        [8]="-----------------------------------------------------------"
+        [9]="GPU 0000:02:00.0 #0 : Tesla C2050 (Serial: 0322810064976)"
+        [10]="   NVML Sanity: SUCCESS"
+        [11]="   InfoROM: SUCCESS"
+        [12]="   GEMINI InfoROM"
+        [13]="      This GPU does not share a board with another GPU chip."
+        [14]="      Result: SKIPPED"
+        [15]="   ECC: SUCCESS"
+        [16]="   CUDA Sanity"
+        [17]="      GPU: Tesla C2050"
+        [18]="      Compute Capability: 2.0"
+        [19]="      Amount of Memory: 2817982464 bytes"
+        [20]="      ECC: Enabled"
+        [21]="      Number of SMs: 14"
+        [22]="      Core Clock: 1147 MHz"
+        [23]="      Watchdog Timeout: Disabled"
+        [24]="      Compute Mode: Default"
+        [25]="      Result: SUCCESS"
+        [26]="   PCIe Maximum Link Generation: SKIPPED"
+        [27]="   PCIe Maximum Link Width: SKIPPED"
+        [28]="   PCI Seating"
+        [29]="      PCIe Link Width (Current/Max): 16/16"
+        [30]="      Result: SUCCESS"
+        [31]="   PCI Bandwidth: SKIPPED"
+        [32]="   Memory"
+        [33]="      Allocated 2725627509 bytes (96.7%)"
+        [34]="      Result: SUCCESS"
+        [35]="   Device Results: 6 success, 0 errors, 0 warnings, 4 did not run"
+        [36]="-----------------------------------------------------------"
+        [37]="GPU 0000:85:00.0 #1 : Tesla C2050 (Serial: 0323210003630)"
+        [38]="   NVML Sanity: SUCCESS"
+        [39]="   InfoROM: SUCCESS"
+        [40]="   GEMINI InfoROM"
+        [41]="      This GPU does not share a board with another GPU chip."
+        [42]="      Result: SKIPPED"
+        [43]="   ECC: SUCCESS"
+        [44]="   CUDA Sanity"
+        [45]="      GPU: Tesla C2050"
+        [46]="      Compute Capability: 2.0"
+        [47]="      Amount of Memory: 2817982464 bytes"
+        [48]="      ECC: Enabled"
+        [49]="      Number of SMs: 14"
+        [50]="      Core Clock: 1147 MHz"
+        [51]="      Watchdog Timeout: Disabled"
+        [52]="      Compute Mode: Default"
+        [53]="      Result: SUCCESS"
+        [54]="   PCIe Maximum Link Generation: SKIPPED"
+        [55]="   PCIe Maximum Link Width: SKIPPED"
+        [56]="   PCI Seating"
+        [57]="      PCIe Link Width (Current/Max): 16/16"
+        [58]="      Result: SUCCESS"
+        [59]="   PCI Bandwidth: SKIPPED"
+        [60]="   Memory"
+        [61]="      Allocated 2725627509 bytes (96.7%)"
+        [62]="      Result: SUCCESS"
+        [63]="   Device Results: 6 success, 0 errors, 0 warnings, 4 did not run"
+        [64]="System Results: 16 success, 0 errors, 0 warnings, 9 did not run"
+        [65]="One or more tests didn't run."
+    )
+    NV_HEALTHMON_RC=0
+}
+
+function populate_nv_data_bad() {
+    NV_HEALTHMON_LINES=(
+        [0]="Loading Config: SUCCESS"
+        [1]="Global Tests"
+        [2]="   Black-Listed Drivers: SUCCESS"
+        [3]="   Load NVML"
+        [4]="      A library required to perform diagnostics could not be found on this "
+        [5]="      system. This indicates that this system may be incorrectly configured or "
+        [6]="      the NVIDIA display driver was improperly installed."
+        [7]="      * Reinstall the NVIDIA Display Driver."
+        [8]="      "
+        [9]="      Result: CRITICAL ERROR"
+        [10]="   Global Test Results: 1 success, 1 errors, 0 warnings, 0 did not run"
+    )
+    NV_HEALTHMON_RC=1
+}
+
+plan $((2+2)) "ww_nv.nhc" && {
+    is "`type -t nhc_nv_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
+    is "`type -t check_nv_healthmon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
+
+    # Not much to test yet, but hopefully more soon!
+    populate_nv_data_good
+    check_nv_healthmon
+    is $? 0 "nVidia Health Check success"
+
+    populate_nv_data_bad
+    check_nv_healthmon
+    is $? 1 "nVidia Health Check failure"
+} ; unplan

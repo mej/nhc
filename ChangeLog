@@ -277,3 +277,7 @@ Initial support for the nVidia HealthMon tool for checking the status
 of nVidia CUDA GPU devices.  More information can be found with the
 Tesla Deployment Kit version 3 (currently in RC status).
 ----------------------------------------------------------------------
+Tue Sep  4 17:50:00 2012                        Michael Jennings (mej)
+
+Add check for blacklisted processes.
+----------------------------------------------------------------------

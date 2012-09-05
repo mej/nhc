@@ -352,7 +352,7 @@ function insert_naughty_procs() {
     PS_ARGS[$BAD_PID]="/home/badguy/badstuff"
 }
 
-plan $((6+10+4+6)) "ww_ps.nhc" && {
+plan $((6+10+6+4+6)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
@@ -385,6 +385,20 @@ plan $((6+10+4+6)) "ww_ps.nhc" && {
     is $? 1 "Daemon nntpd not running"
     check_ps_daemon pbs_server
     is $? 1 "Daemon pbs_server not running"
+
+    # Check some blacklisted processes
+    check_ps_blacklist httpd
+    is $? 0 "Blacklisted process httpd not detected"
+    check_ps_blacklist telnetd
+    is $? 0 "Blacklisted process telnetd not detected"
+    check_ps_blacklist ntpd root
+    is $? 0 "Blacklisted process ntpd owned by root not detected"
+    check_ps_blacklist sshd '!root'
+    is $? 0 "Blacklisted process sshd owned by non-root not detected"
+    check_ps_blacklist sshd root
+    is $? 1 "Blacklisted process sshd owned by root detected"
+    check_ps_blacklist '-bash' '!root'
+    is $? 1 "Blacklisted process bash owned by non-root detected"
 
     # Check all processes to make sure they're owned by authorized users.
     check_ps_unauth_users die

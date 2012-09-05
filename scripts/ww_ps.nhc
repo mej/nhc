@@ -105,6 +105,47 @@ function check_ps_daemon() {
     #fi
 }
 
+# Check to make sure a process ($1) is NOT running (opposite of
+# check_ps_daemon).  Includes optional checks for owner ($2) and
+# arguments ($3).
+function check_ps_blacklist() {
+    local DAEMON=$1
+    local OWNER=$2
+    local ARGS=$3
+    local THIS_PID i
+
+    test "$ARGS" != "" && DAEMON="$DAEMON $ARGS"
+
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
+        nhc_ps_gather_data
+    fi
+
+    for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
+        THIS_PID=${PS_PROCS[$i]}
+        dbg "Checking $THIS_PID:  $DAEMON vs. ${PS_ARGS[$THIS_PID]}"
+        if [[ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]]; then
+            continue
+        fi
+        dbg "Checking $THIS_PID:  $OWNER vs. ${PS_USER[$THIS_PID]}"
+        if [[ -n "$OWNER" ]]; then
+            if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
+                # Owner begins with !.  Negate the check.
+                if [[ "${PS_USER[$THIS_PID]}" == "${OWNER/#\!}" ]]; then
+                    continue
+                fi
+            elif [[ "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+                continue
+            fi
+        fi
+        # We have a matching process with the specified owner.
+        die 1 "$FUNCNAME:  Process $DAEMON ${OWNER:+owned by $OWNER } running"
+        return 1
+    done
+
+    # No matching process found.
+    return 0
+}
+
 # Checks all processes to make sure they are owned by users authorized
 # to be running on the node (i.e., root, and owners of current PBS jobs).
 # Arguments to function are actions to take (ignore, log, syslog, die, kill).

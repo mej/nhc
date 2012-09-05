@@ -281,3 +281,10 @@ Tue Sep  4 17:50:00 2012                        Michael Jennings (mej)
 
 Add check for blacklisted processes.
 ----------------------------------------------------------------------
+Wed Sep  5 16:39:59 2012                        Michael Jennings (mej)
+
+New checks for filesystem size/used/free limits based on "df" output.
+Refactored check_fs_mount() to only read /proc/mounts once and
+populate central array set (just like all the other modules).
+Refactored unit tests accordingly.
+----------------------------------------------------------------------

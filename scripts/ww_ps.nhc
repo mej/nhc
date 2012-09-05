@@ -26,11 +26,11 @@ function nhc_ps_gather_data() {
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
     LINES=( $(ps axo 'user,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
+    IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
-        IFS=$' \t\n'
         LINE=( ${LINES[$i]} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue

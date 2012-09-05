@@ -3,104 +3,145 @@
 # $Id$
 #
 
-# Scan the current mounts on the system to gather test data.
-declare -a TESTWWFS_SAMPLE_RO TESTWWFS_SAMPLE_RW TESTWWFS_SAMPLE_NFS TESTWWFS_SAMPLE_PROC TESTWWFS_LINE
-TESTWWFS_SAMPLE_RO=( )
-TESTWWFS_SAMPLE_RW=( )
-TESTWWFS_SAMPLE_NFS=( )
-TESTWWFS_SAMPLE_PROC=( )
+function populate_fs_data() {
+    DF_DEV=(
+        [0]="/dev/mapper/vg0-lv_root_ext4"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="/dev/sda1"
+        [4]="bluearc0:/home"
+        [5]="bluearc0:/software"
+    )
+    DF_FREE=(
+        [0]="19747624"
+        [1]="0"
+        [2]="0"
+        [3]="367968"
+        [4]="10998677612"
+        [5]="550155968"
+    )
+    DF_MNTPT=(
+        [0]="/"
+        [1]="/proc"
+        [2]="/sys"
+        [3]="/boot"
+        [4]="/home"
+        [5]="/global/software"
+    )
+    DF_PCT=(
+        [0]="38%"
+        [1]="-"
+        [2]="-"
+        [3]="22%"
+        [4]="68%"
+        [5]="32%"
+    )
+    DF_SIZE=(
+        [0]="33027952"
+        [1]="0"
+        [2]="0"
+        [3]="495844"
+        [4]="36124323646"
+        [5]="799277056"
+    )
+    DF_TYPE=(
+        [0]="ext4"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="ext4"
+        [4]="nfs"
+        [5]="nfs"
+    )
+    DF_USED=(
+        [0]="11602608"
+        [1]="0"
+        [2]="0"
+        [3]="102276"
+        [4]="23290830034"
+        [5]="249121088"
+    )
+    FS_DEV=(
+        [0]="rootfs"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="/dev/sda1"
+        [4]="bluearc0:/home"
+        [5]="bluearc0:/software"
+    )
+    FS_MNTPT=(
+        [0]="/"
+        [1]="/proc"
+        [2]="/sys"
+        [3]="/boot"
+        [4]="/home"
+        [5]="/global/software"
+    )
+    FS_OPTS=(
+        [0]="rw"
+        [1]="rw,nosuid,nodev,noexec,relatime"
+        [2]="rw,seclabel,nosuid,nodev,noexec,relatime"
+        [3]="rw,seclabel,relatime,barrier=1,data=ordered"
+        [4]="rw,relatime,vers=3,hard,proto=tcp,timeo=600,retrans=2,sec=sys"
+        [5]="ro,relatime,vers=3,hard,proto=tcp,timeo=600,retrans=2,sec=sys"
+    )
+    FS_TYPE=(
+        [0]="rootfs"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="ext4"
+        [4]="nfs"
+        [5]="nfs"
+    )
+}
 
-TESTWWFS_SAMPLE_NFS_VER=0
-TESTWWFS_SKIP_ALL=0
-
-# Throughout the below, we only want to use filesystems whose mountpoints start with a '/'.
-if [[ -r /proc/mounts ]]; then
-    while read -a TESTWWFS_LINE ; do
-        # If we don't currently have a read-only filesystem to test with, see if this is one.
-        if [[ ${#TESTWWFS_SAMPLE_RO[*]} -eq 0 ]]; then
-            if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'ro,*' ; then
-                TESTWWFS_SAMPLE_RO=( ${TESTWWFS_LINE[*]} )
-            fi
-        # If we don't currently have a read/write filesystem to test with, see if this is one.
-        elif [[ ${#TESTWWFS_SAMPLE_RW[*]} -eq 0 ]]; then
-            if mcheck "${TESTWWFS_LINE[0]}" '/*' && mcheck "${TESTWWFS_LINE[3]}" 'rw,*' ; then
-                TESTWWFS_SAMPLE_RW=( ${TESTWWFS_LINE[*]} )
-            fi
-        fi
-        # Next, look for an NFS filesystem
-        if [[ ${#TESTWWFS_SAMPLE_NFS[*]} -eq 0 ]] && mcheck "${TESTWWFS_LINE[0]}" '/*' ; then
-            if [[ "${TESTWWFS_LINE[2]}" == "nfs" ]]; then
-                TESTWWFS_SAMPLE_NFS=( ${TESTWWFS_LINE[*]} )
-            fi
-            if mcheck "${TESTWWFS_LINE[3]}" '*,vers=3' ; then
-                TESTWWFS_SAMPLE_NFS_VER="vers=3"
-            elif mcheck "${TESTWWFS_LINE[3]}" '*,vers=4' ; then
-                TESTWWFS_SAMPLE_NFS_VER="vers=4"
-            fi
-        # And a proc filesystem.
-        elif [[ ${#TESTWWFS_SAMPLE_PROC[*]} -eq 0 ]]; then
-            if mcheck "${TESTWWFS_LINE[0]}" '/*' && [[ "${TESTWWFS_LINE[2]}" == "proc" ]]; then
-                TESTWWFS_SAMPLE_PROC=( ${TESTWWFS_LINE[*]} )
-            fi
-        fi
-    done < /proc/mounts
-else
-    TESTWWFS_SKIP_ALL=1
-fi
-
-plan $((3+5+5+5+3)) "ww_fs.nhc" && {
+plan $((6+5+5+5+3)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
+    is "`type -t check_fs_size 2>&1`" 'function' 'check_fs_size() loaded properly'
+    is "`type -t check_fs_free 2>&1`" 'function' 'check_fs_free() loaded properly'
+    is "`type -t check_fs_used 2>&1`" 'function' 'check_fs_used() loaded properly'
 
-    [[ $TESTWWFS_SKIP_ALL -eq 1 ]] && skip_begin ; {
-        check_fs_mount /
-        is $? 0 "check_fs_mount() for /"
-        check_fs_mount / "" "" ""
-        is $? 0 "check_fs_mount() for / (blank args)"
-        check_fs_mount /FAKE/filesystem/NAME
-        is $? 1 "check_fs_mount() for bogus filesystem"
-        check_fs_mount /FAKE/filesystem/NAME "" "" ""
-        is $? 1 "check_fs_mount() for bogus filesystem (blank args)"
-    } ; skip_end
+    populate_fs_data
 
-    [[ "${#TESTWWFS_SAMPLE_PROC[*]}" -eq 0 ]] && skip_begin ; {
-        check_fs_mount ${TESTWWFS_SAMPLE_PROC[0]} "" ${TESTWWFS_SAMPLE_PROC[2]}
-        is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument)"
-    } ; skip_end
+    check_fs_mount /
+    is $? 0 "check_fs_mount() for /"
+    check_fs_mount / "" "" ""
+    is $? 0 "check_fs_mount() for / (blank args)"
+    check_fs_mount /FAKE/filesystem/NAME
+    is $? 1 "check_fs_mount() for bogus filesystem"
+    check_fs_mount /FAKE/filesystem/NAME "" "" ""
+    is $? 1 "check_fs_mount() for bogus filesystem (blank args)"
 
-    [[ "${#TESTWWFS_SAMPLE_RO[*]}" -eq 0 ]] && skip_begin ; {
-        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]}
-        is $? 0 "check_fs_mount_ro(), single argument (known good)"
-        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]}
-        is $? 0 "check_fs_mount_ro(), two arguments (known good)"
-        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} ${TESTWWFS_SAMPLE_RO[2]}
-        is $? 0 "check_fs_mount_ro(), three arguments (known good)"
-        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RO[2]}
-        is $? 1 "check_fs_mount_ro(), three arguments (2nd bad)"
-        check_fs_mount_ro ${TESTWWFS_SAMPLE_RO[0]} ${TESTWWFS_SAMPLE_RO[1]} FAKEfstype
-        is $? 1 "check_fs_mount_ro(), three arguments (3rd bad)"
-    } ; skip_end
+    check_fs_mount /proc "" proc
+    is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument)"
 
-    [[ "${#TESTWWFS_SAMPLE_RW[*]}" -eq 0 ]] && skip_begin ; {
-        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]}
-        is $? 0 "check_fs_mount_rw(), single argument (known good)"
-        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]}
-        is $? 0 "check_fs_mount_rw(), two arguments (known good)"
-        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} ${TESTWWFS_SAMPLE_RW[2]}
-        is $? 0 "check_fs_mount_rw(), three arguments (known good)"
-        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} FAKEtestSOURCE ${TESTWWFS_SAMPLE_RW[2]}
-        is $? 1 "check_fs_mount_rw(), three arguments (2nd bad)"
-        check_fs_mount_rw ${TESTWWFS_SAMPLE_RW[0]} ${TESTWWFS_SAMPLE_RW[1]} FAKEfstype
-        is $? 1 "check_fs_mount_rw(), three arguments (3rd bad)"
-    } ; skip_end
+    check_fs_mount_ro /global/software
+    is $? 0 "check_fs_mount_ro(), single argument (known good)"
+    check_fs_mount_ro /global/software bluearc0:/software
+    is $? 0 "check_fs_mount_ro(), two arguments (known good)"
+    check_fs_mount_ro /global/software bluearc0:/software nfs
+    is $? 0 "check_fs_mount_ro(), three arguments (known good)"
+    check_fs_mount_ro /global/software master:/global/software nfs
+    is $? 1 "check_fs_mount_ro(), three arguments (2nd bad)"
+    check_fs_mount_ro /global/software bluearc0:/software nfs4
+    is $? 1 "check_fs_mount_ro(), three arguments (3rd bad)"
 
-    [[ "${#TESTWWFS_SAMPLE_NFS[*]}" -eq 0 ]] && skip_begin ; {
-        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} ${TESTWWFS_SAMPLE_NFS[1]} nfs
-        is $? 0 "check_fs_mount() for NFS (source/type)"
-        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "*,${TESTWWFS_SAMPLE_NFS_VER}*"
-        is $? 0 "check_fs_mount() for NFS version (glob)"
-        check_fs_mount ${TESTWWFS_SAMPLE_NFS[0]} "" "" "/(^|,)${TESTWWFS_SAMPLE_NFS_VER}(,|\$)/"
-        is $? 0 "check_fs_mount() for NFS version (regex)"
-    } ; skip_end
+    check_fs_mount_rw /boot
+    is $? 0 "check_fs_mount_rw(), single argument (known good)"
+    check_fs_mount_rw /boot /dev/sda1
+    is $? 0 "check_fs_mount_rw(), two arguments (known good)"
+    check_fs_mount_rw /boot /dev/sda1 ext4
+    is $? 0 "check_fs_mount_rw(), three arguments (known good)"
+    check_fs_mount_rw /boot /dev/sdb3 ext4
+    is $? 1 "check_fs_mount_rw(), three arguments (2nd bad)"
+    check_fs_mount_rw /boot /dev/sda1 btrfs
+    is $? 1 "check_fs_mount_rw(), three arguments (3rd bad)"
+
+    check_fs_mount /home bluearc0:/home nfs
+    is $? 0 "check_fs_mount() for NFS (source/type)"
+    check_fs_mount /home "" "" "*,vers=3*"
+    is $? 0 "check_fs_mount() for NFS version (glob)"
+    check_fs_mount /home "" "" "/(^|,)vers=3(,|\$)/"
+    is $? 0 "check_fs_mount() for NFS version (regex)"
 } ; unplan

@@ -288,3 +288,8 @@ Refactored check_fs_mount() to only read /proc/mounts once and
 populate central array set (just like all the other modules).
 Refactored unit tests accordingly.
 ----------------------------------------------------------------------
+Thu Sep  6 09:57:41 2012                        Michael Jennings (mej)
+
+Added support for detached mode.  Runs all checks in the background,
+saves state to filesystem and checks it on the next run.
+----------------------------------------------------------------------

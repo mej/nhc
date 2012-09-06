@@ -60,7 +60,7 @@ function test_nhc_driver() {
         is $DEBUG 0 'Debugging off by default'
         is $SILENT 0 'Silent mode off by default'
         is $MARK_OFFLINE 1 'Nodes marked offline by default'
-        is $TIMEOUT 5 '5 second script timeout by default'
+        is $TIMEOUT 10 '10 second script timeout by default'
         cmp_ok $MAX_SYS_UID "-lt" 1000 'Reasonable range for system UIDs'
     } ; unplan
 

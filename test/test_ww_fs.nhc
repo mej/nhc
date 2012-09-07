@@ -94,10 +94,12 @@ function populate_fs_data() {
     )
 }
 
-plan $((6+5+5+5+3)) "ww_fs.nhc" && {
+plan $((8+5+5+5+3+6+8+9+6+6)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
+    is "`type -t nhc_fs_parse_size 2>&1`" 'function' 'check_fs_size() loaded properly'
+    is "`type -t nhc_fs_unparse_size 2>&1`" 'function' 'check_fs_size() loaded properly'
     is "`type -t check_fs_size 2>&1`" 'function' 'check_fs_size() loaded properly'
     is "`type -t check_fs_free 2>&1`" 'function' 'check_fs_free() loaded properly'
     is "`type -t check_fs_used 2>&1`" 'function' 'check_fs_used() loaded properly'
@@ -144,4 +146,94 @@ plan $((6+5+5+5+3)) "ww_fs.nhc" && {
     is $? 0 "check_fs_mount() for NFS version (glob)"
     check_fs_mount /home "" "" "/(^|,)vers=3(,|\$)/"
     is $? 0 "check_fs_mount() for NFS version (regex)"
+
+    OSIZE="1023kB"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE 1023 "nhc_fs_parse_size():  1023kB -> 1023"
+    OSIZE="1023MB"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE $((1023*1024)) "nhc_fs_parse_size():  1023MB -> $((1023*1024))"
+    OSIZE="100GB"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE $((100*1024*1024)) "nhc_fs_parse_size():  100GB -> $((100*1024*1024))"
+    OSIZE="6Tb"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE $((6*1024*1024*1024)) "nhc_fs_parse_size():  6Tb -> $((6*1024*1024*1024))"
+    OSIZE="1pb"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE $((1024*1024*1024*1024)) "nhc_fs_parse_size():  1pb -> $((1024*1024*1024*1024))"
+    OSIZE="1eb"
+    nhc_fs_parse_size $OSIZE NSIZE
+    is $NSIZE $((1024*1024*1024*1024*1024)) "nhc_fs_parse_size():  1eb -> $((1024*1024*1024*1024*1024))"
+
+    OSIZE=$((1024*1024*1024*1024*1024*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1024EB" "nhc_fs_unparse_size():  $OSIZE -> 1024EB"
+    OSIZE=$((1024*1024*1024*1024*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1EB" "nhc_fs_unparse_size():  $OSIZE -> 1EB"
+    OSIZE=$((1023*1024*1024*1024*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1023PB" "nhc_fs_unparse_size():  $OSIZE -> 1023PB"
+    OSIZE=$((64*1024*1024*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "64TB" "nhc_fs_unparse_size():  $OSIZE -> 64TB"
+    OSIZE=$((4*1024*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "4GB" "nhc_fs_unparse_size():  $OSIZE -> 4GB"
+    OSIZE=$((1023*1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1023MB" "nhc_fs_unparse_size():  $OSIZE -> 1023MB"
+    OSIZE=$((1024))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1MB" "nhc_fs_unparse_size():  $OSIZE -> 1MB"
+    OSIZE=$((1000))
+    nhc_fs_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1000kB" "nhc_fs_unparse_size():  $OSIZE -> 1000kB"
+
+    check_fs_size /boot 100M 1G
+    is $? 0 "check_fs_size() - /boot is between 100M and 1G"
+    check_fs_size /boot 1 2k
+    is $? 1 "check_fs_size() - /boot is not between 1kB and 2kB"
+    check_fs_size /boot 1G 2G
+    is $? 1 "check_fs_size() - /boot is not between 1G and 2G"
+    check_fs_size /boot 1kB
+    is $? 0 "check_fs_size() - /boot 1kB minimum, no maximum"
+    check_fs_size /boot 1Gb
+    is $? 1 "check_fs_size() - /boot 1G minimum"
+    check_fs_size /boot 495844
+    is $? 0 "check_fs_size() - actual size as minimum passes"
+    check_fs_size /boot "" 495844k
+    is $? 0 "check_fs_size() - actual size as maximum passes"
+    check_fs_size /boot "" 1
+    is $? 1 "check_fs_size() - 1kB max only"
+    check_fs_size /boot "" 1G
+    is $? 0 "check_fs_size() - 1G max only"
+
+    check_fs_free / 1G
+    is $? 0 "check_fs_free() - >1GB free on /"
+    check_fs_free / 19747624
+    is $? 0 "check_fs_free() - Exactly 19747624kB free on /"
+    check_fs_free / 1TB
+    is $? 1 "check_fs_free() - <1TB free on /"
+    check_fs_free /home 10%
+    is $? 0 "check_fs_free() - >10% free on /home"
+    check_fs_free /home 32%
+    is $? 0 "check_fs_free() - Exactly 32% free on /home"
+    check_fs_free /home 90%
+    is $? 1 "check_fs_free() - <90% free on /home"
+
+    check_fs_used / 30G
+    is $? 0 "check_fs_used() - <30GB used on /"
+    check_fs_used / 11602608
+    is $? 1 "check_fs_used() - Exactly 11602608kB used on /"
+    check_fs_used / 1GB
+    is $? 1 "check_fs_used() - >1GB used on /"
+    check_fs_used /home 95%
+    is $? 0 "check_fs_used() - <95% used on /home"
+    check_fs_used /home 68%
+    is $? 1 "check_fs_used() - Exactly 68% used on /home"
+    check_fs_used /home 2%
+    is $? 1 "check_fs_used() - >2% used on /home"
+
 } ; unplan

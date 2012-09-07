@@ -293,3 +293,8 @@ Thu Sep  6 09:57:41 2012                        Michael Jennings (mej)
 Added support for detached mode.  Runs all checks in the background,
 saves state to filesystem and checks it on the next run.
 ----------------------------------------------------------------------
+Fri Sep  7 14:14:41 2012                        Michael Jennings (mej)
+
+Added unit tests for new disk space checks.  Tweaked detached mode to
+detach sooner.  Fixed some faulty logic.
+----------------------------------------------------------------------

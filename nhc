@@ -37,7 +37,7 @@ function die() {
     else
         echo "ERROR Health check failed:  $*"
     fi
-    [[ -n "$WATCHDOG_PID" ]] && kill -9 $WATCHDOG_PID >/dev/null 2>&1
+    kill_watchdog
     exit $RET
 }
 
@@ -69,6 +69,12 @@ function syslog_flush() {
         echo "$LOGGER_TEXT" | logger -p daemon.err -t "$NAME[$$]"
     fi
     LOGGER_TEXT=""
+}
+
+function kill_watchdog() {
+    dbg "$FUNCNAME:  Watchdog PID is $WATCHDOG_PID."
+    [[ $WATCHDOG_PID -gt 0 ]] && kill -9 $WATCHDOG_PID >/dev/null 2>&1
+    return 0
 }
 
 #########################
@@ -132,7 +138,7 @@ function nhcmain_finalize_env() {
     MAX_SYS_UID=${MAX_SYS_UID:-99}
 
     if [[ -n "$NHC_DETACHED" ]]; then
-        dbg "This session is running detached."
+        dbg "This session is running detached from $NHC_DETACHED."
     elif [[ $DETACHED_MODE -eq 1 ]]; then
         dbg "Activating detached mode."
         nhcmain_detach
@@ -192,6 +198,9 @@ function nhcmain_detach() {
     # Launch detached process
     nhcmain_spawn_detached &
 
+    # Only mark offline/online in detached copy.
+    MARK_OFFLINE=0
+
     if [[ $RC != 0 ]]; then
         die $RC "$MSG"
         return 1
@@ -227,7 +236,7 @@ function nhcmain_mark_online() {
 function nhcmain_finish() {
     syslog_flush
     log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
-    [[ $WATCHDOG_PID -gt 0 ]] && kill -9 $WATCHDOG_PID
+    kill_watchdog
     exit 0
 }
 

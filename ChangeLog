@@ -298,3 +298,7 @@ Fri Sep  7 14:14:41 2012                        Michael Jennings (mej)
 Added unit tests for new disk space checks.  Tweaked detached mode to
 detach sooner.  Fixed some faulty logic.
 ----------------------------------------------------------------------
+Fri Sep  7 14:52:49 2012                        Michael Jennings (mej)
+
+A couple minor bugfixes/cleanups.  This is now officially 1.2 beta.
+----------------------------------------------------------------------

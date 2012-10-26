@@ -1,0 +1,10 @@
+# Log rotation configuration for Warewulf NHC
+#
+# $Id$
+#
+
+/var/log/nhc.log {
+	missingok
+	notifempty
+	weekly
+}

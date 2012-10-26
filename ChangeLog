@@ -306,3 +306,7 @@ Wed Oct  3 16:09:05 2012                        Michael Jennings (mej)
 
 Finalized 1.2 release.
 ----------------------------------------------------------------------
+Thu Oct 25 18:29:13 2012                        Michael Jennings (mej)
+
+Add support for NHC log rotation.
+----------------------------------------------------------------------

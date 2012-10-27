@@ -310,3 +310,7 @@ Thu Oct 25 18:29:13 2012                        Michael Jennings (mej)
 
 Add support for NHC log rotation.
 ----------------------------------------------------------------------
+Fri Oct 26 17:17:51 2012                        Michael Jennings (mej)
+
+Add support and unit tests for an "authorized users" whitelist.
+----------------------------------------------------------------------

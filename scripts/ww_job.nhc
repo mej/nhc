@@ -9,6 +9,7 @@
 JOBUSERS=( )
 PBS_SERVER_HOME="${PBS_SERVER_HOME:-/var/spool/torque}"
 JOBFILE_PATH="${JOBFILE_PATH:-$PBS_SERVER_HOME/mom_priv/jobs}"
+NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
@@ -17,7 +18,7 @@ function nhc_job_find_users() {
     local LINE
     local -a JOBLIST
 
-    JOBUSERS=( root nobody )
+    JOBUSERS=( $NHC_AUTH_USERS )
     JOBLIST=( $JOBFILE_PATH/*.JB )
     for JOBFILE in "${JOBLIST[@]}" ; do
         if [[ ! -f "$JOBFILE" ]]; then
@@ -42,22 +43,32 @@ function nhc_job_find_users() {
 function nhc_job_user_auth() {
     local JOBUSER="$1"
     local JOBUSER_UID="$2"
+    local i
 
     # Initialize the data array if needed.
     if [[ ${#JOBUSERS[*]} -eq 0 ]]; then
         nhc_job_find_users
     fi
 
-    # Make sure the user specified appears in the array of authorized users.
-    if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
-        if [[ -z "$JOBUSER_UID" ]]; then
-            nhc_common_get_uid "$JOBUSER" JOBUSER_UID
-        fi
-        if [[ -n "$JOBUSER_UID" && $JOBUSER_UID -gt $MAX_SYS_UID ]]; then
-            dbg "User $JOBUSER ($JOBUSER_UID > $MAX_SYS_UID) is NOT authorized."
-            return 1
-        fi
+    # Populate UID if missing.
+    if [[ -z "$JOBUSER_UID" ]]; then
+        nhc_common_get_uid "$JOBUSER" JOBUSER_UID
     fi
-    dbg "User $JOBUSER is authorized."
-    return 0
+
+    # Check if UID is in system range.
+    if [[ -n "$JOBUSER_UID" && $JOBUSER_UID -le $MAX_SYS_UID ]]; then
+        dbg "User $JOBUSER is authorized."
+        return 0
+    fi
+
+    # Make sure the user specified appears in the array of authorized users.
+    for ((i=0; i < ${#JOBUSERS[*]}; i++)); do
+        if [[ "${JOBUSERS[$i]}" == "$JOBUSER" ]]; then
+            dbg "User $JOBUSER is authorized."
+            return 0
+        fi
+    done
+
+    dbg "User $JOBUSER ($JOBUSER_UID > $MAX_SYS_UID) is NOT authorized."
+    return 1
 }

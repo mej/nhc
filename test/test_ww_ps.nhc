@@ -320,39 +320,55 @@ function populate_ps_data() {
     )
 
     # Also need passwd data for process tests
-    PWNAM_UIDS=( 0 29 32 38 12345 )
-    PWUID_USER=( [0]="root" [29]="rpcuser" [32]="rpc" [38]="ntp" [12345]="someuser" )
-    PWUID_GID=( [0]="0" [29]="29" [32]="32" [38]="38" [12345]="12345" )
-    PWUID_GECOS=( [0]="root" [29]="RPC Service User" [32]="Rpcbind Daemon" [38]="" [12345]="Some User" )
-    PWUID_HOME=( [0]="/root" [29]="/var/lib/nfs" [32]="/var/cache/rpcbind" [38]="/etc/ntp" [12345]="/home/someuser" )
-    PWUID_SHELL=( [0]="/bin/bash" [29]="/sbin/nologin" [32]="/sbin/nologin" [38]="/sbin/nologin" [12345]="/bin/bash" )
-    PWDATA_USERS=( "root" "rpcuser" "rpc" "ntp" "someuser" )
+    PWDATA_UIDS=( 0 29 32 38 777 12345 )
+    PWUID_USER=( [0]="root" [29]="rpcuser" [32]="rpc" [38]="ntp" [777]="mej" [12345]="someuser" )
+    PWUID_GID=( [0]="0" [29]="29" [32]="32" [38]="38" [777]="777" [12345]="12345" )
+    PWUID_GECOS=( [0]="root" [29]="RPC Service User" [32]="Rpcbind Daemon" [38]="" [777]="mej" [12345]="Some User" )
+    PWUID_HOME=( [0]="/root" [29]="/var/lib/nfs" [32]="/var/cache/rpcbind" [38]="/etc/ntp" [777]="/home/mej" [12345]="/home/someuser" )
+    PWUID_SHELL=( [0]="/bin/bash" [29]="/sbin/nologin" [32]="/sbin/nologin" [38]="/sbin/nologin" [777]="/bin/bash" [12345]="/bin/bash" )
+    PWDATA_USERS=( "root" "rpcuser" "rpc" "ntp" "mej" "someuser" )
     PWDATA_SYSTEM_USERS=( "root" "rpcuser" "rpc" "ntp" )
-    PWDATA_USERID_MAP="||root:0||rpcuser:29||rpc:32||ntp:38||someuser:12345"
+    PWDATA_USERID_MAP="||root:0||rpcuser:29||rpc:32||ntp:38||mej:777||someuser:12345"
 
     # Fake job data so we don't need /var/spool/torque/mom_priv/jobs/*.JB
-    JOBUSERS=( "root" "nobody" "someuser" )
+    NHC_AUTH_USERS="root nobody mej"
+    JOBUSERS=( $NHC_AUTH_USERS "someuser" )
 
     # Since our sample data is TORQUE-based, make sure we're matching on it.
     RM_DAEMON_MATCH="/\bpbs_mom\b/"
 }
 
-function insert_naughty_procs() {
-    local BAD_PID=31337
+function insert_auth_user_proc() {
+    local NEW_PID=2222
 
-    PS_PROCS[${#PS_PROCS[*]}]=$BAD_PID
-    PS_USER[$BAD_PID]="badguy"
-    PS_UID[$BAD_PID]="31337"
-    PS_PPID[$BAD_PID]="1"
-    PS_PCPU[$BAD_PID]="0.1"
-    PS_PMEM[$BAD_PID]="1.1"
-    PS_RSS[$BAD_PID]="32768"
-    PS_VSZ[$BAD_PID]="1048576"
-    PS_TIME[$BAD_PID]="01:23:45"
-    PS_ARGS[$BAD_PID]="/home/badguy/badstuff"
+    PS_PROCS[${#PS_PROCS[*]}]=$NEW_PID
+    PS_USER[$NEW_PID]="mej"
+    PS_UID[$NEW_PID]="777"
+    PS_PPID[$NEW_PID]="1"
+    PS_PCPU[$NEW_PID]="0.1"
+    PS_PMEM[$NEW_PID]="1.1"
+    PS_RSS[$NEW_PID]="1"
+    PS_VSZ[$NEW_PID]="2"
+    PS_TIME[$NEW_PID]="14:28:57"
+    PS_ARGS[$NEW_PID]="/home/mej/goodstuff"
 }
 
-plan $((6+10+6+4+6)) "ww_ps.nhc" && {
+function insert_naughty_proc() {
+    local NEW_PID=31337
+
+    PS_PROCS[${#PS_PROCS[*]}]=$NEW_PID
+    PS_USER[$NEW_PID]="badguy"
+    PS_UID[$NEW_PID]="31337"
+    PS_PPID[$NEW_PID]="1"
+    PS_PCPU[$NEW_PID]="0.1"
+    PS_PMEM[$NEW_PID]="1.1"
+    PS_RSS[$NEW_PID]="32768"
+    PS_VSZ[$NEW_PID]="1048576"
+    PS_TIME[$NEW_PID]="01:23:45"
+    PS_ARGS[$NEW_PID]="/home/badguy/badstuff"
+}
+
+plan $((6+10+6+6+6)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
@@ -406,8 +422,15 @@ plan $((6+10+6+4+6)) "ww_ps.nhc" && {
     # Make sure all non-system processes are children of the RM daemon
     check_ps_userproc_lineage die
     is $? 0 "All user processes are children of RM daemon"
+    # Add a process from an authorized user...
+    insert_auth_user_proc
+    # ...and nothing should change.
+    check_ps_unauth_users die
+    is $? 0 "Authorized user process is correctly allowed"
+    check_ps_userproc_lineage die
+    is $? 0 "Authorized user non-job process is correctly allowed"
     # Add a process that shouldn't be there...
-    insert_naughty_procs
+    insert_naughty_proc
     # ...and make sure we see it now.
     check_ps_unauth_users die
     is $? 1 "We now detect the unauthorized process"

@@ -6,13 +6,13 @@
 # $Id$
 #
 
-PWUID_UIDS=( )
 PWUID_USER=( )
 PWUID_GID=( )
 PWUID_GECOS=( )
 PWUID_HOME=( )
 PWUID_SHELL=( )
 
+PWDATA_UIDS=( )
 PWDATA_USERS=( )
 PWDATA_SYSTEM_USERS=( )
 PWDATA_USERID_MAP=''
@@ -118,7 +118,7 @@ function nhc_common_load_passwd() {
 
     while read -a LINE ; do
         THIS_UID=${LINE[2]}
-        PWNAM_UIDS[${#PWNAM_UIDS[*]}]=$THIS_UID
+        PWDATA_UIDS[${#PWDATA_UIDS[*]}]=$THIS_UID
         PWUID_USER[$THIS_UID]="${LINE[0]}"
         PWUID_GID[$THIS_UID]=${LINE[3]}
         PWUID_GECOS[$THIS_UID]="${LINE[4]}"

@@ -161,7 +161,7 @@ function check_ps_unauth_users() {
         nhc_ps_gather_data
     fi
 
-    if [[ ${#PWNAM_USERS[*]} -eq 0 ]]; then
+    if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
     fi
 
@@ -207,15 +207,19 @@ function check_ps_userproc_lineage() {
         nhc_ps_gather_data
     fi
 
-    if [[ ${#PWNAM_USERS[*]} -eq 0 ]]; then
+    if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
     fi
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         THIS_UID="${PS_UID[$THIS_PID]}"
+        THIS_USER="${PWUID_USER[$THIS_UID]:-$THIS_UID}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
+            continue
+        fi
+        if mcheck "${NHC_AUTH_USERS}" "/\b$THIS_USER\b/" ; then
             continue
         fi
         # Non-system process.  Check lineage.

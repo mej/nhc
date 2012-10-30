@@ -16,6 +16,7 @@
 PBSNODES="${PBSNODES:-pbsnodes}"
 PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
 PBSNODES_ONLINE_ARGS="${PBSNODES_ONLINE_ARGS:--c -N}"
+IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -29,7 +30,12 @@ OLD_NOTE_LEADER="${LINE[2]}"
 OLD_NOTE="${LINE[*]:3}"
 case $STATUS in
     *offline*)
-        # If there's an old note that wasn't set by NHC, do not online the node.
+        # If there is no old note, and we've not been told to ignore that, do not online the node.
+        if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+            echo "$0:  Not onlining $HOSTNAME:  No note set."
+            exit 0
+        fi
+        # If there IS an old note, but it wasn't set by NHC, do not online the node.
         if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  $OLD_NOTE_LEADER $OLD_NOTE"
             exit 0

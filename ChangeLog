@@ -314,3 +314,8 @@ Fri Oct 26 17:17:51 2012                        Michael Jennings (mej)
 
 Add support and unit tests for an "authorized users" whitelist.
 ----------------------------------------------------------------------
+Mon Oct 29 17:58:30 2012                        Michael Jennings (mej)
+
+By default, don't touch nodes that are offline but have no note.  Not
+every site uses notes as religiously as we do, nor wants to!
+----------------------------------------------------------------------

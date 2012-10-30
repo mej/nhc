@@ -20,6 +20,9 @@ function nhc_job_find_users() {
 
     JOBUSERS=( $NHC_AUTH_USERS )
     JOBLIST=( $JOBFILE_PATH/*.JB )
+    if [[ ${#JOBLIST[*]} -eq 0 && -d $PWD/jobs ]]; then
+        JOBLIST=( $PWD/jobs/*.JB )
+    fi
     for JOBFILE in "${JOBLIST[@]}" ; do
         if [[ ! -f "$JOBFILE" ]]; then
             continue

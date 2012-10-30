@@ -23,6 +23,11 @@ function nhc_ps_gather_data() {
     local IFS PS_DATA THIS_PID i
     local -a LINES LINE
 
+    # We need passwd data to resolve UIDs for users with lengthy userids
+    if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
+        nhc_common_load_passwd
+    fi
+
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
     LINES=( $(ps axo 'user,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
@@ -46,6 +51,9 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
+        if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" && -n "${PWUID_USER[${PS_UID[$THIS_PID]}]}" ]]; then
+            PS_USER[$THIS_PID]="${PWUID_USER[${PS_UID[$THIS_PID]}]}"
+        fi
         dbg "Got process $THIS_PID:  ${PS_USER[$THIS_PID]} ${PS_UID[$THIS_PID]} ${PS_PPID[$THIS_PID]} ${PS_PCPU[$THIS_PID]} ${PS_PMEM[$THIS_PID]} ${PS_RSS[$THIS_PID]} ${PS_VSZ[$THIS_PID]} ${PS_TIME[$THIS_PID]} ${PS_ARGS[$THIS_PID]}"
     done
     export PS_PROCS PS_USER PS_UID PS_PPID PS_PCPU PS_PMEM PS_RSS PS_VSZ PS_TIME PS_ARGS

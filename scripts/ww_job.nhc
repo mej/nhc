@@ -18,10 +18,13 @@ function nhc_job_find_users() {
     local LINE
     local -a JOBLIST
 
+    dbg "Searching for job files"
     JOBUSERS=( $NHC_AUTH_USERS )
     JOBLIST=( $JOBFILE_PATH/*.JB )
-    if [[ ${#JOBLIST[*]} -eq 0 && -d $PWD/jobs ]]; then
+    dbg "Found ${#JOBLIST[*]} job files in $JOBFILE_PATH"
+    if [[ ${#JOBLIST[*]} -eq 1 && ! -f "${JOBLIST[0]}" && -d $PWD/jobs ]]; then
         JOBLIST=( $PWD/jobs/*.JB )
+        dbg "Found ${#JOBLIST[*]} job files in $PWD/jobs"
     fi
     for JOBFILE in "${JOBLIST[@]}" ; do
         if [[ ! -f "$JOBFILE" ]]; then

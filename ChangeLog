@@ -319,3 +319,9 @@ Mon Oct 29 17:58:30 2012                        Michael Jennings (mej)
 By default, don't touch nodes that are offline but have no note.  Not
 every site uses notes as religiously as we do, nor wants to!
 ----------------------------------------------------------------------
+Tue Oct 30 14:17:40 2012                        Michael Jennings (mej)
+
+Fix job file location fallback handling, and look up userids for
+processes where only UID is given as this may indicate a userid >8
+characters rather than an unknown user.
+----------------------------------------------------------------------

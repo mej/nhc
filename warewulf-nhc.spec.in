@@ -54,6 +54,7 @@ test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-, root, root)
+%doc COPYING ChangeLog LICENSE nhc.conf contrib/nhc.cron
 %dir %{_sysconfdir}/%{sname}/
 %config(noreplace) %{_sysconfdir}/%{sname}/%{sname}.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}

@@ -18,7 +18,8 @@ nobase_dist_conf_DATA = scripts/common.nhc scripts/ww_fs.nhc	\
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 
 CLEANFILES = 
-EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate nhc-test.conf warewulf-nhc.spec
+EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate	\
+             nhc-test.conf warewulf-nhc.spec contrib/nhc.cron
 
 install-data-local:
 	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)'

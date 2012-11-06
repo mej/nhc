@@ -325,3 +325,9 @@ Fix job file location fallback handling, and look up userids for
 processes where only UID is given as this may indicate a userid >8
 characters rather than an unknown user.
 ----------------------------------------------------------------------
+Tue Nov  6 13:28:13 2012                        Michael Jennings (mej)
+
+Add nhc.cron script contributed by Ole Holm Nielsen
+<Ole.H.Nielsen@fysik.dtu.dk> to help minimize excessive messages from
+NHC when executed via cron.
+----------------------------------------------------------------------

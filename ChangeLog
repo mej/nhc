@@ -331,3 +331,7 @@ Add nhc.cron script contributed by Ole Holm Nielsen
 <Ole.H.Nielsen@fysik.dtu.dk> to help minimize excessive messages from
 NHC when executed via cron.
 ----------------------------------------------------------------------
+Wed Nov  7 14:23:44 2012                        Michael Jennings (mej)
+
+Finalized 1.2.1 release.
+----------------------------------------------------------------------

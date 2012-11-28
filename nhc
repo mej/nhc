@@ -167,10 +167,22 @@ function nhcmain_load_scripts() {
     done
 }
 
+function nhcmain_watchdog_timer() {
+    local TIMEOUT="$1" NHC_PID="$2"
+
+    sleep $TIMEOUT
+    kill -s ALRM -- $NHC_PID || return 0
+    sleep 1
+    kill -s TERM -- $NHC_PID 2>/dev/null || return 0
+    sleep 3
+    kill -s KILL -- $NHC_PID 2>/dev/null
+    return 0
+}
+
 function nhcmain_set_watchdog() {
     # Set ALARM to timeout script.
     if [[ $TIMEOUT -gt 0 ]]; then
-        (sleep $TIMEOUT ; kill -ALRM -$NHC_PID ; sleep 1 ; kill -TERM -$NHC_PID) &
+        eval nhcmain_watchdog_timer $TIMEOUT $NHC_PID $LOGFILE &
         WATCHDOG_PID=$!
         export WATCHDOG_PID
         dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
@@ -246,7 +258,9 @@ if [[ -n "$NHC_LOAD_ONLY" ]]; then
     return 0 || exit 0
 fi
 
-trap 'die 128 Terminated by signal.' 1 2 15
+trap 'die 129 Terminated by signal SIGHUP.' 1
+trap 'die 130 Terminated by signal SIGINT.' 2
+trap 'die 143 Terminated by signal SIGTERM.' 15
 trap 'die 127 Script timed out.' 14
 
 nhcmain_init_env

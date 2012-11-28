@@ -339,3 +339,10 @@ Wed Nov  7 15:24:26 2012                        Michael Jennings (mej)
 
 Found a bug.  Re-releasing 1.2.1.
 ----------------------------------------------------------------------
+Tue Nov 27 16:56:25 2012                        Michael Jennings (mej)
+
+Despite being specified by POSIX, apparently bash's built-in "kill"
+command doesn't support signaling process groups.  The watchdog timer
+has been rewritten to just kill the nhc script itself.  Unit tests for
+the watchdog timer were also added.
+----------------------------------------------------------------------

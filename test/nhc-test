@@ -87,6 +87,22 @@ function test_nhc_driver() {
         is $WATCHDOG_PID 0 'Watchdog should be disabled'
     } ; unplan
 
+    # Test watchdog timer.
+    sleep 10 &
+    NHC_PID=$!
+    disown $NHC_PID
+    nhcmain_watchdog_timer 1 $NHC_PID &
+    WATCHDOG_PID=$!
+    plan 3 "nhcmain_watchdog_timer" && {
+        kill -s 0 $NHC_PID >/dev/null 2>&1
+        is $? 0 'Simulated NHC process exists'
+        kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
+        is $? 0 'Watchdog timer is running'
+        sleep 2
+        kill -s 0 $NHC_PID >/dev/null 2>&1
+        isnt $? 0 'Simulated NHC process has been killed'
+    } ; unplan
+
     # Empty config file should result in no checks.
     nhcmain_run_checks
     plan 2 "nhcmain_run_checks" && {

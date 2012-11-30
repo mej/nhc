@@ -346,3 +346,11 @@ command doesn't support signaling process groups.  The watchdog timer
 has been rewritten to just kill the nhc script itself.  Unit tests for
 the watchdog timer were also added.
 ----------------------------------------------------------------------
+Thu Nov 29 17:57:23 2012                        Michael Jennings (mej)
+
+New check:  check_hw_mcelog
+
+This check will run "mcelog --client" by default and fail if any
+output is received.  If the mcelog daemon is not running, this will be
+noted in the log file and syslog, but the check will pass.
+----------------------------------------------------------------------

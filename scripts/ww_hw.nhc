@@ -18,6 +18,8 @@ HW_IB_PHYS_STATE=()
 HW_IB_RATE=( )
 HW_MODULES=( )
 HW_ETH_DEV=( )
+MCELOG="${MCELOG:-mcelog}"
+MCELOG_ARGS="${MCELOG_ARGS:---client}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
@@ -313,5 +315,22 @@ function check_hw_eth() {
     done
 
     die 1 "Ethernet device $DEV not detected."
+    return 1
+}
+
+# Check for MCE errors
+function check_hw_mcelog() {
+    local HW_MCELOG_ERRS
+
+    HW_MCELOG_ERRS=$($MCELOG $MCELOG_ARGS 2>&1)
+    if [[ -z "$HW_MCELOG_ERRS" ]]; then
+        return 0
+    elif mcheck_glob "$HW_MCELOG_ERRS" "*Connection refused*" ; then
+        log "check_hw_mcelog():  No mcelog daemon running on $HOSTNAME"
+        syslog "check_hw_mcelog():  No mcelog daemon running on $HOSTNAME"
+        return 0
+    fi
+    log "check_hw_mcelog():  MCEs detected:  $HW_MCELOG_ERRS"
+    die 1 "MCEs detected in log."
     return 1
 }

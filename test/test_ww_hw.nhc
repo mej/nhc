@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((11+7+7+7+7+4+4+4+5+9)) "ww_hw.nhc" && {
+plan $((11+7+7+7+7+4+4+4+5+9+2)) "ww_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
@@ -177,4 +177,12 @@ plan $((11+7+7+7+7+4+4+4+5+9)) "ww_hw.nhc" && {
     check_hw_eth virbr0
     is $? 0 "Ethernet interface virbr0 is present."
 
+    # Fake MCE log data
+    MCELOG="echo"
+    MCELOG_ARGS="This is a fake error."
+    check_hw_mcelog
+    is $? 1 "Any results are bad."
+    MCELOG_ARGS=""
+    check_hw_mcelog
+    is $? 0 "Empty results are good."
 } ; unplan

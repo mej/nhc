@@ -24,7 +24,8 @@
 
 # Declare a print-error-and-exit function.
 function die() {
-    local RET=$1
+    IFS=$' \t\n'
+    local RET="$1"
     shift
     log "Health check failed:  $*"
     syslog "Health check failed:  $*"
@@ -258,10 +259,10 @@ if [[ -n "$NHC_LOAD_ONLY" ]]; then
     return 0 || exit 0
 fi
 
-trap 'die 129 Terminated by signal SIGHUP.' 1
-trap 'die 130 Terminated by signal SIGINT.' 2
-trap 'die 143 Terminated by signal SIGTERM.' 15
-trap 'die 127 Script timed out.' 14
+trap 'die 129 "Terminated by signal SIGHUP."' 1
+trap 'die 130 "Terminated by signal SIGINT."' 2
+trap 'die 143 "Terminated by signal SIGTERM."' 15
+trap 'die 127 "Script timed out."' 14
 
 nhcmain_init_env
 nhcmain_load_sysconfig

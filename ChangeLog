@@ -354,3 +354,9 @@ This check will run "mcelog --client" by default and fail if any
 output is received.  If the mcelog daemon is not running, this will be
 noted in the log file and syslog, but the check will pass.
 ----------------------------------------------------------------------
+Mon Dec 17 11:03:13 2012                        Michael Jennings (mej)
+
+Reset IFS in die() handler and add quotes to traps.  This should
+prevent newlines being added to failure messages when certain
+subcommands cause timeouts.
+----------------------------------------------------------------------

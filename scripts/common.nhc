@@ -29,6 +29,61 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
             return 1
         fi
     }
+
+    # Check to see if a node range/list ($2) contains a node ($1)
+    function mcheck_range() {
+        local IFS=','
+        local TARGET="$1"
+        local RANGELIST="$2"
+        local GROUP PREFIX SUFFIX RSTART REND WIDTH NODE i j
+
+        for GROUP in $RANGELIST; do
+            if [[ $GROUP =~ ^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$ ]]; then
+                # Check a single node
+                if [[ $TARGET == $GROUP ]]; then
+                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                    return 0
+                fi
+            elif [[ $GROUP =~ ^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$ ]]; then
+                # Check a node range
+                PREFIX=${BASH_REMATCH[1]}
+                RSTART=${BASH_REMATCH[2]}
+                REND=${BASH_REMATCH[3]}
+                SUFFIX=${BASH_REMATCH[4]}
+                WIDTH=${#RSTART}
+
+                if [[ ${#RSTART} -lt ${#REND} ]]; then
+                    dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
+                    WIDTH=${#REND}
+                fi
+
+                if [[ $RSTART -gt $REND ]]; then
+                    dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
+                    j=$RSTART
+                    RSTART=$REND
+                    REND=$j
+                fi
+
+                for ((i=$RSTART; i <= $REND; i++)); do
+                    NODE="$i"
+                    while [[ ${#NODE} -lt $WIDTH ]]; do
+                        NODE="0$NODE"
+                    done
+                    NODE="$PREFIX$NODE$SUFFIX"
+                    if [[ $TARGET == $NODE ]]; then
+                        dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                        return 0
+                    fi
+                done
+            else
+                # Bad syntax
+                log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
+                return 1
+            fi
+        done
+        dbg "$FUNCNAME:  $TARGET NOT found in $RANGELIST."
+        return 1
+    }
 else
     # Check to see if parameter ($1) matches regexp ($2) using egrep
     function mcheck_regexp() {
@@ -40,6 +95,65 @@ else
             return 1
         fi
     }
+
+    # Check to see if a node range/list ($2) contains a node ($1)
+    function mcheck_range() {
+        local IFS=','
+        local TARGET="$1"
+        local RANGELIST="$2"
+        local GROUP PREFIX RSTART REND WIDTH NODE i j
+
+        for GROUP in $RANGELIST; do
+            if mcheck_regexp "$GROUP" '^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$' ; then
+                # Check a single node
+                if [[ $TARGET == $GROUP ]]; then
+                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                    return 0
+                fi
+            else
+                PREFIX=""
+                RSTART=""
+                REND=""
+                SUFFIX=""
+                eval $(echo "$GROUP" | sed -re 's/^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$/PREFIX="\1" RSTART="\2" REND="\3" SUFFIX="\4"/')
+
+                if [[ -n "$PREFIX" || -n "$RSTART" ]]; then
+                    # Check a node range
+                    WIDTH=${#RSTART}
+
+                    if [[ ${#RSTART} -lt ${#REND} ]]; then
+                        dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
+                        WIDTH=${#REND}
+                    fi
+
+                    if [[ $RSTART -gt $REND ]]; then
+                        dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
+                        j=$RSTART
+                        RSTART=$REND
+                        REND=$j
+                    fi
+
+                    for ((i=$RSTART; i <= $REND; i++)); do
+                        NODE="$i"
+                        while [[ ${#NODE} -lt $WIDTH ]]; do
+                            NODE="0$NODE"
+                        done
+                        NODE="$PREFIX$NODE$SUFFIX"
+                        if [[ $TARGET == $NODE ]]; then
+                            dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                            return 0
+                        fi
+                    done
+                else
+                    # Bad syntax
+                    log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
+                    return 1
+                fi
+            fi
+        done
+        dbg "$FUNCNAME:  $TARGET NOT found in $RANGELIST."
+        return 1
+    }
 fi
 
 # Check to see if parameter ($1) matches glob ($2)
@@ -50,8 +164,10 @@ function mcheck_glob() {
     esac
 }
 
-# Detect either regexp match (/.../) or glob match (no slashes) and
-# call the appropriate mcheck_*() function above.
+
+# Detect regexp match (/.../), range match ({...}), or glob match (no
+# slashes or braces), and call the appropriate mcheck_*() function
+# above.
 function mcheck() {
     local STRING="$1"
     local MATCH="$2"
@@ -62,6 +178,13 @@ function mcheck() {
         MATCH="${MATCH#/}"
         MATCH="${MATCH%/}"
         if mcheck_regexp "$STRING" "$MATCH" ; then
+            return 0
+        fi
+    elif [[ "${MATCH#\{}" != "$MATCH" && "${MATCH%\}}" != "$MATCH" ]]; then
+        # pdsh-style node range syntax.  Strip braces, then match.
+        MATCH="${MATCH#\{}"
+        MATCH="${MATCH%\}}"
+        if mcheck_range "$STRING" "$MATCH" ; then
             return 0
         fi
     else

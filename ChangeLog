@@ -360,3 +360,14 @@ Reset IFS in die() handler and add quotes to traps.  This should
 prevent newlines being added to failure messages when certain
 subcommands cause timeouts.
 ----------------------------------------------------------------------
+Wed Jan 16 12:14:23 2013                        Michael Jennings (mej)
+
+Patch from John Hanks <john.hanks@usu.edu> for basic pdsh-style node
+range support.  Node ranges are now permitted and must be surrounded
+by braces (e.g., "{n00[00-99].cluster}").  Multiple ranges may be
+specified by separating them with commas (e.g., "{node[0-5],node8}"),
+but commas may NOT be used inside the brackets ("{node[0-5,8]}").
+
+This feature should be considered experimental at this point.  Please
+report any mismatches.
+----------------------------------------------------------------------

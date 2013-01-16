@@ -30,7 +30,7 @@ function nhc_ps_gather_data() {
 
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
-    LINES=( $(ps axo 'user,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
+    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
@@ -51,8 +51,8 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
-        if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" && -n "${PWUID_USER[${PS_UID[$THIS_PID]}]}" ]]; then
-            PS_USER[$THIS_PID]="${PWUID_USER[${PS_UID[$THIS_PID]}]}"
+        if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" ]]; then
+            nhc_common_get_userid "${PS_UID[$THIS_PID]}" "PS_USER[$THIS_PID]"
         fi
         dbg "Got process $THIS_PID:  ${PS_USER[$THIS_PID]} ${PS_UID[$THIS_PID]} ${PS_PPID[$THIS_PID]} ${PS_PCPU[$THIS_PID]} ${PS_PMEM[$THIS_PID]} ${PS_RSS[$THIS_PID]} ${PS_VSZ[$THIS_PID]} ${PS_TIME[$THIS_PID]} ${PS_ARGS[$THIS_PID]}"
     done

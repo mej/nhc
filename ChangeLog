@@ -399,3 +399,17 @@ entry.
 I do not have such a system, so these changes are largely untested.
 Feedback is humbly requested.  :-)
 ----------------------------------------------------------------------
+Tue Jan 22 13:32:47 2013                        Michael Jennings (mej)
+
+Bare parenthesized regular expressions are incompatible with bash 3 in
+RHEL4 and RHEL5.  Quoted regular expressions are incompatible with
+bash 4 in RHEL6.  Why?  Because someone decided in bash 4 to allow
+parts of regular expressions to be quoted and matched as strings
+instead.  Why?  Beats me.
+
+Way to go, bash developers.  That's the kind of incompatibility I'd
+expect from Python. :-/
+
+Thankfully, storing the regular expressions in variables works just
+fine, so we'll do that.
+----------------------------------------------------------------------

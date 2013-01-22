@@ -8,6 +8,9 @@
 
 PASSWD_DATA_SRC="${PASSWD_DATA_SRC:-/etc/passwd}"
 
+RANGE_MATCH_REGEXP1='^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$'
+RANGE_MATCH_REGEXP2='^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$'
+
 PWUID_USER=( )
 PWUID_GID=( )
 PWUID_GECOS=( )
@@ -40,13 +43,13 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
         local GROUP PREFIX SUFFIX RSTART REND WIDTH NODE i j
 
         for GROUP in $RANGELIST; do
-            if [[ $GROUP =~ ^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$ ]]; then
+            if [[ $GROUP =~ $RANGE_MATCH_REGEXP1 ]]; then
                 # Check a single node
                 if [[ $TARGET == $GROUP ]]; then
                     dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
                     return 0
                 fi
-            elif [[ $GROUP =~ ^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$ ]]; then
+            elif [[ $GROUP =~ $RANGE_MATCH_REGEXP2 ]]; then
                 # Check a node range
                 PREFIX=${BASH_REMATCH[1]}
                 RSTART=${BASH_REMATCH[2]}
@@ -106,7 +109,7 @@ else
         local GROUP PREFIX RSTART REND WIDTH NODE i j
 
         for GROUP in $RANGELIST; do
-            if mcheck_regexp "$GROUP" '^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$' ; then
+            if mcheck_regexp "$GROUP" "$RANGE_MATCH_REGEXP1" ; then
                 # Check a single node
                 if [[ $TARGET == $GROUP ]]; then
                     dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
@@ -117,7 +120,7 @@ else
                 RSTART=""
                 REND=""
                 SUFFIX=""
-                eval $(echo "$GROUP" | sed -re 's/^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$/PREFIX="\1" RSTART="\2" REND="\3" SUFFIX="\4"/')
+                eval $(echo "$GROUP" | sed -re 's/'"$RANGE_MATCH_REGEXP2"'/PREFIX="\1" RSTART="\2" REND="\3" SUFFIX="\4"/')
 
                 if [[ -n "$PREFIX" || -n "$RSTART" ]]; then
                     # Check a node range

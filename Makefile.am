@@ -22,11 +22,12 @@ EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate	\
              nhc-test.conf warewulf-nhc.spec contrib/nhc.cron
 
 install-data-local:
-	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)'
+	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc'
 	$(INSTALL_DATA) $(srcdir)/nhc.logrotate '$(DESTDIR)$(logrotatedir)/nhc'
 
 uninstall-local:
 	-( cd '$(DESTDIR)$(logrotatedir)' && rm -f nhc )
+	-rm -f '$(DESTDIR)$(localstatedir)/lib/nhc'
 
 test:
 	$(MAKE) -C test test

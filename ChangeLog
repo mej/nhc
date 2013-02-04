@@ -421,3 +421,11 @@ Tue Jan 22 16:58:44 2013                        Michael Jennings (mej)
 
 Setting up the tree for 1.2.3 development.
 ----------------------------------------------------------------------
+Mon Feb  4 11:20:34 2013                        Michael Jennings (mej)
+
+Fix from Ole Holm Nielsen <Ole.H.Nielsen@fysik.dtu.dk> for his
+nhc.cron script to place transient files in /var/lib/nhc rather than
+/tmp to avoid potential symlink issues.  Based on suggestions on the
+hpc-monitoring Google Group from Stuart Barkley <google@4gh.net> and
+Jesse Becker <hawson@gmail.com>.
+----------------------------------------------------------------------

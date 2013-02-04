@@ -11,23 +11,24 @@
 # Exit the script in case of control-C etc.
 trap "exit -1" SIGTERM SIGINT SIGQUIT
 
-NHC=/usr/sbin/nhc
-STOPFILE=/tmp/nhc.stopfile
-NHCMESG=/tmp/nhc.message
+NHC="${NHC:-/usr/sbin/nhc}"
+NHCLIBDIR="${NHCLIBDIR:-/var/lib/nhc}"
+STOPFILE="${STOPFILE:-$NHCLIBDIR/nhc.stopfile}"
+NHCMESG="${NHCMESG:-$NHCLIBDIR/nhc.message}"
 
-if $NHC 2>&1 > $NHCMESG
+if "$NHC" 2>&1 > "$NHCMESG"
 then
-	if [ -f $STOPFILE ]
+	if [ -f "$STOPFILE" ]
 	then
 		echo NHC errors on node $HOSTNAME cleared
-		rm -f $STOPFILE $NHCMESG
+		rm -f "$STOPFILE" "$NHCMESG"
 	fi
 else
-	if [ ! -f $STOPFILE ]
+	if [ ! -f "$STOPFILE" ]
 	then
 		echo NOTICE: NHC errors on node $HOSTNAME 
-		cat $NHCMESG
-		touch $STOPFILE
+		cat "$NHCMESG"
+		touch "$STOPFILE"
 	fi
 
 fi

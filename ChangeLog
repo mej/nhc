@@ -429,3 +429,13 @@ nhc.cron script to place transient files in /var/lib/nhc rather than
 hpc-monitoring Google Group from Stuart Barkley <google@4gh.net> and
 Jesse Becker <hawson@gmail.com>.
 ----------------------------------------------------------------------
+Mon Feb 11 14:22:29 2013                        Michael Jennings (mej)
+
+Added variable $DETACHED_MODE_FAIL_NODATA which can be set to 1 to
+cause detached mode to return failure by default, instead of success,
+when no results file is present from a previous run.
+
+Also made sure that results files which are older than /proc,
+indicating a reboot since the last run, are considered stale and
+removed.
+----------------------------------------------------------------------

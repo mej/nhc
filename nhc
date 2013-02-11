@@ -135,6 +135,7 @@ function nhcmain_finalize_env() {
     SILENT=${SILENT:-0}
     MARK_OFFLINE=${MARK_OFFLINE:-1}
     DETACHED_MODE=${DETACHED_MODE:-0}
+    DETACHED_MODE_FAIL_NODATA=${DETACHED_MODE_FAIL_NODATA:-0}
     TIMEOUT=${TIMEOUT:-10}
     MAX_SYS_UID=${MAX_SYS_UID:-99}
 
@@ -201,8 +202,16 @@ function nhcmain_spawn_detached() {
 function nhcmain_detach() {
     local RC MSG
 
+    # If the results file exists but the system has rebooted since its
+    # creation, assume it's stale and remove it.
+    if [[ -e "$RESULTFILE" && -d "/proc/1" && "$RESULTFILE" -ot "/proc" ]]; then
+        rm -f "$RESULTFILE"
+    fi
     if [[ -r "$RESULTFILE" ]]; then
         read RC MSG < "$RESULTFILE"
+    elif [[ "$DETACHED_MODE_FAIL_NODATA" == "1" ]]; then
+        RC=1
+        MSG="Detached mode -- pending checks (no data found)"
     else
         RC=0
         MSG=""

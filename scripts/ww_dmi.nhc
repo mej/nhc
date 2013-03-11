@@ -1,0 +1,228 @@
+# NHC - Warewulf DMI/SMBIOS Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 08 March 2013
+#
+# $Id$
+#
+
+DMI_HANDLES=( )
+DMI_HANDLE_LOOKUP=( )
+DMI_TYPE_IDS=( )
+DMI_TYPE_STRINGS=( )
+DMI_TYPE_HANDLES=( )
+DMI_DATA=( )
+DMI_RAW_DATA=( )
+
+# Read hardware information from DMI via "dmidecode" command.
+function nhc_dmi_gather_data() {
+    local HANDLE TYPE STR WS WSCOUNT LEADER
+    local IFS i j IN_DATA=0
+    local -a TAG_STACK TMPDATA
+
+    if [[ ${#DMI_RAW_DATA[*]} -eq 0 ]]; then
+        nhc_dmi_gather_raw_data
+    fi
+
+    # Skip to the first line that starts with Handle
+    for ((i=0; i<${#DMI_RAW_DATA[*]}; i++)); do
+        if mcheck_glob "${DMI_RAW_DATA[$i]}" 'Handle *' ; then
+            break
+        fi
+    done
+
+    # Iterate through $DMI_RAW_DATA[] array to gather process data.
+    for ((; i<${#DMI_RAW_DATA[*]}; i++)); do
+        if mcheck_regexp "${DMI_RAW_DATA[$i]}" '^Handle ([A-Fa-fXx0-9]+), DMI type ([0-9]+), ' ; then
+            # Before processing a new handle, we need to save the data from the old one, if any.
+            if [[ -n "$HANDLE" ]]; then
+                if [[ ${#TMPDATA[*]} > 0 ]]; then
+                    IFS=$'\n'
+                    DMI_DATA[$HANDLE]="${TMPDATA[*]}"
+                    IFS=$' \t\n'
+                    TMPDATA=( )
+                else
+                    DMI_DATA[$HANDLE]=""
+                fi
+            fi
+            HANDLE="${BASH_REMATCH[1]}"
+            TYPE="${BASH_REMATCH[2]}"
+            TAG_STACK=( )
+            # Save the handle information
+            DMI_HANDLE_LOOKUP[$HANDLE]=${#DMI_HANDLES[*]}
+            DMI_HANDLES[${#DMI_HANDLES[*]}]=$HANDLE
+            DMI_TYPE_IDS[$HANDLE]=$TYPE
+            DMI_TYPE_HANDLES[$TYPE]="${DMI_TYPE_HANDLES[$TYPE]} $HANDLE"
+        else
+            if mcheck_regexp "${DMI_RAW_DATA[$i]}" '^([[:space:]]+)([^[:space:]]+.*)$' ; then
+                # Lines that start with whitespace are DMI table information.  Each tab
+                # character must be expanded using the DMI type string and any previous
+                # section headers under which the current line is indented.
+                WS="${BASH_REMATCH[1]}"
+                STR="${BASH_REMATCH[2]}"
+                LEADER=""
+                if [[ ${#WS} < ${#TAG_STACK[*]} ]]; then
+                    # If the current line is indented less than the last line,
+                    # erase any extra section tags from the stack.
+                    for ((j=${#TAG_STACK[*]}-1; j>= ${#WS}; j--)) ; do
+                        unset TAG_STACK[$j]
+                    done
+                fi
+                if [[ ${#TAG_STACK[*]} > 0 ]]; then
+                    # If we have anything left on the tag stack, prefix the string with it.
+                    LEADER="${TAG_STACK[*]} "
+                fi
+                # Append the new string to the array of data strings.
+                TMPDATA=( "${TMPDATA[@]}" "$LEADER$STR" )
+            else
+                # Lines that don't start with whitespace are DMI type strings.
+                STR="${DMI_RAW_DATA[$i]}"
+                DMI_TYPE_STRINGS[$HANDLE]="$STR"
+            fi
+            if [[ "${STR%:}" = "${STR}" ]]; then
+                # Add a colon to the end in case there isn't one.
+                STR="${STR}:"
+            fi
+            TAG_STACK=( "${TAG_STACK[@]}" "$STR" )
+        fi
+    done
+    export DMI_HANDLES DMI_HANDLE_LOOKUP DMI_TYPE_IDS DMI_TYPE_STRINGS DMI_TYPE_HANDLES DMI_DATA
+}
+
+# Alternative format for dmidecode data.  This version just grabs the raw
+# output from the dmidecode command without any fancy parsing or manipulation.
+function nhc_dmi_gather_raw_data() {
+    # Create array $DMI_RAW_DATA[] by splitting "dmidecode" output on newlines.
+    IFS=$'\n'
+    DMI_RAW_DATA=( $(dmidecode) )
+    IFS=$' \t\n'
+
+    export DMI_RAW_DATA
+}
+
+
+# Check the DMI info table for matching data.  Syntax is:
+#  check_dmi_data_match [-h handle] [-t type] [ -n | ! ] <string match>
+function check_dmi_data_match() {
+    local HANDLE TYPE OPTION i l
+    local NEG=0 MATCH
+    local -a HANDLES TMPDATA
+
+    if [[ "$1" == '!' ]]; then
+        NEG=1
+        shift
+    fi
+    MATCH="$*"
+
+    if [[ ${#DMI_HANDLES[*]} -eq 0 ]]; then
+        nhc_dmi_gather_data
+    fi
+
+    while getopts ":h:t:n" OPTION ; do
+        case "$OPTION" in
+            h) HANDLES=( $OPTARG ) ;;
+            t) TYPE="$OPTARG" ;;
+            n) NEG=1 ;;
+            :) die 1 "Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+
+    # If we weren't given a set of handles, look at all handles
+    # which are valid for the supplied type, if any.
+    if [[ ${#HANDLES[*]} == 0 ]]; then
+        if [[ -n "$TYPE" ]]; then
+            case "$TYPE" in
+                *[^0-9]*)
+                    # Find all matching type strings.
+                    for ((i=0; i<${#DMI_HANDLES[*]}; i++)) ; do
+                        HANDLE=${DMI_HANDLES[$i]}
+                        if [[ "${DMI_TYPE_STRINGS[$HANDLE]}" == "$TYPE" ]]; then
+                            HANDLES[${#HANDLES[*]}]=$HANDLE
+                        fi
+                    done
+                    ;;
+                *)
+                    # This case is easy since we can track this at parse time.
+                    HANDLES=( ${DMI_TYPE_HANDLES[$TYPE]} )
+                    ;;
+            esac
+        else
+            # Check all handles.
+            HANDLES=( "${DMI_HANDLES[@]}" )
+        fi
+    fi
+    if [[ ${#HANDLES[*]} == 0 ]]; then
+        # No handles are valid for the given parameters
+        die 1 "No valid DMI handles found"
+        return 1
+    fi
+
+    # Search all lines to find a match
+    for ((i=0; i<${#HANDLES[*]}; i++)); do
+        HANDLE=${HANDLES[$i]}
+        if [[ -n "$TYPE" && "$TYPE" != "${DMI_TYPE_IDS[$HANDLE]}" && "$TYPE" != "${DMI_TYPE_STRINGS[$HANDLE]}" ]]; then
+            continue
+        fi
+        IFS=$'\n'
+        TMPDATA=( ${DMI_DATA[$HANDLE]} )
+        IFS=$' \t\n'
+        for ((j=0; j<${#TMPDATA[*]}; j++)) ; do
+            if mcheck "${TMPDATA[$j]}" "$MATCH" ; then
+                # If the match is negated, we're making sure a matching line *isn't* there.
+                # Otherwise, we're making sure it *is* there.
+                if [[ $NEG == 1 ]]; then
+                    die 1 "Match found for $MATCH:  ${TMPDATA[$j]}"
+                    return 1
+                else
+                    return 0
+                fi
+            fi
+        done
+    done
+
+    # No matching line has been found.
+    if [[ $NEG == 1 ]]; then
+        return 0
+    else
+        die 1 "No match found for $MATCH"
+        return 1
+    fi
+}
+
+# "Grep" through the raw DMI data for a match to the supplied string.
+function check_dmi_raw_data_match() {
+    local NEG=0 MATCH
+
+    if [[ "$1" == '!' ]]; then
+        NEG=1
+        shift
+    fi
+    MATCH="$*"
+        
+    if [[ ${#DMI_RAW_DATA[*]} -eq 0 ]]; then
+        nhc_dmi_gather_raw_data
+    fi
+
+    # Search all lines to find a match
+    for ((i=0; i<${#DMI_RAW_DATA[*]}; i++)); do
+        if mcheck "${DMI_RAW_DATA[$i]}" "$MATCH" ; then
+            # If the match is negated, we're making sure a matching line *isn't* there.
+            # Otherwise, we're making sure it *is* there.
+            if [[ $NEG == 1 ]]; then
+                die 1 "Match found for $MATCH:  ${DMI_RAW_DATA[$i]}"
+                return 1
+            else
+                return 0
+            fi
+        fi
+    done
+
+    # No matching line has been found.
+    if [[ $NEG == 1 ]]; then
+        return 0
+    else
+        die 1 "No match found for $MATCH"
+        return 1
+    fi
+}

@@ -22,6 +22,90 @@ PWDATA_USERS=( )
 PWDATA_SYSTEM_USERS=( )
 PWDATA_USERID_MAP=''
 
+#################### Utility functions ####################
+### Add one or more elements to the end of the array named in $1
+### Example:  array_push SOMEARRAY "item 1" "item 2" "item 3"
+function array_push() {
+    local ANAME="$1"
+    #local SAVEIFS="$IFS"
+
+    shift
+    #IFS='|'
+    #dprint "Appending to array $ANAME:  <<$*>>"
+    #IFS="$SAVEIFS"
+    eval "$ANAME"'=( "${'"$ANAME"'[@]}" "$@" )'
+}
+
+### Remove $2 elements (default 1) from the end of array $1 and
+### optionally assign to variable $3
+### Example:  array_pop SOMEARRAY 3 SOMEVAR
+function array_pop() {
+    local ANAME="$1" COUNT="$2" VARNAME="$3" END i j
+    local -a NEWARRAY
+
+    eval END='$((${#'"$ANAME"'[*]}-1))'
+    for ((i=0; i < ${COUNT:-1}; i++)); do
+        j=$((END-i))
+        eval 'NEWARRAY[$j]="${'"$ANAME"'[$j]}"'
+        eval unset "$ANAME"'['"$j"']'
+    done
+    if [[ -n "$VARNAME" ]]; then
+        eval "$VARNAME"'="${NEWARRAY[*]}"'
+    fi
+}
+
+### Add one or more elements to the beginning of array $1
+### Example:  array_unshift SOMEARRAY "item 1" "item 2" "item 3"
+function array_unshift() {
+    local ANAME="$1"
+    #local SAVEIFS="$IFS"
+
+    shift
+    #IFS='|'
+    #dprint "Appending to array $ANAME:  <<$*>>"
+    #IFS="$SAVEIFS"
+    eval "$ANAME"'=( "$@" "${'"$ANAME"'[@]}" )'
+}
+
+### Remove $2 elements (default 1) from the beginning of array $1
+### Example:  array_shift SOMEARRAY 2
+function array_shift() {
+    local ANAME="$1" COUNT="$2" i
+
+    for ((i=0; i < ${COUNT:-1}; i++)); do
+        eval unset "$ANAME"'['"$i"']'
+    done
+    eval "$ANAME"'=( "${'"$ANAME"'[@]}" )'
+}
+
+### Splits the string $2 on separator character $1 and stores in array $3
+### Example:  array_split $'\n' "$FILE" LINES
+function array_split() {
+    local SEP="$1" STR="$2" ANAME="$3"
+    local SAVEIFS="$IFS"
+
+    IFS="$SEP"
+    eval "$ANAME"'=( '"$STR"' )'
+    IFS="$SAVEIFS"
+}
+
+### Joins the contents of array $2 using separator character $1
+### into optional output variable variable $3
+### Example:  array_join ',' FIELDS RESULT
+function array_join() {
+    local SEP="$1" ANAME="$2" OUTVAR="$3"
+    local SAVEIFS="$IFS"
+
+    IFS="$SEP"
+    if [[ -n "$OUTVAR" ]]; then
+        eval "$OUTVAR"'="${'"$ANAME"'[*]}"'
+    else
+        eval echo '"${'"$ANAME"'[*]}"'
+    fi
+    IFS="$SAVEIFS"
+}
+###########################################################
+
 # Define regexp match check conditionally based on bash version.
 if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
     # Check to see if parameter ($1) matches regexp ($2)

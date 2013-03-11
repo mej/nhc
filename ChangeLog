@@ -439,3 +439,13 @@ Also made sure that results files which are older than /proc,
 indicating a reboot since the last run, are considered stale and
 removed.
 ----------------------------------------------------------------------
+Mon Mar 11 14:47:19 2013                        Michael Jennings (mej)
+
+Add DMI data gatherer and corresponding checks.  Definitely not
+speedy, but there's an awful lot of very valuable information that can
+be gleaned from it.  And, as always, once you take the initial hit,
+you can write as many DMI checks as you like with minimal added
+overhead.
+
+Still need to write the unit tests for the new checks.
+----------------------------------------------------------------------

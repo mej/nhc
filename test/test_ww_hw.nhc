@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((11+7+7+7+7+4+4+4+5+9+2)) "ww_hw.nhc" && {
+plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
@@ -134,6 +134,8 @@ plan $((11+7+7+7+7+4+4+4+5+9+2)) "ww_hw.nhc" && {
     HW_IB_STATE=( "ACTIVE" "DOWN" )
     HW_IB_PHYS_STATE=( "LinkUp" "Disabled" )
     HW_IB_RATE=( "56" "10" )
+    HW_IB_DEV=( "ib0" "ib1" )
+
     # Check for EDR, FDR, QDR, DDR, and SDR 4X links
     check_hw_ib 100
     is $? 1 "Not present:  4X EDR Infiniband link"
@@ -145,6 +147,16 @@ plan $((11+7+7+7+7+4+4+4+5+9+2)) "ww_hw.nhc" && {
     is $? 1 "Not present:  4X DDR Infiniband link"
     check_hw_ib 10
     is $? 1 "Not present:  4X SDR Infiniband link"
+    check_hw_ib 56 ib1
+    is $? 1 "Not present:  4X FDR Infiniband link on ib1"
+    check_hw_ib 56 ib0
+    is $? 0 "Present:  4X FDR Infiniband link on ib0"
+    check_hw_ib 10 ib1
+    is $? 1 "Present:  SDR Infiniband link on ib1"
+    check_hw_ib '' ib0
+    is $? 0 "Present:  Infiniband link on ib0"
+    check_hw_ib '' ib1
+    is $? 1 "Present:  Infiniband link on ib1"
 
 
     # Kernel module data:  Pared down list from 2.6.32

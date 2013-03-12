@@ -16,6 +16,7 @@ HW_SWAP_FREE=0
 HW_IB_STATE=( )
 HW_IB_PHYS_STATE=()
 HW_IB_RATE=( )
+HW_IB_DEV=()
 HW_MODULES=( )
 HW_ETH_DEV=( )
 MCELOG="${MCELOG:-mcelog}"
@@ -91,8 +92,11 @@ function nhc_hw_gather_data() {
         read LINE < $PORT/rate
         FIELD=( $LINE )
         HW_IB_RATE[$INDEX]=${FIELD[0]}
+        IFS=' /'
+        arr=( $PORT )
+        HW_IB_DEV[$INDEX]="${arr[4]}:${arr[6]}"
         IFS=$' \t\n'
-        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port (${HW_IB_RATE[$INDEX]} Gb/sec)"
+        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec)"
     done
     export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
 
@@ -253,7 +257,8 @@ function check_hw_mem_free() {
 function check_hw_ib() {
     local STATE="ACTIVE"
     local PHYS_STATE="LinkUp"
-    local RATE=$1
+    local RATE="$1"
+    local DEV="$2"
     local i
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
@@ -261,12 +266,21 @@ function check_hw_ib() {
     fi
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
-        if [[ ${HW_IB_STATE[$i]} == $STATE && ${HW_IB_PHYS_STATE[$i]} == $PHYS_STATE && ${HW_IB_RATE[$i]} == $RATE ]]; then
-            return 0
+        if [[ "${HW_IB_STATE[$i]}" == "$STATE" && "${HW_IB_PHYS_STATE[$i]}" == "$PHYS_STATE" ]]; then
+            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") ]]; then
+                return 0
+            fi
         fi
     done
 
-    die 1 "No IB port is $STATE ($PHYS_STATE, $RATE Gb/sec)."
+    if [[ -n "$DEV" ]]; then
+        DEV=" $DEV"
+    fi
+    if [[ -n "$RATE" ]]; then
+        RATE=", $RATE Gb/sec"
+    fi
+
+    die 1 "No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
     return 1
 }
 

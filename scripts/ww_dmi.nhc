@@ -108,16 +108,11 @@ function check_dmi_data_match() {
     local NEG=0 MATCH
     local -a HANDLES TMPDATA
 
-    if [[ "$1" == '!' ]]; then
-        NEG=1
-        shift
-    fi
-    MATCH="$*"
-
     if [[ ${#DMI_HANDLES[*]} -eq 0 ]]; then
         nhc_dmi_gather_data
     fi
 
+    OPTIND=1
     while getopts ":h:t:n" OPTION ; do
         case "$OPTION" in
             h) HANDLES=( $OPTARG ) ;;
@@ -127,6 +122,13 @@ function check_dmi_data_match() {
             \?) die 1 "Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
+    shift $((OPTIND-1))
+
+    if [[ "$1" == '!' ]]; then
+        NEG=1
+        shift
+    fi
+    MATCH="$*"
 
     # If we weren't given a set of handles, look at all handles
     # which are valid for the supplied type, if any.

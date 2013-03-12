@@ -449,3 +449,7 @@ overhead.
 
 Still need to write the unit tests for the new checks.
 ----------------------------------------------------------------------
+Mon Mar 11 17:43:40 2013                        Michael Jennings (mej)
+
+Added unit tests and auto-fu for DMI stuff.
+----------------------------------------------------------------------

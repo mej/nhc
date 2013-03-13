@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((7+5+8+5+4)) "common.nhc" && {
+plan $((9+5+8+5+4+6+8)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_glob 2>&1`" 'function' 'mcheck_glob() loaded properly'
@@ -11,6 +11,8 @@ plan $((7+5+8+5+4)) "common.nhc" && {
     is "`type -t nhc_load_conf 2>&1`" 'function' 'nhc_load_conf() loaded properly'
     is "`type -t nhc_common_load_passwd 2>&1`" 'function' 'nhc_common_load_passwd() loaded properly'
     is "`type -t nhc_common_get_uid 2>&1`" 'function' 'nhc_common_get_uid() loaded properly'
+    is "`type -t nhc_common_parse_size 2>&1`" 'function' 'nhc_common_parse_size() loaded properly'
+    is "`type -t nhc_common_unparse_size 2>&1`" 'function' 'nhc_common_unparse_size() loaded properly'
 
     mcheck "This is a test." '/test/'
     is $? 0 "Basic regexp match via mcheck()"
@@ -59,4 +61,49 @@ plan $((7+5+8+5+4)) "common.nhc" && {
     is $? 1 "Direct usage of mcheck_range() with braces (wrong)"
     mcheck_range 'n0000.foo' 'n000[0-9].foo'
     is $? 0 "Direct usage of mcheck_range() without braces (correct)"
+
+    OSIZE="1023kB"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE 1023 "nhc_common_parse_size():  1023kB -> 1023"
+    OSIZE="1023MB"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE $((1023*1024)) "nhc_common_parse_size():  1023MB -> $((1023*1024))"
+    OSIZE="100GB"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE $((100*1024*1024)) "nhc_common_parse_size():  100GB -> $((100*1024*1024))"
+    OSIZE="6Tb"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE $((6*1024*1024*1024)) "nhc_common_parse_size():  6Tb -> $((6*1024*1024*1024))"
+    OSIZE="1pb"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE $((1024*1024*1024*1024)) "nhc_common_parse_size():  1pb -> $((1024*1024*1024*1024))"
+    OSIZE="1eb"
+    nhc_common_parse_size $OSIZE NSIZE
+    is $NSIZE $((1024*1024*1024*1024*1024)) "nhc_common_parse_size():  1eb -> $((1024*1024*1024*1024*1024))"
+
+    OSIZE=$((1024*1024*1024*1024*1024*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1024EB" "nhc_common_unparse_size():  $OSIZE -> 1024EB"
+    OSIZE=$((1024*1024*1024*1024*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1EB" "nhc_common_unparse_size():  $OSIZE -> 1EB"
+    OSIZE=$((1023*1024*1024*1024*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1023PB" "nhc_common_unparse_size():  $OSIZE -> 1023PB"
+    OSIZE=$((64*1024*1024*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "64TB" "nhc_common_unparse_size():  $OSIZE -> 64TB"
+    OSIZE=$((4*1024*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "4GB" "nhc_common_unparse_size():  $OSIZE -> 4GB"
+    OSIZE=$((1023*1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1023MB" "nhc_common_unparse_size():  $OSIZE -> 1023MB"
+    OSIZE=$((1024))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1MB" "nhc_common_unparse_size():  $OSIZE -> 1MB"
+    OSIZE=$((1000))
+    nhc_common_unparse_size $OSIZE NSIZE
+    is "$NSIZE" "1000kB" "nhc_common_unparse_size():  $OSIZE -> 1000kB"
+
 } ; unplan

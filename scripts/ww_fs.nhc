@@ -78,43 +78,6 @@ function nhc_fs_df_gather_data() {
     #set | grep ^DF_ | sed 's/\[/\n        [/g;s/)$/\n)/' | sed '/\[\(3\|4\|7\|8\|9\|1[0-9]\)\]/d'
 }
 
-function nhc_fs_parse_size() {
-    local VAL=$1
-    local VAR=$2
-
-    if [[ -n "$VAL" ]]; then
-        VAL="${VAL/%[bB]}"
-        case "$VAL" in
-            *k|*K)  VAL=${VAL/%[Kk]} ;;
-            *m|*M)  VAL=$((${VAL/%[Mm]}*1024)) ;;
-            *g|*G)  VAL=$((${VAL/%[Gg]}*1024*1024)) ;;
-            *t|*T)  VAL=$((${VAL/%[Tt]}*1024*1024*1024)) ;;
-            *p|*P)  VAL=$((${VAL/%[Pp]}*1024*1024*1024*1024)) ;;
-            *e|*E)  VAL=$((${VAL/%[Ee]}*1024*1024*1024*1024*1024)) ;;
-        esac
-    fi
-    if [[ -n "$VAR" ]]; then
-        eval $VAR=$VAL
-    fi
-}
-
-function nhc_fs_unparse_size() {
-    local VAL=$1
-    local VAR=$2
-    local -a SUFFIXES=( k M G T P E )
-    local i
-
-    if [[ -n "$VAL" ]]; then
-        for ((i=0; VAL >= 1024 && i < ${#SUFFIXES[*]}-1; i++)); do
-            ((VAL/=1024))
-        done
-        VAL="$VAL${SUFFIXES[$i]}B"
-    fi
-    if [[ -n "$VAR" ]]; then
-        eval $VAR='"$VAL"'
-    fi
-}
-
 # Check to make sure a filesystem ($1) is mounted.  Includes optional
 # checks for source ($2), filesystem type ($3), and a regular
 # expression for mount options ($4).
@@ -182,8 +145,8 @@ function check_fs_size() {
         nhc_fs_df_gather_data
     fi
 
-    nhc_fs_parse_size "$MIN_SIZE" MIN_SIZE
-    nhc_fs_parse_size "$MAX_SIZE" MAX_SIZE
+    nhc_common_parse_size "$MIN_SIZE" MIN_SIZE
+    nhc_common_parse_size "$MAX_SIZE" MAX_SIZE
 
     for ((i=0; i < ${#DF_DEV[*]}; i++)); do
         if [[ "${DF_MNTPT[$i]}" != "$FS" ]]; then
@@ -191,14 +154,14 @@ function check_fs_size() {
         fi
         FS_SIZE=${DF_SIZE[$i]}
         if [[ -n "$MIN_SIZE" && $MIN_SIZE -gt $FS_SIZE ]]; then
-            nhc_fs_unparse_size $FS_SIZE FS_SIZE
-            nhc_fs_unparse_size $MIN_SIZE MIN_SIZE
+            nhc_common_unparse_size $FS_SIZE FS_SIZE
+            nhc_common_unparse_size $MIN_SIZE MIN_SIZE
             die 1 "$FUNCNAME:  $FS size $FS_SIZE less than minimum of $MIN_SIZE"
             return 1
         fi
         if [[ -n "$MAX_SIZE" && $MAX_SIZE -lt $FS_SIZE ]]; then
-            nhc_fs_unparse_size $FS_SIZE FS_SIZE
-            nhc_fs_unparse_size $MAX_SIZE MAX_SIZE
+            nhc_common_unparse_size $FS_SIZE FS_SIZE
+            nhc_common_unparse_size $MAX_SIZE MAX_SIZE
             die 1 "$FUNCNAME:  $FS size $FS_SIZE exceeds maximum of $MAX_SIZE"
             return 1
         fi
@@ -227,15 +190,15 @@ function check_fs_free() {
             FS_FREE=${DF_FREE[$i]}
             if [[ "${MIN_FREE/%%}" != "$MIN_FREE" ]]; then
                 if [[ $FREE_PCT -lt "${MIN_FREE/%%}" ]]; then
-                    nhc_fs_unparse_size $FS_FREE FS_FREE
+                    nhc_common_unparse_size $FS_FREE FS_FREE
                     die 1 "$FUNCNAME:  $FS has only ${FREE_PCT}% free ($FS_FREE), minimum is $MIN_FREE"
                     return 1
                 fi
             else
-                nhc_fs_parse_size $MIN_FREE MIN_FREE
+                nhc_common_parse_size $MIN_FREE MIN_FREE
                 if [[ $FS_FREE -lt $MIN_FREE ]]; then
-                    nhc_fs_unparse_size $MIN_FREE MIN_FREE
-                    nhc_fs_unparse_size $FS_FREE FS_FREE
+                    nhc_common_unparse_size $MIN_FREE MIN_FREE
+                    nhc_common_unparse_size $FS_FREE FS_FREE
                     die 1 "$FUNCNAME:  $FS has only $FS_FREE free, minimum is $MIN_FREE"
                     return 1
                 fi
@@ -265,15 +228,15 @@ function check_fs_used() {
             FS_USED=${DF_USED[$i]}
             if [[ "${MAX_USED/%%}" != "$MAX_USED" ]]; then
                 if [[ ${DF_PCT[$i]/%%} -ge "${MAX_USED/%%}" ]]; then
-                    nhc_fs_unparse_size $FS_USED FS_USED
+                    nhc_common_unparse_size $FS_USED FS_USED
                     die 1 "$FUNCNAME:  $FS is ${DF_PCT[$i]/%%}% full ($FS_USED), threshold is ${MAX_USED}%"
                     return 1
                 fi
             else
-                nhc_fs_parse_size $MAX_USED MAX_USED
+                nhc_common_parse_size $MAX_USED MAX_USED
                 if [[ $FS_USED -ge $MAX_USED ]]; then
-                    nhc_fs_unparse_size $MAX_USED MAX_USED
-                    nhc_fs_unparse_size $FS_USED FS_USED
+                    nhc_common_unparse_size $MAX_USED MAX_USED
+                    nhc_common_unparse_size $FS_USED FS_USED
                     die 1 "$FUNCNAME:  $FS has $FS_USED used, threshold is $MAX_USED"
                     return 1
                 fi

@@ -418,3 +418,46 @@ function nhc_common_get_userid() {
         eval $THIS_VAR=${PWUID_USER[$THIS_UID]}
     fi
 }
+
+# Convert text representation of size (e.g., nnnMB or nnnG) into a number of kilobytes.
+function nhc_common_parse_size() {
+    local VAL=$1
+    local VAR=$2
+
+    if [[ -n "$VAL" ]]; then
+        VAL="${VAL/%[bB]}"
+        case "$VAL" in
+            *k|*K)  VAL=${VAL/%[Kk]} ;;
+            *m|*M)  VAL=$((${VAL/%[Mm]}*1024)) ;;
+            *g|*G)  VAL=$((${VAL/%[Gg]}*1024*1024)) ;;
+            *t|*T)  VAL=$((${VAL/%[Tt]}*1024*1024*1024)) ;;
+            *p|*P)  VAL=$((${VAL/%[Pp]}*1024*1024*1024*1024)) ;;
+            *e|*E)  VAL=$((${VAL/%[Ee]}*1024*1024*1024*1024*1024)) ;;
+        esac
+    fi
+    if [[ -n "$VAR" ]]; then
+        eval $VAR=$VAL
+    fi
+}
+
+# Convert number of kilobytes into text representation with suffix (e.g., 1024 -> 1MB)
+function nhc_common_unparse_size() {
+    local VAL=$1
+    local VAR=$2
+    local -a SUFFIXES=( k M G T P E )
+    local i
+
+    if [[ -n "$VAL" ]]; then
+        for ((i=0; VAL >= 1024 && i < ${#SUFFIXES[*]}-1; i++)); do
+            ((VAL/=1024))
+        done
+        VAL="$VAL${SUFFIXES[$i]}B"
+    fi
+    if [[ -n "$VAR" ]]; then
+        eval $VAR='"$VAL"'
+    fi
+}
+
+# Aliases for backward compatibility, just in case
+#function nhc_fs_parse_size { nhc_common_parse_size "$@" }
+#function nhc_fs_unparse_size { nhc_common_unparse_size "$@" }

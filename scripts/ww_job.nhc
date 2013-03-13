@@ -20,27 +20,37 @@ function nhc_job_find_users() {
 
     dbg "Searching for job files"
     JOBUSERS=( $NHC_AUTH_USERS )
-    JOBLIST=( $JOBFILE_PATH/*.JB )
-    dbg "Found ${#JOBLIST[*]} job files in $JOBFILE_PATH"
-    if [[ ${#JOBLIST[*]} -eq 1 && ! -f "${JOBLIST[0]}" && -d $PWD/jobs ]]; then
-        JOBLIST=( $PWD/jobs/*.JB )
-        dbg "Found ${#JOBLIST[*]} job files in $PWD/jobs"
-    fi
-    for JOBFILE in "${JOBLIST[@]}" ; do
-        if [[ ! -f "$JOBFILE" ]]; then
-            continue
+    if [[ "$NHC_RM" == "pbs" ]]; then
+        JOBLIST=( $JOBFILE_PATH/*.JB )
+        dbg "Found ${#JOBLIST[*]} job files in $JOBFILE_PATH"
+        if [[ ${#JOBLIST[*]} -eq 1 && ! -f "${JOBLIST[0]}" && -d $PWD/jobs ]]; then
+            JOBLIST=( $PWD/jobs/*.JB )
+            dbg "Found ${#JOBLIST[*]} job files in $PWD/jobs"
         fi
-        while read LINE ; do
-            JOBUSER=${LINE##PBS_O_LOGNAME=}
-            if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
+        for JOBFILE in "${JOBLIST[@]}" ; do
+            if [[ ! -f "$JOBFILE" ]]; then
                 continue
             fi
-            if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
-                JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
-            fi
-            break
-        done < "$JOBFILE"
-    done 2>/dev/null || :
+            while read LINE ; do
+                JOBUSER=${LINE##PBS_O_LOGNAME=}
+                if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
+                    continue
+                fi
+                if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
+                    JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
+                fi
+                break
+            done < "$JOBFILE"
+        done 2>/dev/null || :
+    elif [[ "$NHC_RM" == "slurm" ]]; then
+        # FIXME:  SLURM not yet supported
+        :
+    elif [[ "$NHC_RM" == "sge" ]]; then
+        # FIXME:  SGE not yet supported
+        :
+    else
+        dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
+    fi
     dbg "Authorized users are:  ${JOBUSERS[*]}"
 }
 

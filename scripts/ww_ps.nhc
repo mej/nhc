@@ -6,8 +6,6 @@
 # $Id$
 #
 
-RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
-
 PS_PROCS=( )
 PS_USER=( )
 PS_PPID=( )
@@ -26,6 +24,17 @@ function nhc_ps_gather_data() {
     # We need passwd data to resolve UIDs for users with lengthy userids
     if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
+    fi
+
+    # Set default for $RM_DAEMON_MATCH based on configured resource manager.
+    if [[ "$NHC_RM" == "pbs" ]]; then
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
+    elif [[ "$NHC_RM" == "slurm" ]]; then
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmd\b/}"
+    elif [[ "$NHC_RM" == "sge" ]]; then
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_execd\b/}"
+    else
+        dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
     fi
 
     # Create array $LINES[] by splitting "ps" output on newlines.

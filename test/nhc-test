@@ -43,7 +43,8 @@ function test_nhc_driver() {
     CONFDIR="$TOP_SRCDIR"
     HELPERDIR="$LIBEXECDIR"
     LOGFILE=" "
-    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR HELPERDIR LOGFILE
+    NHC_RM="pbs"
+    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR HELPERDIR LOGFILE NHC_RM
 
     # Finalize environment.  Make sure we get what we expect.
     nhcmain_finalize_env

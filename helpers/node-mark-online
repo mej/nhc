@@ -8,28 +8,59 @@
 # $Id$
 #
 
-# This script is a simple pbsnodes wrapper that the node health check
-# can run in the background to mark nodes online after having been
-# previously offlined.  It will first obtain the current node state
-# information to avoid onlining nodes it didn't originally offline.
+# This script is a simple wrapper that the node health check can run
+# in the background to mark nodes online after having been previously
+# offlined.  It will first obtain the current node state information
+# to avoid onlining nodes it didn't originally offline.
 
-PBSNODES="${PBSNODES:-pbsnodes}"
-PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
-PBSNODES_ONLINE_ARGS="${PBSNODES_ONLINE_ARGS:--c -N}"
 IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}"
 LEADER="NHC:"
-
-echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
-
 HOSTNAME="$1"
 NOTE=""
 
-LINE=( $($PBSNODES $PBSNODES_LIST_ARGS $HOSTNAME) )
-STATUS="${LINE[1]}"
-OLD_NOTE_LEADER="${LINE[2]}"
-OLD_NOTE="${LINE[*]:3}"
-case $STATUS in
-    *offline*)
+echo "`date '+%Y%m%d %H:%M:%S'` [$NHC_RM] $0 $*"
+
+### PBS (TORQUE)
+if [[ "$NHC_RM" == "pbs" ]]; then
+    PBSNODES="${PBSNODES:-pbsnodes}"
+    PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
+    PBSNODES_ONLINE_ARGS="${PBSNODES_ONLINE_ARGS:--c -N}"
+
+    LINE=( $($PBSNODES $PBSNODES_LIST_ARGS $HOSTNAME) )
+    STATUS="${LINE[1]}"
+    OLD_NOTE_LEADER="${LINE[2]}"
+    OLD_NOTE="${LINE[*]:3}"
+    case $STATUS in
+        *offline*)
+            # If there is no old note, and we've not been told to ignore that, do not online the node.
+            if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  No note set."
+                exit 0
+            fi
+            # If there IS an old note, but it wasn't set by NHC, do not online the node.
+            if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  Offline for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+                exit 0
+            fi
+            echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
+            exec $PBSNODES $PBSNODES_ONLINE_ARGS '' $HOSTNAME
+            ;;
+    esac
+    echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+
+### SLURM
+elif [[ "$NHC_RM" == "slurm" ]]; then
+    HOSTNAME="${HOSTNAME/%.*}"
+    SLURM_SINFO="${SLURM_SINFO:-sinfo}"
+    SLURM_SINFO_ARGS="${SLURM_SINFO_ARGS:--o '%t %E' -hn}"
+    SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
+    SLURM_SC_ONLINE_ARGS="${SLURM_SC_ONLINE_ARGS:-update State=Idle}"
+
+    LINE=( $($SLURM_SINFO $SLURM_SINFO_ARGS $HOSTNAME) )
+    STATUS="${LINE[1]}"
+    OLD_NOTE_LEADER="${LINE[2]}"
+    OLD_NOTE="${LINE[*]:3}"
+    if [[ "$STATUS" == "down" ]]; then
         # If there is no old note, and we've not been told to ignore that, do not online the node.
         if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  No note set."
@@ -37,11 +68,21 @@ case $STATUS in
         fi
         # If there IS an old note, but it wasn't set by NHC, do not online the node.
         if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
-            echo "$0:  Not onlining $HOSTNAME:  $OLD_NOTE_LEADER $OLD_NOTE"
+            echo "$0:  Not onlining $HOSTNAME:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
             exit 0
         fi
         echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
-        exec $PBSNODES $PBSNODES_ONLINE_ARGS '' $HOSTNAME
-        ;;
-esac
-echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+        exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$HOSTNAME
+    fi
+    echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+
+### Sun Grid Engine (and variants)
+elif [[ "$NHC_RM" == "sge" ]]; then
+    echo "$0:  No additional node marking necessary for SGE and variants."
+
+### Everything else is unsupported.
+else
+    echo "$0:  Unsupported RM detected in $0:  \"$NHC_RM\""
+    exit -1
+fi
+exit 0

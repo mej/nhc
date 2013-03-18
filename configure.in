@@ -11,6 +11,25 @@ dnl# Try to get SVN revision
 SVNVERSION=`svnversion -c | sed 's/^.*://g' 2>/dev/null || echo 0000`
 if test "$SVNVERSION" = "0000" ; then
     SVNVERSION=`svnversion 2>/dev/null || echo 0000`
+elif test "$SVNVERSION" = "exported" ; then
+    SVNVERSION=`git show -s --pretty=format:%h 2>/dev/null`
+    if test -n "$SVNVERSION" ; then
+        SVNVERSION=`git svn find-rev $SVNVERSION`
+        if test $? -eq 0 ; then
+            if test -z "$SVNVERSION" ; then
+                for REV in 1 2 3 4 5 6 7 8 9 10 ; do
+                    SVNVERSION=`git svn find-rev HEAD~$REV`
+                    test -n "$SVNVERSION" && break
+                done
+            fi
+            if test -n "$SVNVERSION" ; then
+                git diff --no-ext-diff --quiet --exit-code || SVNVERSION="${SVNVERSION}M"
+            fi
+        fi
+    fi
+    if test -z "$SVNVERSION" ; then
+        SVNVERSION="0000"
+    fi
 fi
 AC_SUBST(SVNVERSION)
 

@@ -70,7 +70,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             if [[ "$STATUS" == "down" ]]; then
                 # If the node is already offline, and there is no old note, and
                 # we've not been told to ignore that, do not touch the node.
-                if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+                if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
                     echo "$0:  Not offlining $HOSTNAME:  Already offline with no note set."
                     exit 0
                 fi

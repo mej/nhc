@@ -61,12 +61,12 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE="${LINE[*]:2}"
     if [[ "$STATUS" == "down" ]]; then
         # If there is no old note, and we've not been told to ignore that, do not online the node.
-        if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+        if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  No note set."
             exit 0
         fi
         # If there IS an old note, but it wasn't set by NHC, do not online the node.
-        if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+        if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
             echo "$0:  Not onlining $HOSTNAME:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
             exit 0
         fi

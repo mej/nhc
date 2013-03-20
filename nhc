@@ -35,6 +35,11 @@ function die() {
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         echo "$RET $*" > $RESULTFILE
+    elif [[ "$NHC_RM" == "sge" ]]; then
+        echo "begin"
+        echo "$HOSTNAME:healthy:false"
+        echo "$HOSTNAME:diagnosis:NHC: $*"
+        echo "end"
     else
         echo "ERROR Health check failed:  $*"
     fi
@@ -153,6 +158,12 @@ function nhcmain_finalize_env() {
             OFFLINE_NODE=:
             MARK_OFFLINE=0
         fi
+    fi
+    if [[ "$NHC_RM" == "sge" ]]; then
+        # With SGE, we return the status and note directly from NHC.
+        ONLINE_NODE=:
+        OFFLINE_NODE=:
+        MARK_OFFLINE=0
     fi
     export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM
 }
@@ -296,6 +307,12 @@ function nhcmain_mark_online() {
 function nhcmain_finish() {
     syslog_flush
     log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
+    if [[ "$NHC_RM" == "sge" ]]; then
+        echo "begin"
+        echo "$HOSTNAME:healthy:true"
+        echo "$HOSTNAME:diagnosis:HEALTHY"
+        echo "end"
+    fi        
     kill_watchdog
     exit 0
 }

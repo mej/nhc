@@ -58,16 +58,28 @@ if [[ "$NHC_RM" == "pbs" ]]; then
 elif [[ "$NHC_RM" == "slurm" ]]; then
     HOSTNAME="${HOSTNAME/%.*}"
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
-    SLURM_SINFO_ARGS="${SLURM_SINFO_ARGS:--o '%t %E' -hn}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
     SLURM_SC_OFFLINE_ARGS="${SLURM_SC_OFFLINE_ARGS:-update State=Down}"
 
-    LINE=( $($SLURM_SINFO $SLURM_SINFO_ARGS $HOSTNAME) )
-    STATUS="${LINE[1]}"
-    OLD_NOTE_LEADER="${LINE[2]}"
-    OLD_NOTE="${LINE[*]:3}"
+    LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
+    STATUS="${LINE[0]}"
+    OLD_NOTE_LEADER="${LINE[1]}"
+    OLD_NOTE="${LINE[*]:2}"
     case $STATUS in
-        idle)
+        down|idle)
+            if [[ "$STATUS" == "down" ]]; then
+                # If the node is already offline, and there is no old note, and
+                # we've not been told to ignore that, do not touch the node.
+                if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+                    echo "$0:  Not offlining $HOSTNAME:  Already offline with no note set."
+                    exit 0
+                fi
+            fi
+            # If there's an old note that wasn't set by NHC, preserve it.
+            if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+                LEADER="$OLD_NOTE_LEADER"
+                NOTE="$OLD_NOTE"
+            fi
             echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
             ;;

@@ -52,14 +52,13 @@ if [[ "$NHC_RM" == "pbs" ]]; then
 elif [[ "$NHC_RM" == "slurm" ]]; then
     HOSTNAME="${HOSTNAME/%.*}"
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
-    SLURM_SINFO_ARGS="${SLURM_SINFO_ARGS:--o '%t %E' -hn}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
     SLURM_SC_ONLINE_ARGS="${SLURM_SC_ONLINE_ARGS:-update State=Idle}"
 
-    LINE=( $($SLURM_SINFO $SLURM_SINFO_ARGS $HOSTNAME) )
-    STATUS="${LINE[1]}"
-    OLD_NOTE_LEADER="${LINE[2]}"
-    OLD_NOTE="${LINE[*]:3}"
+    LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
+    STATUS="${LINE[0]}"
+    OLD_NOTE_LEADER="${LINE[1]}"
+    OLD_NOTE="${LINE[*]:2}"
     if [[ "$STATUS" == "down" ]]; then
         # If there is no old note, and we've not been told to ignore that, do not online the node.
         if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then

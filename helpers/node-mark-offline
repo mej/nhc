@@ -59,7 +59,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     HOSTNAME="${HOSTNAME/%.*}"
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
-    SLURM_SC_OFFLINE_ARGS="${SLURM_SC_OFFLINE_ARGS:-update State=Down}"
+    SLURM_SC_OFFLINE_ARGS="${SLURM_SC_OFFLINE_ARGS:-update State=DRAIN}"
 
     LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
     STATUS="${LINE[0]}"

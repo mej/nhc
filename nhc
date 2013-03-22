@@ -190,8 +190,11 @@ function nhcmain_find_rm() {
         if [[ -x "$DIR/pbsnodes" ]]; then
             NHC_RM="pbs"
             return 0
-        elif [[ -x "$DIR/srun" ]]; then
+        elif [[ -x "$DIR/scontrol" ]]; then
             NHC_RM="slurm"
+            return 0
+        elif [[ -x "$DIR/badmin" ]]; then
+            NHC_RM="lsf"
             return 0
         elif [[ -x "$DIR/qselect" ]]; then
             NHC_RM="sge"

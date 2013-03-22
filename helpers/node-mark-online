@@ -30,7 +30,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     STATUS="${LINE[1]}"
     OLD_NOTE_LEADER="${LINE[2]}"
     OLD_NOTE="${LINE[*]:3}"
-    case $STATUS in
+    case "$STATUS" in
         *offline*)
             # If there is no old note, and we've not been told to ignore that, do not online the node.
             if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
@@ -47,6 +47,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
             ;;
     esac
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+
 
 ### SLURM
 elif [[ "$NHC_RM" == "slurm" ]]; then
@@ -79,9 +80,55 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     esac
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
 
+
+### IBM Platform LSF
+elif [[ "$NHC_RM" == "lsf" ]]; then
+    LSF_BHOSTS="${LSF_BHOSTS:-bhosts}"
+    LSF_BADMIN="${LSF_BADMIN:-badmin}"
+    LSF_ONLINE_ARGS="${LSF_ONLINE_ARGS:-hopen}"
+
+    STATUS=""
+    OLD_NOTE_LEADER=""
+    OLD_NOTE=""
+    IFS=$'\n'
+    LINES=( $($LSF_BHOSTS -l $HOSTNAME) )
+    IFS=$' \t\n'
+    for ((i=0; i < ${#LINES[*]}; i++)) ; do
+        LINE=( ${LINES[$i]} )
+        if [[ "${LINE[0]}" == "STATUS" ]]; then
+            ((i++))
+            LINE=( ${LINES[$i]} )
+            STATUS="${LINE[0]}"
+        elif [[ "${LINE[0]}" == "ADMIN" && "${LINE[2]}" == "COMMENT:" ]]; then
+            OLD_NOTE_LEADER="${LINE[3]/\"}"
+            OLD_NOTE="${LINE[*]:4}"
+            OLD_NOTE="${OLD_NOTE/%\"}"
+            break
+        fi
+    done
+    case "$STATUS" in
+        closed*)
+            # If there is no old note, and we've not been told to ignore that, do not online the node.
+            if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  No note set."
+                exit 0
+            fi
+            # If there IS an old note, but it wasn't set by NHC, do not online the node.
+            if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+                exit 0
+            fi
+            echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
+            exec $LSF_BADMIN $LSF_ONLINE_ARGS $HOSTNAME
+            ;;
+    esac
+    echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+
+
 ### Sun Grid Engine (and variants)
 elif [[ "$NHC_RM" == "sge" ]]; then
     echo "$0:  No additional node marking necessary for SGE and variants."
+
 
 ### Everything else is unsupported.
 else

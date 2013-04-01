@@ -111,13 +111,81 @@ function nhcmain_init_env() {
     NAME=${0/#*\/}
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM
+    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
         export NHC_DETACHED
         DETACHED_MODE=1
     fi
+}
+
+function nhcmain_help() {
+    local PROGNAME=$0
+    local TITLE UNDERLINE
+
+    PROGNAME="${PROGNAME/#*\/}"
+    TITLE="$PROGNAME Usage"
+    UNDERLINE="${TITLE//?/-}"
+
+    cat <<EOF
+
+$TITLE
+$UNDERLINE
+
+  Syntax:  $PROGNAME [<options>] [<var>=<value> [...]]
+
+ OPTION            DESCRIPTION
+-------------------------------------------------------------------------------
+ -h                Show command line help (this info)
+ -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
+ -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
+ -d                Activate debugging output (i.e., DEBUG=1)
+ -n <name>         Set program name to <name> (default: nhc); see -D & -c above
+ -q                Run quietly (i.e., SILENT=1)
+ -t <timeout>      Use timeout of <timeout> seconds (default: 10)
+
+ All other command line parameters, if any, must be environment variable
+ settings in the form VARNAME=value.
+
+EXAMPLES:
+---------
+ To run in debug mode with a timeout of 60 seconds:
+    # $PROGNAME -d -t 60
+  OR
+    # $PROGNAME DEBUG=1 TIMEOUT=60
+
+ To run with the name "nhc-cron" which will alter default config paths:
+    # $PROGNAME -n nhc-cron
+  OR
+    # $PROGNAME NAME=nhc-cron
+
+EOF
+}
+
+function nhcmain_parse_cmdline() {
+    local OPTION
+
+    OPTIND=1
+    while getopts ":D:c:dhn:qt:" OPTION ; do
+        case "$OPTION" in
+            D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
+            d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
+            h) nhcmain_help ; exit 0 ;;
+            n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
+            q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
+            t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
+            :) nhcmain_help ; echo "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
+            \?) nhcmain_help ; echo "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    while [[ ! -z "$1" ]]; do
+        eval "$1"
+        shift
+    done
+    return 0
 }
 
 function nhcmain_load_sysconfig() {
@@ -343,6 +411,7 @@ trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
 trap 'die 127 "Script timed out." ; exit 127' 14
 
 nhcmain_init_env
+nhcmain_parse_cmdline "$@" || exit 10
 nhcmain_load_sysconfig
 nhcmain_finalize_env
 nhcmain_check_conffile || exit 0

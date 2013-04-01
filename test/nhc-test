@@ -14,6 +14,9 @@
 # from the top-level NHC source tree.
 
 function test_nhc_driver() {
+    local -a LINES FOUND=(0 0 0 0 0 0 0)
+    local LINE i MAXLEN=0
+
     # Load functions from NHC script.
     export NHC_LOAD_ONLY=1
     . $TOP_SRCDIR/nhc
@@ -34,6 +37,70 @@ function test_nhc_driver() {
         isnt $NAME nhc 'Validity of $NAME (2)'
         unlike "$HOSTNAME_S" "/\./" '$HOSTNAME_S contains no dots'
         unlike "$NAME" "/\//" '$NAME contains no slashes'
+    } ; unplan
+
+    # Check help output
+    IFS=$'\n'
+    LINES=( $(nhcmain_help) )
+    IFS=$' \t\n'
+    for ((i=0; i<${#LINES[*]}; i++)); do
+        LINE="${LINES[$i]}"
+        if [[ ${#LINE} > $MAXLEN ]]; then
+            MAXLEN=${#LINE}
+        fi
+        if [[ "${LINE/# -D }" != "$LINE" ]]; then
+            FOUND[0]=1
+        elif [[ "${LINE/# -c }" != "$LINE" ]]; then
+            FOUND[1]=1
+        elif [[ "${LINE/# -d }" != "$LINE" ]]; then
+            FOUND[2]=1
+        elif [[ "${LINE/# -h }" != "$LINE" ]]; then
+            FOUND[3]=1
+        elif [[ "${LINE/# -n }" != "$LINE" ]]; then
+            FOUND[4]=1
+        elif [[ "${LINE/# -q }" != "$LINE" ]]; then
+            FOUND[5]=1
+        elif [[ "${LINE/# -t }" != "$LINE" ]]; then
+            FOUND[6]=1
+        fi
+    done
+    plan 8 "nhcmain_help" && {
+        [ $MAXLEN -lt 80 ]
+        is $? 0 'Help screen lines do not exceed 80 columns'
+        is ${FOUND[0]} 1 'Help for option -D is present'
+        is ${FOUND[1]} 1 'Help for option -c is present'
+        is ${FOUND[2]} 1 'Help for option -d is present'
+        is ${FOUND[3]} 1 'Help for option -h is present'
+        is ${FOUND[4]} 1 'Help for option -n is present'
+        is ${FOUND[5]} 1 'Help for option -q is present'
+        is ${FOUND[6]} 1 'Help for option -t is present'
+    } ; unplan
+
+    # Check CLI parsing
+    plan 16 "nhcmain_parse_cmdline" && {
+        nhcmain_parse_cmdline
+        is $? 0 'No options?  No problem.'
+        nhcmain_parse_cmdline -d -t 60
+        is $DEBUG 1 '-d option sets $DEBUG'
+        is $TIMEOUT 60 '-t option sets $TIMEOUT'
+        nhcmain_parse_cmdline -q CONFDIR="/etc/moo"
+        is $SILENT 1 '-q option sets $SILENT'
+        is $CONFDIR "/etc/moo" 'CONFDIR=/etc/moo sets $CONFDIR'
+        nhcmain_parse_cmdline -n nhc -D /etc/nhc -c /etc/nhc/nhc.conf
+        is $NAME "nhc" '-n option sets $NAME'
+        is $CONFDIR "/etc/nhc" '-D option sets $CONFDIR'
+        is $CONFFILE "/etc/nhc/nhc.conf" '-c option sets $CONFFILE'
+        nhcmain_parse_cmdline NAME=nhc-test DEBUG=0 SILENT=0 TIMEOUT='' CONFDIR='' CONFFILE=''
+        is $NAME "nhc-test" 'NAME=nhc-test resets $NAME to nhc-test'
+        is $DEBUG 0 'DEBUG=0 resets $DEBUG to 0'
+        is $SILENT 0 'SILENT=0 resets $SILENT to 0'
+        is "$TIMEOUT" '' 'TIMEOUT="" resets $TIMEOUT to empty'
+        is "$CONFDIR" '' 'CONFDIR="" resets $CONFDIR to empty'
+        is "$CONFFILE" '' 'CONFFILE="" resets $CONFFILE to empty'
+        nhcmain_parse_cmdline -n >/dev/null 2>&1
+        is $? 8 'Missing parameters results in error'
+        nhcmain_parse_cmdline -p >/dev/null 2>&1
+        is $? 9 'Unknown command line option results in error'
     } ; unplan
 
     # Reset environment for testing purposes.

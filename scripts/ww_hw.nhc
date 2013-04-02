@@ -153,6 +153,9 @@ function check_hw_physmem() {
         nhc_hw_gather_data
     fi
 
+    nhc_common_parse_size "$RAM_MIN" RAM_MIN
+    nhc_common_parse_size "$RAM_MAX" RAM_MAX
+
     if [[ $HW_RAM_TOTAL -lt $RAM_MIN ]]; then
         die 1 "Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
         return 1
@@ -173,6 +176,9 @@ function check_hw_swap() {
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
         nhc_hw_gather_data
     fi
+
+    nhc_common_parse_size "$SWAP_MIN" SWAP_MIN
+    nhc_common_parse_size "$SWAP_MAX" SWAP_MAX
 
     if [[ $HW_SWAP_TOTAL -lt $SWAP_MIN ]]; then
         die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
@@ -195,6 +201,9 @@ function check_hw_mem() {
         nhc_hw_gather_data
     fi
 
+    nhc_common_parse_size "$MEM_MIN" MEM_MIN
+    nhc_common_parse_size "$MEM_MAX" MEM_MAX
+
     MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
     if [[ $MEM_TOTAL -lt $MEM_MIN ]]; then
         die 1 "Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
@@ -214,6 +223,8 @@ function check_hw_physmem_free() {
         nhc_hw_gather_data
     fi
 
+    nhc_common_parse_size "$RAM_MINFREE" RAM_MINFREE
+
     if [[ $HW_RAM_FREE -lt $RAM_MINFREE ]]; then
         die 1 "Not enough RAM free ($HW_RAM_FREE kB < $RAM_MINFREE kB)."
         return 1
@@ -228,6 +239,8 @@ function check_hw_swap_free() {
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
         nhc_hw_gather_data
     fi
+
+    nhc_common_parse_size "$SWAP_MINFREE" SWAP_MINFREE
 
     if [[ $HW_SWAP_FREE -lt $SWAP_MINFREE ]]; then
         die 1 "Not enough swap free ($HW_SWAP_FREE kB < $SWAP_MINFREE kB)."
@@ -244,6 +257,8 @@ function check_hw_mem_free() {
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
         nhc_hw_gather_data
     fi
+
+    nhc_common_parse_size "$MEM_MINFREE" MEM_MINFREE
 
     MEM_FREE=$((HW_RAM_FREE + HW_SWAP_FREE))
     if [[ $MEM_FREE -lt $MEM_MINFREE ]]; then

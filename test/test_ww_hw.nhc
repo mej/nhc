@@ -60,11 +60,11 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 1 "RAM range maximum is below actual physical RAM size"
     check_hw_physmem 100 32857508
     is $? 0 "RAM range maximum equal to actual physical RAM size"
-    check_hw_physmem 32000000 33000000
+    check_hw_physmem 31GB 33GB
     is $? 0 "RAM range includes actual physical RAM size"
-    check_hw_physmem 32857508 99999999
+    check_hw_physmem 32857508 99G
     is $? 0 "RAM range minimum equal to actual physical RAM size"
-    check_hw_physmem 99999999 999999999
+    check_hw_physmem 98GB 99GB
     is $? 1 "RAM range minimum is above actual physical RAM size"
 
     # Check ranges of swap:  0, exact, max below, at max, in range, at min, min above
@@ -76,11 +76,11 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 1 "Swap range maximum is below actual swap size"
     check_hw_swap 100 18563064
     is $? 0 "Swap range maximum equal to actual swap size"
-    check_hw_swap 18000000 19000000
+    check_hw_swap 18000000 19G
     is $? 0 "Swap range includes actual swap size"
-    check_hw_swap 18563064 99999999
+    check_hw_swap 18563064 99G
     is $? 0 "Swap range minimum equal to actual swap size"
-    check_hw_swap 99999999 999999999
+    check_hw_swap 999999999 99G
     is $? 1 "Swap range minimum is above actual swap size"
 
     # Check ranges of memory:  0, exact, max below, at max, in range, at min, min above
@@ -88,21 +88,21 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 1 "Bogus memory range:  0kB - 0kB"
     check_hw_mem 51420572 51420572
     is $? 0 "Non-range check equal to actual memory size"
-    check_hw_mem 1 12
+    check_hw_mem 1 12k
     is $? 1 "Memory range maximum is below actual memory size"
-    check_hw_mem 100 51420572
+    check_hw_mem 100kB 51420572
     is $? 0 "Memory range maximum equal to actual memory size"
-    check_hw_mem 51000000 52000000
+    check_hw_mem 48g 52gb
     is $? 0 "Memory range includes actual memory size"
-    check_hw_mem 51420572 99999999
+    check_hw_mem 51420572 99gb
     is $? 0 "Memory range minimum equal to actual memory size"
-    check_hw_mem 99999999 999999999
+    check_hw_mem 99999999 99G
     is $? 1 "Memory range minimum is above actual memory size"
 
     # Check free RAM minima:  0, below actual, exact, above actual
     check_hw_physmem_free 0
     is $? 0 "Free RAM - 0 (no) minimum"
-    check_hw_physmem_free 100
+    check_hw_physmem_free 100k
     is $? 0 "Free RAM - Minimum below actual"
     check_hw_physmem_free 27828840
     is $? 0 "Free RAM - Minimum equal to actual"
@@ -112,21 +112,21 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     # Check free Swap minima:  0, below actual, exact, above actual
     check_hw_swap_free 0
     is $? 0 "Free Swap - 0 (no) minimum"
-    check_hw_swap_free 100
+    check_hw_swap_free 1mb
     is $? 0 "Free Swap - Minimum below actual"
     check_hw_swap_free 18480520
     is $? 0 "Free Swap - Minimum equal to actual"
-    check_hw_swap_free 99999999
+    check_hw_swap_free 99999M
     is $? 1 "Free Swap - Minimum above actual"
 
     # Check free memory minima:  0, below actual, exact, above actual
     check_hw_mem_free 0
     is $? 0 "Free memory - 0 (no) minimum"
-    check_hw_mem_free 100
+    check_hw_mem_free 1M
     is $? 0 "Free memory - Minimum below actual"
     check_hw_mem_free 46309360
     is $? 0 "Free memory - Minimum equal to actual"
-    check_hw_mem_free 99999999
+    check_hw_mem_free 99999M
     is $? 1 "Free memory - Minimum above actual"
 
 

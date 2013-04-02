@@ -423,16 +423,17 @@ function nhc_common_get_userid() {
 function nhc_common_parse_size() {
     local VAL=$1
     local VAR=$2
+    local MULT=${3:-1024}
 
     if [[ -n "$VAL" ]]; then
         VAL="${VAL/%[bB]}"
         case "$VAL" in
             *k|*K)  VAL=${VAL/%[Kk]} ;;
-            *m|*M)  VAL=$((${VAL/%[Mm]}*1024)) ;;
-            *g|*G)  VAL=$((${VAL/%[Gg]}*1024*1024)) ;;
-            *t|*T)  VAL=$((${VAL/%[Tt]}*1024*1024*1024)) ;;
-            *p|*P)  VAL=$((${VAL/%[Pp]}*1024*1024*1024*1024)) ;;
-            *e|*E)  VAL=$((${VAL/%[Ee]}*1024*1024*1024*1024*1024)) ;;
+            *m|*M)  VAL=$((${VAL/%[Mm]}*${MULT})) ;;
+            *g|*G)  VAL=$((${VAL/%[Gg]}*${MULT}*${MULT})) ;;
+            *t|*T)  VAL=$((${VAL/%[Tt]}*${MULT}*${MULT}*${MULT})) ;;
+            *p|*P)  VAL=$((${VAL/%[Pp]}*${MULT}*${MULT}*${MULT}*${MULT})) ;;
+            *e|*E)  VAL=$((${VAL/%[Ee]}*${MULT}*${MULT}*${MULT}*${MULT}*${MULT})) ;;
         esac
     fi
     if [[ -n "$VAR" ]]; then
@@ -440,16 +441,17 @@ function nhc_common_parse_size() {
     fi
 }
 
-# Convert number of kilobytes into text representation with suffix (e.g., 1024 -> 1MB)
+# Convert number of kilobytes into text representation with suffix (e.g., ${MULT} -> 1MB)
 function nhc_common_unparse_size() {
     local VAL=$1
     local VAR=$2
+    local MULT=${3:-1024}
     local -a SUFFIXES=( k M G T P E )
     local i
 
     if [[ -n "$VAL" ]]; then
-        for ((i=0; VAL >= 1024 && i < ${#SUFFIXES[*]}-1; i++)); do
-            ((VAL/=1024))
+        for ((i=0; VAL >= ${MULT} && i < ${#SUFFIXES[*]}-1; i++)); do
+            ((VAL/=${MULT}))
         done
         VAL="$VAL${SUFFIXES[$i]}B"
     fi
@@ -458,6 +460,46 @@ function nhc_common_unparse_size() {
     fi
 }
 
+# Convert text representation of a suffixed count (e.g., nnnM or nnnG) into an exact number
+function nhc_common_parse_count() {
+    local VAL=$1
+    local VAR=$2
+    local MULT=${3:-1000}
+
+    if [[ -n "$VAL" ]]; then
+        case "$VAL" in
+            *k|*K)  VAL=$((${VAL/%[Kk]}*${MULT})) ;;
+            *m|*M)  VAL=$((${VAL/%[Mm]}*${MULT}*${MULT})) ;;
+            *g|*G)  VAL=$((${VAL/%[Gg]}*${MULT}*${MULT}*${MULT})) ;;
+            *t|*T)  VAL=$((${VAL/%[Tt]}*${MULT}*${MULT}*${MULT}*${MULT})) ;;
+            *p|*P)  VAL=$((${VAL/%[Pp]}*${MULT}*${MULT}*${MULT}*${MULT}*${MULT})) ;;
+            *e|*E)  VAL=$((${VAL/%[Ee]}*${MULT}*${MULT}*${MULT}*${MULT}*${MULT}*${MULT})) ;;
+        esac
+    fi
+    if [[ -n "$VAR" ]]; then
+        eval $VAR=$VAL
+    fi
+}
+
+# Convert number of kilobytes into text representation with suffix (e.g., ${MULT} -> 1MB)
+function nhc_common_unparse_count() {
+    local VAL=$1
+    local VAR=$2
+    local MULT=${3:-1000}
+    local -a SUFFIXES=( '' k M G T P E )
+    local i
+
+    if [[ -n "$VAL" ]]; then
+        for ((i=0; VAL >= ${MULT} && i < ${#SUFFIXES[*]}; i++)); do
+            ((VAL/=${MULT}))
+        done
+        VAL="$VAL${SUFFIXES[$i]}"
+    fi
+    if [[ -n "$VAR" ]]; then
+        eval $VAR='"$VAL"'
+    fi
+}
+
 # Aliases for backward compatibility, just in case
-#function nhc_fs_parse_size { nhc_common_parse_size "$@" }
-#function nhc_fs_unparse_size { nhc_common_unparse_size "$@" }
+#function nhc_fs_parse_count { nhc_common_parse_count "$@" }
+#function nhc_fs_unparse_count { nhc_common_unparse_count "$@" }

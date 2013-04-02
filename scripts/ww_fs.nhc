@@ -8,6 +8,7 @@
 
 DF_CMD="${DF_CMD:-df}"
 DF_FLAGS="${DF_FLAGS:--Tka}"
+DFI_FLAGS="${DFI_FLAGS:--Tia}"
 
 FS_DEV=( )
 FS_MNTPT=( )
@@ -20,6 +21,13 @@ DF_USED=( )
 DF_FREE=( )
 DF_PCT=( )
 DF_MNTPT=( )
+DFI_DEV=( )
+DFI_TYPE=( )
+DFI_INODES=( )
+DFI_IUSED=( )
+DFI_IFREE=( )
+DFI_PCT=( )
+DFI_MNTPT=( )
 
 function nhc_fs_mounts_gather_data() {
     local IFS FS_CNT i
@@ -76,6 +84,37 @@ function nhc_fs_df_gather_data() {
         ((DF_CNT++))
     done
     #set | grep ^DF_ | sed 's/\[/\n        [/g;s/)$/\n)/' | sed '/\[\(3\|4\|7\|8\|9\|1[0-9]\)\]/d'
+}
+
+function nhc_fs_dfi_gather_data() {
+    local IFS DFI_CNT i
+    local -a LINES FIELD
+
+    IFS=$'\n'
+    LINES=( $($DFI_CMD $DFI_FLAGS) )
+    IFS=$' \t\n'
+
+    ((DFI_CNT=0))
+    # Skip first line (column headers).
+    for ((i=1; i<${#LINES[*]}; i++)); do
+        # Split line on whitespace to create fields.
+        FIELD=( ${LINES[$i]} )
+
+        DFI_DEV[$DFI_CNT]="${FIELD[0]}"
+        if [[ ${#FIELD[*]} -eq 1 ]]; then
+            ((i++))
+            FIELD=( ${FIELD[0]} ${LINES[$i]} )
+        fi
+        DFI_TYPE[$DFI_CNT]="${FIELD[1]}"
+        DFI_INODES[$DFI_CNT]="${FIELD[2]}"
+        DFI_IUSED[$DFI_CNT]="${FIELD[3]}"
+        DFI_IFREE[$DFI_CNT]="${FIELD[4]}"
+        DFI_PCT[$DFI_CNT]="${FIELD[5]}"
+        DFI_MNTPT[$DFI_CNT]="${FIELD[6]}"
+        dbg "Got filesystem ${DFI_DEV[$DFI_CNT]} ${DFI_TYPE[$DFI_CNT]} ${DFI_INODES[$DFI_CNT]} ${DFI_IUSED[$DFI_CNT]} ${DFI_IFREE[$DFI_CNT]} ${DFI_PCT[$DFI_CNT]} ${DFI_MNTPT[$DFI_CNT]}"
+        ((DFI_CNT++))
+    done
+    #set | grep ^DFI_ | sed 's/\[/\n        [/g;s/)$/\n)/' | sed '/\[\(3\|4\|7\|8\|9\|1[0-9]\)\]/d'
 }
 
 # Check to make sure a filesystem ($1) is mounted.  Includes optional
@@ -238,6 +277,116 @@ function check_fs_used() {
                     nhc_common_unparse_size $MAX_USED MAX_USED
                     nhc_common_unparse_size $FS_USED FS_USED
                     die 1 "$FUNCNAME:  $FS has $FS_USED used, threshold is $MAX_USED"
+                    return 1
+                fi
+            fi
+        fi
+        return 0
+    done
+    return 0
+}
+
+# Check to make sure a filesystem ($1) has between a minimum ($2) and
+# a maximum ($3) amount of inodes.  Either may be blank.  To check for
+# a specific inode count, pass the same value for both parameters.
+function check_fs_inodes() {
+    local FS=$1
+    local MIN_INODES=$2
+    local MAX_INODES=$3
+    local FS_INODES
+    local i
+
+    if [[ ${#DFI_DEV[*]} -eq 0 ]]; then
+        nhc_fs_dfi_gather_data
+    fi
+
+    nhc_common_parse_count "$MIN_INODES" MIN_INODES
+    nhc_common_parse_count "$MAX_INODES" MAX_INODES
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
+            continue
+        fi
+        FS_INODES=${DFI_INODES[$i]}
+        if [[ -n "$MIN_INODES" && $MIN_INODES -gt $FS_INODES ]]; then
+            nhc_common_unparse_count $MIN_INODES MIN_INODES
+            die 1 "$FUNCNAME:  $FS inodes $FS_INODES less than minimum of $MIN_INODES"
+            return 1
+        fi
+        if [[ -n "$MAX_INODES" && $MAX_INODES -lt $FS_INODES ]]; then
+            nhc_common_unparse_count $MAX_INODES MAX_INODES
+            die 1 "$FUNCNAME:  $FS inodes $FS_INODES exceeds maximum of $MAX_INODES"
+            return 1
+        fi
+        return 0
+    done
+    return 0
+}
+
+# Check that filesystem ($1) has at least a specified amount ($2) of
+# free inodes.  This may be either a percentage or an exact number.
+function check_fs_ifree() {
+    local FS=$1
+    local MIN_IFREE=$2
+    local FS_IFREE IFREE_PCT i
+
+    if [[ ${#DFI_DEV[*]} -eq 0 ]]; then
+        nhc_fs_dfi_gather_data
+    fi
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
+            continue
+        fi
+        if [[ -n "$MIN_IFREE" ]]; then
+            IFREE_PCT=$((100-${DFI_PCT[$i]/%%}))
+            FS_IFREE=${DFI_IFREE[$i]}
+            if [[ "${MIN_IFREE/%%}" != "$MIN_IFREE" ]]; then
+                if [[ $IFREE_PCT -lt "${MIN_IFREE/%%}" ]]; then
+                    die 1 "$FUNCNAME:  $FS has only ${IFREE_PCT}% of inodes free ($FS_IFREE), minimum is $MIN_IFREE"
+                    return 1
+                fi
+            else
+                nhc_common_parse_count $MIN_IFREE MIN_IFREE
+                if [[ $FS_IFREE -lt $MIN_IFREE ]]; then
+                    nhc_common_unparse_count $MIN_IFREE MIN_IFREE
+                    die 1 "$FUNCNAME:  $FS has only $FS_IFREE inodes free, minimum is $MIN_IFREE"
+                    return 1
+                fi
+            fi
+        fi
+        return 0
+    done
+    return 0
+}
+
+# Check that filesystem ($1) has at most a specified amount ($2) of
+# used inodes.  This may be either a percentage or an exact number.
+function check_fs_iused() {
+    local FS=$1
+    local MAX_IUSED=$2
+    local FS_IUSED i
+
+    if [[ ${#DFI_DEV[*]} -eq 0 ]]; then
+        nhc_fs_dfi_gather_data
+    fi
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
+            continue
+        fi
+        if [[ -n "$MAX_IUSED" ]]; then
+            FS_IUSED=${DFI_IUSED[$i]}
+            if [[ "${MAX_IUSED/%%}" != "$MAX_IUSED" ]]; then
+                if [[ ${DFI_PCT[$i]/%%} -ge "${MAX_IUSED/%%}" ]]; then
+                    die 1 "$FUNCNAME:  $FS has ${DFI_PCT[$i]/%%}% of inodes used ($FS_IUSED), threshold is ${MAX_IUSED}%"
+                    return 1
+                fi
+            else
+                nhc_common_parse_count $MAX_IUSED MAX_IUSED
+                if [[ $FS_IUSED -ge $MAX_IUSED ]]; then
+                    nhc_common_unparse_count $MAX_IUSED MAX_IUSED
+                    die 1 "$FUNCNAME:  $FS has $FS_IUSED inodes used, threshold is $MAX_IUSED"
                     return 1
                 fi
             fi

@@ -60,6 +60,62 @@ function populate_fs_data() {
         [4]="23290830034"
         [5]="249121088"
     )
+    DFI_DEV=(
+        [0]="/dev/mapper/vg0-lv_root_ext4"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="/dev/sda1"
+        [4]="bluearc0:/home"
+        [5]="bluearc0:/software"
+    )
+    DFI_IFREE=(
+        [0]="1727102"
+        [1]="0"
+        [2]="0"
+        [3]="127965"
+        [4]="793109988"
+        [5]="15238336"
+    )
+    DFI_MNTPT=(
+        [0]="/"
+        [1]="/proc"
+        [2]="/sys"
+        [3]="/boot"
+        [4]="/home"
+        [5]="/global/software"
+    )
+    DFI_PCT=(
+        [0]="18%"
+        [1]="-"
+        [2]="-"
+        [3]="1%"
+        [4]="22%"
+        [5]="39%"
+    )
+    DFI_INODES=(
+        [0]="2097152"
+        [1]="0"
+        [2]="0"
+        [3]="128016"
+        [4]="1004912640"
+        [5]="24977408"
+    )
+    DFI_TYPE=(
+        [0]="ext4"
+        [1]="proc"
+        [2]="sysfs"
+        [3]="ext4"
+        [4]="nfs"
+        [5]="nfs"
+    )
+    DFI_IUSED=(
+        [0]="370050"
+        [1]="0"
+        [2]="0"
+        [3]="51"
+        [4]="211802652"
+        [5]="9739072"
+    )
     FS_DEV=(
         [0]="rootfs"
         [1]="proc"
@@ -94,7 +150,7 @@ function populate_fs_data() {
     )
 }
 
-plan $((6+5+5+5+3+9+6+6)) "ww_fs.nhc" && {
+plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
@@ -189,5 +245,50 @@ plan $((6+5+5+5+3+9+6+6)) "ww_fs.nhc" && {
     is $? 1 "check_fs_used() - Exactly 68% used on /home"
     check_fs_used /home 2%
     is $? 1 "check_fs_used() - >2% used on /home"
+
+    check_fs_inodes /boot 100k 200000
+    is $? 0 "check_fs_inodes() - /boot has between 100k and 200k inodes"
+    check_fs_inodes /boot 1 2k
+    is $? 1 "check_fs_inodes() - /boot does not have between 1 and 2k inodes"
+    check_fs_inodes /boot 1G 2G
+    is $? 1 "check_fs_inodes() - /boot does not have between 1G and 2G inodes"
+    check_fs_inodes /boot 1k
+    is $? 0 "check_fs_inodes() - /boot 1k minimum, no maximum"
+    check_fs_inodes /boot 1G
+    is $? 1 "check_fs_inodes() - /boot 1G minimum"
+    check_fs_inodes /boot 128016
+    is $? 0 "check_fs_inodes() - actual size as minimum passes"
+    check_fs_inodes /boot "" 128016
+    is $? 0 "check_fs_inodes() - actual size as maximum passes"
+    check_fs_inodes /boot "" 1
+    is $? 1 "check_fs_inodes() - 1k max only"
+    check_fs_inodes /boot "" 1G
+    is $? 0 "check_fs_inodes() - 1G max only"
+
+    check_fs_ifree / 1M
+    is $? 0 "check_fs_ifree() - >1M inodes free on /"
+    check_fs_ifree / 1727102
+    is $? 0 "check_fs_ifree() - Exactly 1727102 inodes free on /"
+    check_fs_ifree / 1T
+    is $? 1 "check_fs_ifree() - <1T inodes free on /"
+    check_fs_ifree /home 10%
+    is $? 0 "check_fs_ifree() - >10% free inodes on /home"
+    check_fs_ifree /home 78%
+    is $? 0 "check_fs_ifree() - Exactly 78% free inodes on /home"
+    check_fs_ifree /home 99%
+    is $? 1 "check_fs_ifree() - <99% free inodes on /home"
+
+    check_fs_iused / 1G
+    is $? 0 "check_fs_iused() - <1G inodes used on /"
+    check_fs_iused / 370050
+    is $? 1 "check_fs_iused() - Exactly 370050 inodes used on /"
+    check_fs_iused / 370k
+    is $? 1 "check_fs_iused() - >370k inodes used on /"
+    check_fs_iused /home 95%
+    is $? 0 "check_fs_iused() - <95% used inodes on /home"
+    check_fs_iused /home 22%
+    is $? 1 "check_fs_iused() - Exactly 22% used inodes on /home"
+    check_fs_iused /home 2%
+    is $? 1 "check_fs_iused() - >2% used inodes on /home"
 
 } ; unplan

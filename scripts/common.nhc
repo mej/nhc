@@ -486,7 +486,7 @@ function nhc_common_unparse_count() {
     local VAL=$1
     local VAR=$2
     local MULT=${3:-1000}
-    local -a SUFFIXES=( '' k M G T P E )
+    local -a SUFFIXES=( [0]='' [1]=k M G T P E )
     local i
 
     if [[ -n "$VAL" ]]; then

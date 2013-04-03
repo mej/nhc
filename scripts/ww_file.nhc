@@ -1,0 +1,54 @@
+# NHC - Warewulf File Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 01 April 2013
+#
+# $Id$
+#
+
+# 
+function check_file_contents() {
+    local FILENAME="$1"
+    local LINE MATCH_CNT=0 i
+    local -a MATCHES MATCHED
+
+    # Create an array of all matches for which we must search.
+    shift
+    MATCHES=( "$@" )
+
+    # Initialize a parallel array for tracking which matches have been found.
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        MATCHED[$i]=0
+    done
+
+    # Read the file line by line.
+    while read LINE ; do
+        for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+            if [ ${MATCHED[$i]} -eq 0 ] && mcheck "$LINE" "${MATCHES[$i]}" ; then
+                MATCHED[$i]=1
+                ((MATCH_CNT++))
+                if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
+                    # All expression(s) have matched successfully.  Stop reading file.
+                    return 0
+                fi
+            fi
+        done
+    done <"$FILENAME"
+
+    # At least one expression failed to match.  Locate the first such expression.
+    if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
+        # Special case for cleaner output.
+        die 1 "File \"$FILENAME\" failed to match \"${MATCHES[0]}\"."
+        return 1
+    fi
+
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        if [[ ${MATCHED[$i]} == 0 ]]; then
+            die 1 "File \"$FILENAME\" matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
+            return 1
+        fi
+    done
+    die 2 "No unmatched expressions found for \"$FILENAME\" but ${FUNCNAME[0]}() failed to terminate."
+    return 2
+}
+

@@ -1,0 +1,54 @@
+# Tests for ww_file.nhc
+#
+# $Id$
+#
+
+plan $((1+5+5+3+5)) "ww_file.nhc" && {
+    is "`type -t check_file_contents 2>&1`" 'function' 'check_file_contents() loaded properly'
+
+    FILEDATA=$'line1\nline2\nline3\nline4\nline5\nline6\n'
+
+    check_file_contents <(echo "$FILEDATA") '/line3/'
+    is $? 0 'Single regexp match success'
+    check_file_contents <(echo "$FILEDATA") 'line1'
+    is $? 0 'Single glob match success'
+    check_file_contents <(echo "$FILEDATA") '/line1/' '/^line2$/' '/line3/' '/^line4$/' '/line5/' '/^line6$/'
+    is $? 0 'Multiple regexp match success'
+    check_file_contents <(echo "$FILEDATA") '*line1*' 'line2' '*line3*' 'line4' '*line5*' 'line6'
+    is $? 0 'Multiple glob match success'
+    check_file_contents <(echo "$FILEDATA") '/line1/' '/^line2$/' '*line3*' 'line4' '/line5$/' '/^line6/'
+    is $? 0 'Multiple mixed glob/regexp matches success'
+
+    check_file_contents <(echo "$FILEDATA") '/line7/'
+    is $? 1 'Single regexp match failure'
+    check_file_contents <(echo "$FILEDATA") 'line7'
+    is $? 1 'Single glob match failure'
+    check_file_contents <(echo "$FILEDATA") '/line7/' '/^line8$/' '/line9/' '/^line10$/' '/line11/' '/^line12$/'
+    is $? 1 'Multiple regexp match failure'
+    check_file_contents <(echo "$FILEDATA") '*line7*' 'line8' '*line9*' 'line10' '*line11*' 'line12'
+    is $? 1 'Multiple glob match failure'
+    check_file_contents <(echo "$FILEDATA") '/line7/' '/^line8$/' '*line9*' 'line10' '/line11$/' '/^line12/'
+    is $? 1 'Multiple mixed glob/regexp matches failure'
+
+    check_file_contents <(echo "$FILEDATA") '/line1/' '/^line7$/' '*line9*' 'line11'
+    is $? 1 'Multiple matches, 1 success, 3 failures'
+    check_file_contents <(echo "$FILEDATA") '/line7/' '/^line2$/' '*line3*' 'line11'
+    is $? 1 'Multiple matches, 2 successes, 2 failures'
+    check_file_contents <(echo "$FILEDATA") '/line1/' '/^line7$/' '*line3*' 'line4'
+    is $? 1 'Multiple matches, 3 successes, 1 failure'
+
+    FILEDATA=$'$pbsserver master.node\n$pbsclient master.node\n$restricted master.node\n\n$usecp *:/global /global\n$usecp *:/clusterfs /clusterfs\n$usecp *:/var/spool/torque /var/spool/torque\n\n$nospool_dir_list *\n$spool_as_final_name true\n\n$node_check_script /usr/sbin/nhc\n$node_check_interval 5,jobstart,jobend\n$down_on_error 1\n$check_poll_time 60\n\n$logevent 255\n$loglevel 3\n'
+
+    # Some real-world example checks against an actual TORQUE pbs_mom config
+    check_file_contents <(echo "$FILEDATA") '/^\$pbsserver master.node$/'
+    is $? 0 'Real world example:  Match TORQUE server name against MOM config'
+    check_file_contents <(echo "$FILEDATA") '/^\$spool_as_final_name (true|True|TRUE|1|yes|Yes|YES)$/'
+    is $? 0 'Real world example:  Assert TORQUE configuration setting in MOM config (present)'
+    check_file_contents <(echo "$FILEDATA") '/^\$source_login_batch (true|True|TRUE|1|yes|Yes|YES)$/'
+    is $? 1 'Real world example:  Assert TORQUE configuration setting in MOM config (missing)'
+    check_file_contents <(echo "$FILEDATA") '$logevent *' '$loglevel *' '$check_poll_time *'
+    is $? 0 'Real world example:  Match TORQUE variable names against MOM config (present)'
+    check_file_contents <(echo "$FILEDATA") '$status_update_time *' '$timeout *' '$usecp *'
+    is $? 1 'Real world example:  Match TORQUE variable names against MOM config (missing)'
+
+} ; unplan

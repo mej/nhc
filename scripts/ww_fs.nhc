@@ -7,6 +7,7 @@
 #
 
 DF_CMD="${DF_CMD:-df}"
+DFI_CMD="${DFI_CMD:-${DF_CMD}}"
 DF_FLAGS="${DF_FLAGS:--Tka}"
 DFI_FLAGS="${DFI_FLAGS:--Tia}"
 

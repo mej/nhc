@@ -150,13 +150,16 @@ function populate_fs_data() {
     )
 }
 
-plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
+plan $((9+5+5+5+3+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
     is "`type -t check_fs_size 2>&1`" 'function' 'check_fs_size() loaded properly'
     is "`type -t check_fs_free 2>&1`" 'function' 'check_fs_free() loaded properly'
     is "`type -t check_fs_used 2>&1`" 'function' 'check_fs_used() loaded properly'
+    is "`type -t check_fs_inodes 2>&1`" 'function' 'check_fs_inodes() loaded properly'
+    is "`type -t check_fs_ifree 2>&1`" 'function' 'check_fs_ifree() loaded properly'
+    is "`type -t check_fs_iused 2>&1`" 'function' 'check_fs_iused() loaded properly'
 
     populate_fs_data
 
@@ -219,6 +222,8 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 1 "check_fs_size() - 1kB max only"
     check_fs_size /boot "" 1G
     is $? 0 "check_fs_size() - 1G max only"
+    check_fs_size /proc 1G 1G
+    is $? 0 "check_fs_size() on pseudofilesystem passes (with warning)"
 
     check_fs_free / 1G
     is $? 0 "check_fs_free() - >1GB free on /"
@@ -232,6 +237,8 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 0 "check_fs_free() - Exactly 32% free on /home"
     check_fs_free /home 90%
     is $? 1 "check_fs_free() - <90% free on /home"
+    check_fs_free /proc 1G
+    is $? 0 "check_fs_free() on pseudofilesystem passes (with warning)"
 
     check_fs_used / 30G
     is $? 0 "check_fs_used() - <30GB used on /"
@@ -245,6 +252,8 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 1 "check_fs_used() - Exactly 68% used on /home"
     check_fs_used /home 2%
     is $? 1 "check_fs_used() - >2% used on /home"
+    check_fs_used /proc 1G
+    is $? 0 "check_fs_used() on pseudofilesystem passes (with warning)"
 
     check_fs_inodes /boot 100k 200000
     is $? 0 "check_fs_inodes() - /boot has between 100k and 200k inodes"
@@ -264,6 +273,8 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 1 "check_fs_inodes() - 1k max only"
     check_fs_inodes /boot "" 1G
     is $? 0 "check_fs_inodes() - 1G max only"
+    check_fs_inodes /proc 999 999
+    is $? 0 "check_fs_inodes() on pseudofilesystem passes (with warning)"
 
     check_fs_ifree / 1M
     is $? 0 "check_fs_ifree() - >1M inodes free on /"
@@ -277,6 +288,8 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 0 "check_fs_ifree() - Exactly 78% free inodes on /home"
     check_fs_ifree /home 99%
     is $? 1 "check_fs_ifree() - <99% free inodes on /home"
+    check_fs_ifree /proc 999
+    is $? 0 "check_fs_ifree() on pseudofilesystem passes (with warning)"
 
     check_fs_iused / 1G
     is $? 0 "check_fs_iused() - <1G inodes used on /"
@@ -290,5 +303,7 @@ plan $((6+5+5+5+3+9+6+6+9+6+6)) "ww_fs.nhc" && {
     is $? 1 "check_fs_iused() - Exactly 22% used inodes on /home"
     check_fs_iused /home 2%
     is $? 1 "check_fs_iused() - >2% used inodes on /home"
+    check_fs_iused /proc 999
+    is $? 0 "check_fs_iused() on pseudofilesystem passes (with warning)"
 
 } ; unplan

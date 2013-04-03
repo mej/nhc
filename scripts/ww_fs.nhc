@@ -81,6 +81,9 @@ function nhc_fs_df_gather_data() {
         DF_FREE[$DF_CNT]="${FIELD[4]}"
         DF_PCT[$DF_CNT]="${FIELD[5]}"
         DF_MNTPT[$DF_CNT]="${FIELD[6]}"
+        if [[ "${DF_PCT[$DF_CNT]}" == "-" ]]; then
+            DF_PCT[$DF_CNT]=0
+        fi
         dbg "Got filesystem ${DF_DEV[$DF_CNT]} ${DF_TYPE[$DF_CNT]} ${DF_SIZE[$DF_CNT]} ${DF_USED[$DF_CNT]} ${DF_FREE[$DF_CNT]} ${DF_PCT[$DF_CNT]} ${DF_MNTPT[$DF_CNT]}"
         ((DF_CNT++))
     done
@@ -112,6 +115,9 @@ function nhc_fs_dfi_gather_data() {
         DFI_IFREE[$DFI_CNT]="${FIELD[4]}"
         DFI_PCT[$DFI_CNT]="${FIELD[5]}"
         DFI_MNTPT[$DFI_CNT]="${FIELD[6]}"
+        if [[ "${DFI_PCT[$DFI_CNT]}" == "-" ]]; then
+            DFI_PCT[$DFI_CNT]=0
+        fi
         dbg "Got filesystem ${DFI_DEV[$DFI_CNT]} ${DFI_TYPE[$DFI_CNT]} ${DFI_INODES[$DFI_CNT]} ${DFI_IUSED[$DFI_CNT]} ${DFI_IFREE[$DFI_CNT]} ${DFI_PCT[$DFI_CNT]} ${DFI_MNTPT[$DFI_CNT]}"
         ((DFI_CNT++))
     done
@@ -192,6 +198,10 @@ function check_fs_size() {
         if [[ "${DF_MNTPT[$i]}" != "$FS" ]]; then
             continue
         fi
+        if [[ "${DF_SIZE[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
+        fi
         FS_SIZE=${DF_SIZE[$i]}
         if [[ -n "$MIN_SIZE" && $MIN_SIZE -gt $FS_SIZE ]]; then
             nhc_common_unparse_size $FS_SIZE FS_SIZE
@@ -224,6 +234,10 @@ function check_fs_free() {
     for ((i=0; i < ${#DF_DEV[*]}; i++)); do
         if [[ "${DF_MNTPT[$i]}" != "$FS" ]]; then
             continue
+        fi
+        if [[ "${DF_SIZE[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
         fi
         if [[ -n "$MIN_FREE" ]]; then
             FREE_PCT=$((100-${DF_PCT[$i]/%%}))
@@ -263,6 +277,10 @@ function check_fs_used() {
     for ((i=0; i < ${#DF_DEV[*]}; i++)); do
         if [[ "${DF_MNTPT[$i]}" != "$FS" ]]; then
             continue
+        fi
+        if [[ "${DF_SIZE[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
         fi
         if [[ -n "$MAX_USED" ]]; then
             FS_USED=${DF_USED[$i]}
@@ -308,6 +326,10 @@ function check_fs_inodes() {
         if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
             continue
         fi
+        if [[ "${DFI_INODES[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
+        fi
         FS_INODES=${DFI_INODES[$i]}
         if [[ -n "$MIN_INODES" && $MIN_INODES -gt $FS_INODES ]]; then
             nhc_common_unparse_count $MIN_INODES MIN_INODES
@@ -338,6 +360,10 @@ function check_fs_ifree() {
     for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
         if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
             continue
+        fi
+        if [[ "${DFI_INODES[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
         fi
         if [[ -n "$MIN_IFREE" ]]; then
             IFREE_PCT=$((100-${DFI_PCT[$i]/%%}))
@@ -375,6 +401,10 @@ function check_fs_iused() {
     for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
         if [[ "${DFI_MNTPT[$i]}" != "$FS" ]]; then
             continue
+        fi
+        if [[ "${DFI_INODES[$i]}" == "0" ]]; then
+            syslog "WARNING:  Possible bogus check:  ${FUNCNAME[0]} on pseudofilesystem $FS"
+            return 0
         fi
         if [[ -n "$MAX_IUSED" ]]; then
             FS_IUSED=${DFI_IUSED[$i]}

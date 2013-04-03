@@ -273,7 +273,6 @@ function nhcmain_find_rm() {
         log "Unable to detect resource manager."
         return 1
     fi
-    export NHC_RM
 }
 
 function nhcmain_check_conffile() {

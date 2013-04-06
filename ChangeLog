@@ -453,3 +453,146 @@ Mon Mar 11 17:43:40 2013                        Michael Jennings (mej)
 
 Added unit tests and auto-fu for DMI stuff.
 ----------------------------------------------------------------------
+Tue Mar 12 16:39:17 2013                        Michael Jennings (mej)
+
+Merged and tweaked patch from Aleksey Senin <aleksey@senin.name> to
+support Infiniband device names in check_hw_ib.
+----------------------------------------------------------------------
+Tue Mar 12 16:39:19 2013                        Michael Jennings (mej)
+
+Add .gitignore file.
+----------------------------------------------------------------------
+Wed Mar 13 15:29:34 2013                        Michael Jennings (mej)
+
+Auto-detect resource manager on startup for later use.
+----------------------------------------------------------------------
+Wed Mar 13 15:29:37 2013                        Michael Jennings (mej)
+
+Move nhc_fs_[un]parse_size() to common for use in other checks.
+----------------------------------------------------------------------
+Wed Mar 13 15:29:39 2013                        Michael Jennings (mej)
+
+Convert existing checks to support multiple resource managers via
+$NHC_RM.
+----------------------------------------------------------------------
+Thu Mar 14 21:08:53 2013                        Michael Jennings (mej)
+
+Merged in contributions from Dustin Rice <dustin@alaska.edu> to add
+SLURM support to the node online/offline scripts.  Also added SGE
+support (sort of, since it's not actually necessary).
+----------------------------------------------------------------------
+Thu Mar 14 21:14:11 2013                        Michael Jennings (mej)
+
+Fix "make test" by assuming PBS for testing purposes.
+----------------------------------------------------------------------
+Fri Mar 15 16:38:28 2013                        Michael Jennings (mej)
+
+Bump to version 1.3.
+----------------------------------------------------------------------
+Mon Mar 18 15:53:15 2013                        Michael Jennings (mej)
+
+Simulate svnversion with git to fix RPM release numbers.
+----------------------------------------------------------------------
+Wed Mar 20 11:58:08 2013                        Michael Jennings (mej)
+
+Fix issues with SLURM support found during testing.  Since $(...) does
+not treat quotes as metacharacters, we'll need to hard-code the sinfo
+arguments for obtaining the node status listing.  If someone has a
+better way, I'm all ears (eyes?)!
+
+As far as I can tell, SLURM support is now fully functional.
+----------------------------------------------------------------------
+Wed Mar 20 12:03:37 2013                        Michael Jennings (mej)
+
+Oops; missed a few spots.
+----------------------------------------------------------------------
+Wed Mar 20 13:37:30 2013                        Michael Jennings (mej)
+
+Preliminary work to integrate Grid Engine support into NHC.  This
+currently still requires an external input loop, but I am planning to
+do that in nhc as well.
+----------------------------------------------------------------------
+Wed Mar 20 14:41:55 2013                        Michael Jennings (mej)
+
+Finish merging the Grid Engine wrapper into NHC.  The nhc script is
+now directly callable as an SGE/UGE/*GE "load sensor."
+----------------------------------------------------------------------
+Thu Mar 21 11:48:40 2013                        Michael Jennings (mej)
+
+Use "DRAIN" state instead of "DOWN" as the latter will terminate
+running jobs on the node.  We don't want that.  :-)
+----------------------------------------------------------------------
+Thu Mar 21 11:48:42 2013                        Michael Jennings (mej)
+
+More tweaks to handling of SLURM node states.
+----------------------------------------------------------------------
+Thu Mar 21 14:42:56 2013                        Michael Jennings (mej)
+
+Another node state I didn't know about.
+----------------------------------------------------------------------
+Fri Mar 22 12:35:26 2013                        Michael Jennings (mej)
+
+Add online/offline support for IBM Platform LSF.
+
+NOTE:  This is based entirely on documentation and has not been tested
+at all.  If you are an LSF user and are willing to help test, please
+contact me!  I haven't found a way to have LSF run NHC on the nodes
+yet, so for now it would need to run out of cron or similar.
+----------------------------------------------------------------------
+Mon Apr 01 16:27:08 2013                        Michael Jennings (mej)
+
+Add support for both command line options and arbitrary environment
+variable setting on the command line.  A few limited options are
+available; see "nhc -h" for details.  For example, you can turn on
+debugging and set an alternate config file location using:
+
+    # nhc -d -c /etc/nhc/alternate.conf
+
+All other configuration settings can be manipulated on the command
+line using an env-like VAR=value syntax.  So for example, if you
+wanted to disable marking online/offline of nodes and set the maximum
+system UID to 499, you can now do:
+
+    # nhc MARK_OFFLINE=0 MAX_SYS_UID=499
+
+Note that these parameters WILL be overridden by the config file if
+they're set there!
+----------------------------------------------------------------------
+Mon Apr 01 18:09:03 2013                        Michael Jennings (mej)
+
+Added 3 new checks:  check_fs_inodes(), check_fs_ifree(), and
+check_fs_iused().  The perform the same tasks as their
+check_fs_{size,used,free}() counterparts except using inode count
+instead of byte count.
+----------------------------------------------------------------------
+Mon Apr 01 18:09:06 2013                        Michael Jennings (mej)
+
+Add support for byte suffixes to all check_hw_{physmem,swap,mem}{,_free}() tests.
+----------------------------------------------------------------------
+Tue Apr 02 17:09:16 2013                        Michael Jennings (mej)
+
+Added new check:  check_file_contents() will scan through a file
+looking for matches to one or more patterns (regular expressions or
+globs).  The check will succeed iff all patterns are successfully
+matched against individual lines in the file.
+
+Some real-world usage examples:
+    check_file_contents /etc/passwd '/^root:x:0:0:[^:]*:/root:/bin/[a-z]*sh$/'
+    check_file_contents /etc/passwd 'adminusr:*' 'slurm:*' 'sshd:*'
+    check_file_contents /var/spool/torque/mom_priv/config '$pbsserver master'
+    check_file_contents /etc/hosts '10.0.0.10*master'
+    check_file_contents /proc/cgroups 'cpuset*1'
+----------------------------------------------------------------------
+Wed Apr 03 15:10:12 2013                        Michael Jennings (mej)
+
+More minor issues found during testing.
+----------------------------------------------------------------------
+Wed Apr 03 15:10:14 2013                        Michael Jennings (mej)
+
+I'll take "Things Missed by Unit Tests for $100, Alex."
+----------------------------------------------------------------------
+Wed Apr 03 15:10:17 2013                        Michael Jennings (mej)
+
+Note to self:  Write more unit tests based on potential stupid
+mistakes an admin could make rather than just real-world usage.
+----------------------------------------------------------------------

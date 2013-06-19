@@ -51,7 +51,6 @@ if [[ "$NHC_RM" == "pbs" ]]; then
 
 ### SLURM
 elif [[ "$NHC_RM" == "slurm" ]]; then
-    HOSTNAME="${HOSTNAME/%.*}"
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
     SLURM_SC_ONLINE_ARGS="${SLURM_SC_ONLINE_ARGS:-update State=IDLE}"

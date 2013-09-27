@@ -39,7 +39,7 @@ function nhc_ps_gather_data() {
 
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
-    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,time,args') )
+    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
@@ -291,7 +291,7 @@ function check_ps_kswapd() {
         TIME=( ${PS_TIME[$THIS_PID]} )
         KSWAPD_PROC[${#KSWAPD_PROC[*]}]=$THIS_PID
         # Time in seconds.
-        KSWAPD_TIME[$THIS_PID]=$((10#${TIME[0]}*3600 + 10#${TIME[1]}*60 + 10#${TIME[2]}))
+        KSWAPD_TIME[$THIS_PID]=$((10#${TIME[0]}*60 + 10#${TIME[1]}))
         IFS=$' \t\n'
     done
 

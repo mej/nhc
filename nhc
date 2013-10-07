@@ -53,6 +53,10 @@ function die() {
 function dbg() {
     if [[ "$DEBUG" != "0" ]]; then
         eval echo '"DEBUG:  $*"' $LOGFILE
+        if [[ $? -ne 0 ]]; then
+            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
+            export LOGFILE=">/dev/null"
+        fi
     fi
 }
 
@@ -60,6 +64,10 @@ function dbg() {
 function log() {
     if [[ "$SILENT" = "0" ]]; then
         eval echo '"$@"' $LOGFILE
+        if [[ $? -ne 0 ]]; then
+            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
+            export LOGFILE=">/dev/null"
+        fi
     fi
 }
 

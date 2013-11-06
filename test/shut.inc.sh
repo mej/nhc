@@ -32,6 +32,8 @@ function pass() {
 }
 
 function fail() {
+    ((SHUT_TESTS_DONE++))
+    ((SHUT_TESTSET_DONE++))
     if [[ $SHUT_TESTSET_SKIPPED -gt 0 ]]; then
         echo "failed $SHUT_TESTSET_DONE/$SHUT_TESTSET_PLANNED ($SHUT_TESTSET_SKIPPED skipped)"
     else

@@ -101,11 +101,11 @@ function check_ps_daemon() {
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
-        dbg "Checking $THIS_PID:  $DAEMON vs. ${PS_ARGS[$THIS_PID]}"
+        dbg "Checking $THIS_PID:  \"$DAEMON\" vs. \"${PS_ARGS[$THIS_PID]}\""
         if [[ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]]; then
             continue
         fi
-        dbg "Checking $THIS_PID:  $OWNER vs. ${PS_USER[$THIS_PID]}"
+        dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" && "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
             continue
         fi
@@ -139,11 +139,11 @@ function check_ps_blacklist() {
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
-        dbg "Checking $THIS_PID:  $DAEMON vs. ${PS_ARGS[$THIS_PID]}"
+        dbg "Checking $THIS_PID:  \"$DAEMON\" vs. \"${PS_ARGS[$THIS_PID]}\""
         if [[ "${PS_ARGS[$THIS_PID]//$DAEMON}" = "${PS_ARGS[$THIS_PID]}" ]]; then
             continue
         fi
-        dbg "Checking $THIS_PID:  $OWNER vs. ${PS_USER[$THIS_PID]}"
+        dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" ]]; then
             if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
                 # Owner begins with !.  Negate the check.
@@ -161,6 +161,92 @@ function check_ps_blacklist() {
 
     # No matching process found.
     return 0
+}
+
+# Check to make sure a service is running.  Syntax:
+#  check_ps_service [-0] [-f] [-r|-c] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
+function check_ps_service() {
+    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 ACTION FOUND_ACTION
+    local THIS_PID THIS_SVC i MSG
+    local -a ARGS
+
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
+        nhc_ps_gather_data
+    fi
+
+    OPTIND=1
+    while getopts ":0frcu:d:m:e:E:" OPTION ; do
+        case "$OPTION" in
+            0) NONFATAL=1 ;;
+            f) FULLMATCH=1 ;;
+            r) RESTART=1 ;;
+            c) CYCLE=1 ;;
+            u) OWNER="$OPTARG" ;;
+            d) DAEMON="$OPTARG" ;;
+            m) MATCH="$OPTARG" ;;
+            e) ACTION="$OPTARG" ;;
+            E) FOUND_ACTION="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    SERVICE="$*"
+    if [[ "$SERVICE" == "" ]]; then
+        die 1 "$FUNCNAME:  Syntax error:  Service name required."
+        return 1
+    fi
+    if [[ "$DAEMON" == "" ]]; then
+        DAEMON="$SERVICE"
+    fi
+    if [[ "$MATCH" == "" ]]; then
+        MATCH="*$DAEMON"
+    fi
+    if mcheck_regexp "$OWNER" '[0-9]+$' ; then
+        # Owner is a numeric UID, so resolve it to a userid.
+        nhc_common_get_userid $OWNER OWNER
+    fi
+
+    for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
+        THIS_PID=${PS_PROCS[$i]}
+        if [[ $FULLMATCH == 1 ]]; then
+            THIS_SVC="${PS_ARGS[$THIS_PID]}"
+        else
+            ARGS=( ${PS_ARGS[$THIS_PID]} )
+            THIS_SVC="${ARGS[0]}"
+        fi
+        dbg "Checking $THIS_PID:  \"$MATCH\" vs. \"$THIS_SVC\""
+        if ! mcheck "$THIS_SVC" "$MATCH" ; then
+            continue
+        fi
+        dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
+        if [[ -n "$OWNER" && "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+            continue
+        fi
+        # We have a matching process with the correct owner.  All is well.
+        if [[ "$FOUND_ACTION" != "" ]]; then
+            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
+        fi
+        return 0
+    done
+
+    # No matching process found.
+    MSG="$FUNCNAME:  Process $SERVICE ${OWNER:+owned by $OWNER }not running"
+    if [[ $RESTART == 1 ]]; then
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
+        MSG="$MSG; restart in progress"
+    elif [[ $CYCLE == 1 ]]; then
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" &
+        MSG="$MSG; cycle in progress"
+    elif [[ "$ACTION" != "" ]]; then
+        ${SHELL:-/bin/bash} -c "$ACTION" &
+        MSG="$MSG; executed \"$ACTION\""
+    fi
+    if [[ $NONFATAL == 1 ]]; then
+        return 0
+    fi
+    die 1 "$MSG"
+    return 1
 }
 
 # Checks all processes to make sure they are owned by users authorized

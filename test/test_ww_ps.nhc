@@ -368,7 +368,7 @@ function insert_naughty_proc() {
     PS_ARGS[$NEW_PID]="/home/badguy/badstuff"
 }
 
-plan $((6+10+6+6+6)) "ww_ps.nhc" && {
+plan $((6+10+21+6+6+6)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
@@ -401,6 +401,50 @@ plan $((6+10+6+6+6)) "ww_ps.nhc" && {
     is $? 1 "Daemon nntpd not running"
     check_ps_daemon pbs_server
     is $? 1 "Daemon pbs_server not running"
+
+    # Service-oriented checks
+    check_ps_service sshd
+    is $? 0 "Simple service check success"
+    check_ps_service httpd
+    is $? 1 "Simple service check failure"
+    check_ps_service -u root sshd
+    is $? 0 "Service check with owner"
+    check_ps_service -u root httpd
+    is $? 1 "Missing service with owner"
+    check_ps_service -u bob sshd
+    is $? 1 "Service check with incorrect owner"
+    SHELL=: check_ps_service -r httpd
+    is $? 1 "Missing service with restart directive"
+    SHELL=: check_ps_service -c httpd
+    is $? 1 "Missing service with cycle directive"
+    check_ps_service -f -u root sshd
+    is $? 0 "Service check with full command line match"
+    check_ps_service -f rsyslogd
+    is $? 1 "Service check with bad full command line match"
+    check_ps_service -f -m '/rsyslogd -i.* -c 5/' rsyslogd
+    is $? 0 "Service check with corrected full command line match"
+    check_ps_service -0 httpd
+    is $? 0 "Simple missing service check made non-fatal"
+    SHELL=: check_ps_service -d rpc.statd -r nfslock
+    is $? 0 "Service check with alternate daemon name (success)"
+    SHELL=: check_ps_service -d munged -c munge
+    is $? 1 "Service check with alternate daemon name (failure)"
+    check_ps_service -m '/^\/usr\/sbin\/sshd$/' sshd
+    is $? 0 "Service check with exact match regexp (success)"
+    check_ps_service -m '^sshd$' sshd
+    is $? 1 "Service check with exact match regexp (failure)"
+    check_ps_service -m '*sbin*sshd' sshd
+    is $? 0 "Service check with exact match glob (success)"
+    check_ps_service -m 'sshd*' sshd
+    is $? 1 "Service check with exact match glob (failure)"
+    SHELL=: check_ps_service -e "/sbin/shutdown -r 1" trqauthd
+    is $? 0 "Service check with missing action (success)"
+    SHELL=: check_ps_service -e "/sbin/shutdown -r 1" httpd
+    is $? 1 "Service check with missing action (failure)"
+    SHELL=: check_ps_service -E "true" trqauthd
+    is $? 0 "Service check with missing action (success)"
+    SHELL=: check_ps_service -E "true" httpd
+    is $? 1 "Service check with missing action (failure)"
 
     # Check some blacklisted processes
     check_ps_blacklist httpd

@@ -17,7 +17,7 @@ function populate_ps_data() {
         [1289]="rpc.idmapd"
         [1351]="/usr/sbin/sshd"
         [1373]="ntpd -u ntp:ntp -p /var/run/ntpd.pid -g"
-        [1408]="/usr/sbin/pbs_mom -d /var/spool/torque/cluster/n0018 -L /local/torque/mom_logs/n0018.cluster.log -q"
+        [1408]="pbs_mom -d /var/spool/torque/cluster/n0018 -L /local/torque/mom_logs/n0018.cluster.log -q"
         [1416]="/usr/sbin/provisiond -i 300 10.0.0.1 ready"
         [1431]="/usr/sbin/trqauthd"
         [1441]="/usr/sbin/wulfd -m 10.0.0.1"
@@ -335,7 +335,7 @@ function populate_ps_data() {
     JOBUSERS=( $NHC_AUTH_USERS "someuser" )
 
     # Since our sample data is TORQUE-based, make sure we're matching on it.
-    RM_DAEMON_MATCH="/\bpbs_mom\b/"
+    RM_DAEMON_MATCH="/(^|[^A-Za-z0-9])pbs_mom(\$|[^A-Za-z0-9])/"
 }
 
 function insert_auth_user_proc() {

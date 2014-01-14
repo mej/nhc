@@ -33,6 +33,9 @@ uninstall-local:
 test:
 	$(MAKE) -C test test
 
+test-debug:
+	$(MAKE) -C test test-debug
+
 bench:
 	$(MAKE) -C bench bench
 

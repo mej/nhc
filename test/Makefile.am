@@ -13,4 +13,7 @@ EXTRA_DIST = nhc-test shut.inc.sh test_common.nhc test_ww_dmi.nhc	\
 test:
 	@./nhc-test $(srcdir) $(top_srcdir)
 
+test-debug:
+	@$(SHELL) -x ./nhc-test $(srcdir) $(top_srcdir) 2>&1
+
 .PHONY: test

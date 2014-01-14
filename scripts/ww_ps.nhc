@@ -36,7 +36,12 @@ function nhc_ps_gather_data() {
     else
         dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
     fi
-
+    if [[ ! "test" =~ \btest\b ]]; then
+        # Workaround for lack of \b support in regexp library.
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
+    fi
+        
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
     LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
@@ -322,7 +327,7 @@ function check_ps_userproc_lineage() {
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi
-        if mcheck "${NHC_AUTH_USERS}" "/\b$THIS_USER\b/" ; then
+        if mcheck "${NHC_AUTH_USERS}" "/(^|[^A-Za-z0-9])$THIS_USER(\$|[^A-Za-z0-9])/" ; then
             continue
         fi
         # Non-system process.  Check lineage.

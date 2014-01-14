@@ -51,8 +51,11 @@ function die() {
 
 # Quick-and-dirty debugging output
 function dbg() {
+    local PREFIX=""
+
     if [[ "$DEBUG" != "0" ]]; then
-        eval echo '"DEBUG:  $*"' $LOGFILE
+        [[ $TS -eq 1 ]] && PREFIX="[$SECONDS] - "
+        eval echo '"${PREFIX}DEBUG:  $*"' $LOGFILE
         if [[ $? -ne 0 ]]; then
             syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
             export LOGFILE=">/dev/null"
@@ -62,8 +65,11 @@ function dbg() {
 
 # Quick-and-dirty log output
 function log() {
+    local PREFIX=""
+
     if [[ "$SILENT" = "0" ]]; then
-        eval echo '"$@"' $LOGFILE
+        [[ $TS -eq 1 ]] && PREFIX="[$SECONDS] - "
+        eval echo '"$PREFIX$@"' $LOGFILE
         if [[ $? -ne 0 ]]; then
             syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
             export LOGFILE=">/dev/null"
@@ -110,6 +116,7 @@ function nhcmain_init_env() {
     fi
     HOSTNAME_S=${HOSTNAME/%.*}
     RET=0
+    TS=0
     LOGGER_TEXT=""
     NHC_PID=$$
     WATCHDOG_PID=0
@@ -215,6 +222,7 @@ function nhcmain_finalize_env() {
     OFFLINE_NODE="${OFFLINE_NODE:-$HELPERDIR/node-mark-offline}"
     LOGFILE="${LOGFILE:->>/var/log/$NAME.log}"
     DEBUG=${DEBUG:-0}
+    TS=${TS:-$DEBUG}
     SILENT=${SILENT:-0}
     MARK_OFFLINE=${MARK_OFFLINE:-1}
     DETACHED_MODE=${DETACHED_MODE:-0}
@@ -239,6 +247,13 @@ function nhcmain_finalize_env() {
         TIMEOUT=0
     fi
 
+    # If timestamps are desired, initialize them here.
+    if [[ $TS -eq 1 ]]; then
+        EPOCH_SECONDS=$(date '+%s')
+        ELAPSED_SECONDS=$SECONDS
+        SECONDS=$((ELAPSED_SECONDS+EPOCH_SECONDS))
+    fi
+
     if [[ -n "$NHC_DETACHED" ]]; then
         dbg "This session is running detached from $NHC_DETACHED."
     elif [[ $DETACHED_MODE -eq 1 ]]; then
@@ -247,7 +262,7 @@ function nhcmain_finalize_env() {
         return
     fi
 
-    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM
+    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG TS SILENT TIMEOUT MAX_SYS_UID NHC_RM
 }
 
 function nhcmain_find_rm() {

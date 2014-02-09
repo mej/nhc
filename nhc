@@ -32,7 +32,7 @@ function die() {
     log "Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
-    if [[ "$MARK_OFFLINE" = "1" ]]; then
+    if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
         eval '$OFFLINE_NODE "$HOSTNAME" "$*" </dev/null >/dev/null' $LOGFILE '2>&1 &'
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -45,6 +45,10 @@ function die() {
         return 77
     else
         echo "ERROR Health check failed:  $*"
+    fi
+    if [[ "$NHC_CHECK_ALL" == "1" ]]; then
+        ((FAIL_CNT++))
+        return 0
     fi
     kill_watchdog
     exit $RET
@@ -121,13 +125,14 @@ function nhcmain_init_env() {
     LOGGER_TEXT=""
     NHC_PID=$$
     WATCHDOG_PID=0
-    export PATH SYSCONFIGDIR LIBEXECDIR RESULTFILE HOSTNAME HOSTNAME_S RET LOGGER_TEXT NHC_PID WATCHDOG_PID
+    FAIL_CNT=0
+    export PATH SYSCONFIGDIR LIBEXECDIR RESULTFILE HOSTNAME HOSTNAME_S RET LOGGER_TEXT NHC_PID WATCHDOG_PID FAIL_CNT
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM
+    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM NHC_CHECK_ALL
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -160,6 +165,7 @@ $UNDERLINE
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
  -t <timeout>      Use timeout of <timeout> seconds (default: 10)
+ -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
 
  All other command line parameters, if any, must be environment variable
  settings in the form VARNAME=value.
@@ -183,7 +189,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:c:dhn:qt:" OPTION ; do
+    while getopts ":D:c:dhn:qt:a" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
@@ -192,6 +198,7 @@ function nhcmain_parse_cmdline() {
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
+            a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             :) nhcmain_help ; echo "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
             \?) nhcmain_help ; echo "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
         esac
@@ -230,6 +237,7 @@ function nhcmain_finalize_env() {
     DETACHED_MODE_FAIL_NODATA=${DETACHED_MODE_FAIL_NODATA:-0}
     TIMEOUT=${TIMEOUT:-10}
     MAX_SYS_UID=${MAX_SYS_UID:-99}
+    NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
 
     if [[ -z "$NHC_RM" ]]; then
         if ! nhcmain_find_rm ; then
@@ -377,7 +385,7 @@ function nhcmain_detach() {
     # Only mark offline/online in detached copy.
     MARK_OFFLINE=0
 
-    if [[ $RC != 0 ]]; then
+    if [[ "$RC" != "0" ]]; then
         die $RC "$MSG"
         return 1
     fi
@@ -397,8 +405,8 @@ function nhcmain_run_checks() {
         RET=$?
 
         # Check for failure.
-        if [[ $RET != 0 ]]; then
-            if [[ $CHECK_DIED == 0 ]]; then
+        if [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
+            if [[ "$CHECK_DIED" == "0" ]]; then
                 # If the check failed but didn't call die(), use this fallback.
                 log "Node Health Check failed.  Check $CHECK returned $RET"
                 die $RET "Check $CHECK returned $RET"
@@ -406,6 +414,16 @@ function nhcmain_run_checks() {
             return $RET
         fi
     done
+    if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
+        # One or more checks have failed.  Give final report and terminate.
+        NHC_CHECK_ALL=0
+        log "$FAIL_CNT health checks failed."
+        syslog "$FAIL_CNT health checks failed."
+        echo "ERROR $FAIL_CNT health checks failed."
+        syslog_flush
+        kill_watchdog
+        exit $FAIL_CNT
+    fi
 }
 
 function nhcmain_mark_online() {

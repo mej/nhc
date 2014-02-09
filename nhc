@@ -27,6 +27,8 @@ function die() {
     IFS=$' \t\n'
     local RET="$1"
     shift
+
+    CHECK_DIED=1
     log "Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
@@ -40,7 +42,6 @@ function die() {
         echo "$HOSTNAME:healthy:false"
         echo "$HOSTNAME:diagnosis:NHC: $*"
         echo "end"
-        CHECK_DIED=1
         return 77
     else
         echo "ERROR Health check failed:  $*"
@@ -384,11 +385,11 @@ function nhcmain_detach() {
 }
 
 function nhcmain_run_checks() {
-    CHECK_DIED=0
     CHECKS=( )
     nhc_load_conf "$CONFFILE"
     for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
         CHECK="${CHECKS[$CNUM]}"
+        CHECK_DIED=0
 
         # Run the check.
         log "Running check:  \"$CHECK\""
@@ -398,6 +399,7 @@ function nhcmain_run_checks() {
         # Check for failure.
         if [[ $RET != 0 ]]; then
             if [[ $CHECK_DIED == 0 ]]; then
+                # If the check failed but didn't call die(), use this fallback.
                 log "Node Health Check failed.  Check $CHECK returned $RET"
                 die $RET "Check $CHECK returned $RET"
             fi

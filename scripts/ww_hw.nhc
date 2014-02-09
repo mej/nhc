@@ -29,24 +29,26 @@ function nhc_hw_gather_data() {
 
     # Gather CPU info
     PROCESSOR=-1
-    while read -a FIELD ; do
-        if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
-            : $((PROCESSOR++))
-        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
-            PHYS_ID=${FIELD[3]}
-            if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
-                PHYS_IDS[$PHYS_ID]=1
-                : $((HW_SOCKETS++))
+    if [[ -e /proc/cpuinfo ]]; then
+        while read -a FIELD ; do
+            if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
+                : $((PROCESSOR++))
+            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
+                PHYS_ID=${FIELD[3]}
+                if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
+                    PHYS_IDS[$PHYS_ID]=1
+                    : $((HW_SOCKETS++))
+                fi
+            elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
+                SIBLINGS=${FIELD[2]}
+            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
+                CORES=${FIELD[3]}
+            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
+                MHZ="${FIELD[3]}"
+                MHZ="${MHZ/%.*}"
             fi
-        elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
-            SIBLINGS=${FIELD[2]}
-        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
-            CORES=${FIELD[3]}
-        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
-            MHZ="${FIELD[3]}"
-            MHZ="${MHZ/%.*}"
-        fi
-    done < /proc/cpuinfo
+        done < /proc/cpuinfo
+    fi
     if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
         HW_SOCKETS=$((PROCESSOR+1))
         HW_CORES=$HW_SOCKETS
@@ -60,21 +62,23 @@ function nhc_hw_gather_data() {
     dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
 
     # Gather memory info
-    while read -a FIELD ; do
-        if [[ "${FIELD[0]}" = "MemTotal:" ]]; then
-            HW_RAM_TOTAL=${FIELD[1]}
-        elif [[ "${FIELD[0]}" = "MemFree:" ]]; then
-            : $((HW_RAM_FREE += ${FIELD[1]}))
-        elif [[ "${FIELD[0]}" = "Buffers:" ]]; then
-            : $((HW_RAM_FREE += ${FIELD[1]}))
-        elif [[ "${FIELD[0]}" = "Cached:" ]]; then
-            : $((HW_RAM_FREE += ${FIELD[1]}))
-        elif [[ "${FIELD[0]}" = "SwapTotal:" ]]; then
-            HW_SWAP_TOTAL=${FIELD[1]}
-        elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
-            HW_SWAP_FREE=${FIELD[1]}
-        fi
-    done < /proc/meminfo
+    if [[ -e /proc/meminfo ]]; then
+        while read -a FIELD ; do
+            if [[ "${FIELD[0]}" = "MemTotal:" ]]; then
+                HW_RAM_TOTAL=${FIELD[1]}
+            elif [[ "${FIELD[0]}" = "MemFree:" ]]; then
+                : $((HW_RAM_FREE += ${FIELD[1]}))
+            elif [[ "${FIELD[0]}" = "Buffers:" ]]; then
+                : $((HW_RAM_FREE += ${FIELD[1]}))
+            elif [[ "${FIELD[0]}" = "Cached:" ]]; then
+                : $((HW_RAM_FREE += ${FIELD[1]}))
+            elif [[ "${FIELD[0]}" = "SwapTotal:" ]]; then
+                HW_SWAP_TOTAL=${FIELD[1]}
+            elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
+                HW_SWAP_FREE=${FIELD[1]}
+            fi
+        done < /proc/meminfo
+    fi
     dbg "Found $HW_RAM_TOTAL kB RAM ($HW_RAM_FREE kB free)"
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
 
@@ -101,20 +105,24 @@ function nhc_hw_gather_data() {
     export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
 
     # Gather kernel modules
-    while read -a FIELD ; do
-        HW_MODULES[${#HW_MODULES[*]}]=${FIELD[0]}
-        dbg "Found kernel module ${FIELD[0]}"
-    done < /proc/modules
+    if [[ -e /proc/modules ]]; then
+        while read -a FIELD ; do
+            HW_MODULES[${#HW_MODULES[*]}]=${FIELD[0]}
+            dbg "Found kernel module ${FIELD[0]}"
+        done < /proc/modules
+    fi
     export HW_MODULES
 
     # Gather Ethernet info
-    while read -a FIELD ; do
-        if [[ ${FIELD[0]} == *:* ]]; then
-            DEV=${FIELD[0]%%:*}
-            HW_ETH_DEV[${#HW_ETH_DEV[*]}]=$DEV
-            dbg "Found Ethernet device $DEV"
-        fi
-    done < /proc/net/dev
+    if [[ -e /proc/net/dev ]]; then
+        while read -a FIELD ; do
+            if [[ ${FIELD[0]} == *:* ]]; then
+                DEV=${FIELD[0]%%:*}
+                HW_ETH_DEV[${#HW_ETH_DEV[*]}]=$DEV
+                dbg "Found Ethernet device $DEV"
+            fi
+        done < /proc/net/dev
+    fi
     export HW_ETH_DEV
 }
 

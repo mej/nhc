@@ -368,10 +368,12 @@ function insert_naughty_proc() {
     PS_ARGS[$NEW_PID]="/home/badguy/badstuff"
 }
 
-plan $((6+10+21+6+6+6)) "ww_ps.nhc" && {
+plan $((8+10+25+6+6+6)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
+    is "`type -t check_ps_service 2>&1`" 'function' 'check_ps_service() loaded properly'
+    is "`type -t check_ps_blacklist 2>&1`" 'function' 'check_ps_blacklist() loaded properly'
     is "`type -t check_ps_unauth_users 2>&1`" 'function' 'check_ps_unauth_users() loaded properly'
     is "`type -t check_ps_userproc_lineage 2>&1`" 'function' 'check_ps_userproc_lineage() loaded properly'
     is "`type -t check_ps_kswapd 2>&1`" 'function' 'check_ps_kswapd() loaded properly'
@@ -417,6 +419,14 @@ plan $((6+10+21+6+6+6)) "ww_ps.nhc" && {
     is $? 1 "Missing service with restart directive"
     SHELL=: check_ps_service -c httpd
     is $? 1 "Missing service with cycle directive"
+    SHELL=: check_ps_service -s httpd
+    is $? 0 "Missing service with stop directive"
+    SHELL=: check_ps_service -k httpd
+    is $? 0 "Missing service with kill directive"
+    SHELL=: check_ps_service -s -u root sshd
+    is $? 1 "Running service with stop directive"
+    SHELL=: check_ps_service -k -u root sshd
+    is $? 1 "Running service with kill directive"
     check_ps_service -f -u root sshd
     is $? 0 "Service check with full command line match"
     check_ps_service -f rsyslogd

@@ -168,10 +168,10 @@ function check_ps_blacklist() {
     return 0
 }
 
-# Check to make sure a service is running.  Syntax:
-#  check_ps_service [-0] [-f] [-r|-c] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
+# Check to make sure a service is (or isn't) running.  Syntax:
+#  check_ps_service [-0] [-f] [-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
 function check_ps_service() {
-    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 ACTION FOUND_ACTION
+    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 STOP=0 KILL=0 ACTION FOUND_ACTION
     local THIS_PID THIS_SVC i MSG
     local -a ARGS
 
@@ -180,12 +180,14 @@ function check_ps_service() {
     fi
 
     OPTIND=1
-    while getopts ":0frcu:d:m:e:E:" OPTION ; do
+    while getopts ":0frcsku:d:m:e:E:" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
             f) FULLMATCH=1 ;;
             r) RESTART=1 ;;
             c) CYCLE=1 ;;
+            s) STOP=1 ;;
+            k) KILL=1 ;;
             u) OWNER="$OPTARG" ;;
             d) DAEMON="$OPTARG" ;;
             m) MATCH="$OPTARG" ;;
@@ -228,14 +230,37 @@ function check_ps_service() {
         if [[ -n "$OWNER" && "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
             continue
         fi
-        # We have a matching process with the correct owner.  All is well.
+        # We have a matching process with the correct owner.
         if [[ "$FOUND_ACTION" != "" ]]; then
             ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
         fi
+        if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+            # Logic is inverted; we DON'T want this process running, so finding it is a failure.
+            MSG="$FUNCNAME:  Process $SERVICE ${OWNER:+owned by $OWNER }running"
+            if [[ "$KILL" == "1" ]]; then
+                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
+                MSG="$MSG; killed process ID $THIS_PID"
+            else
+                # $STOP must be 1
+                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" &
+                MSG="$MSG; termination in progress"
+            fi
+            if [[ $NONFATAL == 1 ]]; then
+                return 0
+            fi
+            die 1 "$MSG"
+            return 1
+        fi
+        # All is well.
         return 0
     done
 
     # No matching process found.
+    if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+        # Logic is inverted; we DON'T want this process running, so not finding it is a success.
+        return 0
+    fi
+
     MSG="$FUNCNAME:  Process $SERVICE ${OWNER:+owned by $OWNER }not running"
     if [[ $RESTART == 1 ]]; then
         ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &

@@ -41,6 +41,7 @@ which checks should be run on which nodes.
 
 
 %install
+umask 0077
 %{__make} install DESTDIR=$RPM_BUILD_ROOT %{?mflags_install}
 
 
@@ -53,7 +54,7 @@ test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 
 
 %files
-%defattr(-, root, root, 0700)
+%defattr(-, root, root)
 %doc COPYING ChangeLog LICENSE nhc.conf contrib/nhc.cron
 %dir %{_sysconfdir}/%{sname}/
 %dir %{_localstatedir}/lib/%{sname}/

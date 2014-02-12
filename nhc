@@ -434,7 +434,7 @@ function nhcmain_mark_online() {
 
 function nhcmain_finish() {
     syslog_flush
-    log "Node Health Check completed successfully (${SECONDS}s${BASH_SUBSHELL:+, $BASH_SUBSHELL subshells})."
+    log "Node Health Check completed successfully (${SECONDS}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin"
         echo "$HOSTNAME:healthy:true"

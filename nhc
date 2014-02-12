@@ -33,7 +33,7 @@ function die() {
     syslog "Health check failed:  $*"
     syslog_flush
     if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
-        eval '$OFFLINE_NODE "$HOSTNAME" "$*" </dev/null >/dev/null' $LOGFILE '2>&1 &'
+        eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'" '</dev/null >/dev/null' $LOGFILE '2>&1 &'
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         echo "$RET $*" > $RESULTFILE
@@ -428,7 +428,7 @@ function nhcmain_run_checks() {
 
 function nhcmain_mark_online() {
     if [[ "$MARK_OFFLINE" = "1" ]]; then
-        eval '$ONLINE_NODE "$HOSTNAME" </dev/null >/dev/null' $LOGFILE '2>&1 &'
+        eval $ONLINE_NODE "'$HOSTNAME'" '</dev/null >/dev/null' $LOGFILE '2>&1 &'
     fi
 }
 

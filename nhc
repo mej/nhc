@@ -121,7 +121,6 @@ function nhcmain_init_env() {
     fi
     HOSTNAME_S=${HOSTNAME/%.*}
     RET=0
-    TS=0
     LOGGER_TEXT=""
     NHC_PID=$$
     WATCHDOG_PID=0

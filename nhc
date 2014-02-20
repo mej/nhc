@@ -336,7 +336,7 @@ function nhcmain_watchdog_timer() {
 
     sleep $TIMEOUT &
     SLEEP_PID=$!
-    trap "kill -9 $SLEEP_PID ; exit 0" HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE ALRM TERM USR1 USR2 CONT STOP TSTP TTIN TTOU
+    trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE ALRM TERM USR1 USR2 CONT STOP TSTP TTIN TTOU
     wait
     kill -s ALRM -- $NHC_PID || return 0
     sleep 1

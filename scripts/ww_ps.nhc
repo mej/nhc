@@ -243,7 +243,7 @@ function check_ps_service() {
         fi
         if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
             # Logic is inverted; we DON'T want this process running, so finding it is a failure.
-            MSG="$FUNCNAME:  Process $SERVICE ${OWNER:+owned by $OWNER }running"
+            MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }running"
             if [[ "$KILL" == "1" ]]; then
                 [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
                 MSG="$MSG; killed process ID $THIS_PID"
@@ -268,7 +268,7 @@ function check_ps_service() {
         return 0
     fi
 
-    MSG="$FUNCNAME:  Process $SERVICE ${OWNER:+owned by $OWNER }not running"
+    MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
     if [[ $RESTART == 1 ]]; then
         ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
         MSG="$MSG; restart in progress"

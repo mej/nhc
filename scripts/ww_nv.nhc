@@ -20,8 +20,8 @@ function nhc_nv_gather_data() {
 
     IFS=$'\n'
     NV_HEALTHMON_LINES=( $($NVIDIA_HEALTHMON $NVIDIA_HEALTHMON_ARGS 2>/dev/null) )
-    NV_HEALTHMON_OUTPUT="${NV_HEALTHMON_LINES[*]}"
     NV_HEALTHMON_RC=$?
+    NV_HEALTHMON_OUTPUT="${NV_HEALTHMON_LINES[*]}"
 }
 
 # Run the nVidia Tesla Health Monitor utility and verify that all GPUs

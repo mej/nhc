@@ -212,7 +212,8 @@ function nhcmain_parse_cmdline() {
 
 function nhcmain_load_sysconfig() {
     # Load settings from system-wide location.  NOTE:  To change value of $NAME
-    # here, the driver script must be renamed to something other than "nhc."
+    # here, the driver script must be renamed to something other than "nhc"
+    # or "-n foo" or "NAME=foo" must be passed on the command line.
     if [[ -f $SYSCONFIGDIR/$NAME ]]; then
         . $SYSCONFIGDIR/$NAME
     fi

@@ -59,7 +59,7 @@ function dbg() {
     local PREFIX=""
 
     if [[ "$DEBUG" != "0" ]]; then
-        [[ $TS -eq 1 ]] && PREFIX="[$SECONDS] - "
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
         eval echo '"${PREFIX}DEBUG:  $*"' $LOGFILE
         if [[ $? -ne 0 ]]; then
             syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
@@ -73,7 +73,7 @@ function log() {
     local PREFIX=""
 
     if [[ "$SILENT" = "0" ]]; then
-        [[ $TS -eq 1 ]] && PREFIX="[$SECONDS] - "
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
         eval echo '"$PREFIX$@"' $LOGFILE
         if [[ $? -ne 0 ]]; then
             syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
@@ -257,10 +257,10 @@ function nhcmain_finalize_env() {
     fi
 
     # If timestamps are desired, initialize them here.
-    if [[ $TS -eq 1 ]]; then
-        EPOCH_SECONDS=$(date '+%s')
+    if [[ $TS -ne 0 ]]; then
+        TS=$(date '+%s')
         ELAPSED_SECONDS=$SECONDS
-        SECONDS=$((ELAPSED_SECONDS+EPOCH_SECONDS))
+        SECONDS=$((ELAPSED_SECONDS+TS))
     fi
 
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -437,8 +437,14 @@ function nhcmain_mark_online() {
 }
 
 function nhcmain_finish() {
+    local ELAPSED
+
     syslog_flush
-    log "Node Health Check completed successfully (${SECONDS}s)."
+    ELAPSED=$SECONDS
+    if [[ $TS -ne 0 ]]; then
+        ((ELAPSED-=TS))
+    fi
+    log "Node Health Check completed successfully (${ELAPSED}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin"
         echo "$HOSTNAME:healthy:true"

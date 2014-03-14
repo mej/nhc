@@ -60,7 +60,7 @@ function populate_ps_data() {
         [19234]="94.0"
         [19235]="98.8"
         [19236]="98.8"
-        [19237]="98.8"
+        [19237]="99.1"
         [19238]="98.8"
         [19239]="98.7"
         [19240]="98.9"
@@ -84,7 +84,7 @@ function populate_ps_data() {
         [1431]="0.0"
         [1441]="0.0"
         [1448]="0.0"
-        [19197]="0.0"
+        [19197]="55.5"
         [19198]="0.0"
         [19217]="0.0"
         [19233]="0.0"
@@ -177,7 +177,7 @@ function populate_ps_data() {
         [1431]="1004"
         [1441]="452"
         [1448]="1224"
-        [19197]="1656"
+        [19197]="16562195"
         [19198]="2148"
         [19217]="1864"
         [19233]="4856"
@@ -301,7 +301,7 @@ function populate_ps_data() {
         [1431]="123868"
         [1441]="4056"
         [1448]="249044"
-        [19197]="110216"
+        [19197]="21021633"
         [19198]="48308"
         [19217]="115016"
         [19233]="109056"
@@ -368,12 +368,17 @@ function insert_naughty_proc() {
     PS_ARGS[$NEW_PID]="/home/badguy/badstuff"
 }
 
-plan $((8+10+27+6+6+6)) "ww_ps.nhc" && {
+plan $((13+10+6+27+17+6+5+7+6+6)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
+    is "`type -t nhc_ps_check_res 2>&1`" 'function' 'nhc_ps_check_res() loaded properly'
     is "`type -t check_ps_daemon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
-    is "`type -t check_ps_service 2>&1`" 'function' 'check_ps_service() loaded properly'
     is "`type -t check_ps_blacklist 2>&1`" 'function' 'check_ps_blacklist() loaded properly'
+    is "`type -t check_ps_service 2>&1`" 'function' 'check_ps_service() loaded properly'
+    is "`type -t check_ps_cpu 2>&1`" 'function' 'check_ps_cpu() loaded properly'
+    is "`type -t check_ps_mem 2>&1`" 'function' 'check_ps_mem() loaded properly'
+    is "`type -t check_ps_physmem 2>&1`" 'function' 'check_ps_physmem() loaded properly'
+    is "`type -t check_ps_time 2>&1`" 'function' 'check_ps_time() loaded properly'
     is "`type -t check_ps_unauth_users 2>&1`" 'function' 'check_ps_unauth_users() loaded properly'
     is "`type -t check_ps_userproc_lineage 2>&1`" 'function' 'check_ps_userproc_lineage() loaded properly'
     is "`type -t check_ps_kswapd 2>&1`" 'function' 'check_ps_kswapd() loaded properly'
@@ -403,6 +408,20 @@ plan $((8+10+27+6+6+6)) "ww_ps.nhc" && {
     is $? 1 "Daemon nntpd not running"
     check_ps_daemon pbs_server
     is $? 1 "Daemon pbs_server not running"
+
+    # Check some blacklisted processes
+    check_ps_blacklist httpd
+    is $? 0 "Blacklisted process httpd not detected"
+    check_ps_blacklist telnetd
+    is $? 0 "Blacklisted process telnetd not detected"
+    check_ps_blacklist ntpd root
+    is $? 0 "Blacklisted process ntpd owned by root not detected"
+    check_ps_blacklist sshd '!root'
+    is $? 0 "Blacklisted process sshd owned by non-root not detected"
+    check_ps_blacklist sshd root
+    is $? 1 "Blacklisted process sshd owned by root detected"
+    check_ps_blacklist '-bash' '!root'
+    is $? 1 "Blacklisted process bash owned by non-root detected"
 
     # Service-oriented checks
     check_ps_service sshd
@@ -460,19 +479,86 @@ plan $((8+10+27+6+6+6)) "ww_ps.nhc" && {
     SHELL=: check_ps_service -E "true" httpd
     is $? 1 "Service check with missing action (failure)"
 
-    # Check some blacklisted processes
-    check_ps_blacklist httpd
-    is $? 0 "Blacklisted process httpd not detected"
-    check_ps_blacklist telnetd
-    is $? 0 "Blacklisted process telnetd not detected"
-    check_ps_blacklist ntpd root
-    is $? 0 "Blacklisted process ntpd owned by root not detected"
-    check_ps_blacklist sshd '!root'
-    is $? 0 "Blacklisted process sshd owned by non-root not detected"
-    check_ps_blacklist sshd root
-    is $? 1 "Blacklisted process sshd owned by root detected"
-    check_ps_blacklist '-bash' '!root'
-    is $? 1 "Blacklisted process bash owned by non-root detected"
+    # Checks for excessive CPU utilization
+    check_ps_cpu 99
+    is $? 1 "CPU utilization >= 99%, any process"
+    check_ps_cpu 99%
+    is $? 1 "CPU utilization >= 99%, any process - with percent sign"
+    check_ps_cpu -0 99
+    is $? 0 "CPU utilization >= 99% - non-fatal"
+    check_ps_cpu 100
+    is $? 0 "CPU utilization >= 100% (pass)"
+    check_ps_cpu 100%
+    is $? 0 "CPU utilization >= 100% - with percent sign (pass)"
+    check_ps_cpu -m '/bash/' 99
+    is $? 0 "CPU utilization >= 99% by bash (pass)"
+    check_ps_cpu -m '!/wrf/' 1
+    is $? 0 "CPU utilization >= 1% by any non-WRF process (pass)"
+    check_ps_cpu -m '/-np/' 0
+    is $? 0 "Match looks at argv[0] only by default"
+    check_ps_cpu -f -m '/-np/' 0
+    is $? 1 "Full match looks at entire arg list"
+    check_ps_cpu -u root 99
+    is $? 0 "CPU utilization >= 99% by root-owned process (pass)"
+    check_ps_cpu -u '!root' 99
+    is $? 1 "CPU utilization >= 99% by non-root-owned process"
+    check_ps_cpu -a -m '/wrf/' 90
+    is $? 12 "CPU utilization >= 90% by WRF (-a gets all 12 procs)"
+    check_ps_cpu -l -m '/wrf/' 99
+    is $? 1 "CPU utilization >= 99% by WRF (log directive)"
+    check_ps_cpu -s -m '/bash/' 99
+    is $? 0 "CPU utilization >= 99% by bash (syslog directive)"
+    SHELL=: check_ps_cpu -k -m '/wrf/' 99
+    is $? 1 "CPU utilization >= 99% by WRF (kill directive)"
+    SHELL=: check_ps_cpu -r 15 -m '/bash/' 99
+    is $? 0 "CPU utilization >= 99% by bash (renice directive)"
+    SHELL=: check_ps_cpu -e /sbin/reboot -m '/mpirun/' 0
+    is $? 1 "CPU utilization >= 0% by mpirun (action directive)"
+
+    # Checks for excessive memory consumption
+    # We only need to test the code which differs from check_ps_cpu() above.
+    check_ps_mem 99999999
+    is $? 0 "Memory utilization >= 99,999,999 kB (pass)"
+    check_ps_mem 99g
+    is $? 0 "Memory utilization >= 99 GB (pass)"
+    check_ps_mem -m '???*' 20000000
+    is $? 1 "Memory utilization >= 20,000,000 kB"
+    check_ps_mem -m '/./' 20GB
+    is $? 1 "Memory utilization >= 20 GB"
+    check_ps_mem 1
+    is $? 1 "Memory utilization >= 1 kB"
+    check_ps_mem 1kB
+    is $? 1 "Memory utilization >= 1 kB"
+
+    # Checks for excessive RAM consumption
+    # We only need to test the code which differs from check_ps_cpu() above.
+    check_ps_physmem 99G
+    is $? 0 "RAM utilization >= 99 GB (pass)"
+    check_ps_physmem 18G
+    is $? 0 "RAM utilization >= 18 GB (pass)"
+    check_ps_physmem 15G
+    is $? 1 "RAM utilization >= 15 GB"
+    check_ps_physmem 56%
+    is $? 0 "RAM utilization >= 56% (pass)"
+    check_ps_physmem 55%
+    is $? 1 "RAM utilization >= 55%"
+
+    # Checks for high CPU time
+    # We only need to test the code which differs from check_ps_cpu() above.
+    check_ps_time 7200
+    is $? 0 "CPU time utilization >= 7200 (pass)"
+    check_ps_time 7200s
+    is $? 0 "CPU time utilization >= 7200s (pass)"
+    check_ps_time 60m3600s
+    is $? 0 "CPU time utilization >= 60m3600s (pass)"
+    check_ps_time 120m
+    is $? 0 "CPU time utilization >= 7200 (pass)"
+    check_ps_time -m wrf.exe 120m
+    is $? 0 "CPU time utilization for wrf.exe >= 120m (pass)"
+    check_ps_time -u root 60m
+    is $? 1 "CPU time utilization for root-owned process >= 60m"
+    check_ps_time 1800
+    is $? 1 "CPU time utilization >= 1800"
 
     # Check all processes to make sure they're owned by authorized users.
     check_ps_unauth_users die

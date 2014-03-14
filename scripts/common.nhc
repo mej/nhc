@@ -398,7 +398,7 @@ function nhc_common_get_userid() {
     local -a PASSWD_ENTRY
 
     if mcheck_regexp "$THIS_UID" '[^0-9]' ; then
-        # It's already a UID.  Just return it.
+        # It's already a userid.  Just return it.
         eval $THIS_VAR=$THIS_UID
         dbg "Got userid ${!THIS_VAR} for UID $THIS_UID"
         return

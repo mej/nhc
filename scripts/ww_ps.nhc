@@ -90,6 +90,173 @@ function nhc_ps_pid_lineage() {
     return 1
 }
 
+# Do the actual work of looking at process resource consumption.  Used
+# by check_ps_{cpu,mem,physmem}().  Additional parameters are the check
+# name and the type of resource to look at.
+function nhc_ps_check_res() {
+    local NONFATAL=0 FULLMATCH=0 ALL=0 SYSLOG=0 LOG=0 KILL=0 RENICE="" OWNER="" MATCH="" ACTION=""
+    local CHECK="$1" COL="$2" THRESHOLD
+    local THIS_PID THIS_PROG MSG T_MIN T_SEC NUM LIM i
+
+    if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
+        nhc_ps_gather_data
+    fi
+
+    shift 2
+    OPTIND=1
+    while getopts ":0falskr:u:m:e:" OPTION ; do
+        case "$OPTION" in
+            0) NONFATAL=1 ;;
+            f) FULLMATCH=1 ;;
+            a) ALL=1 ;;
+            l) LOG=1 ;;
+            s) SYSLOG=1 ;;
+            k) KILL=1 ;;
+            r) RENICE="$OPTARG" ;;
+            u) OWNER="$OPTARG" ;;
+            m) MATCH="$OPTARG" ;;
+            e) ACTION="$OPTARG" ;;
+            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    THRESHOLD="$1"
+    case $COL in
+        1)  THRESHOLD="${THRESHOLD%%%}"
+            if [[ -z "$THRESHOLD" || "${THRESHOLD//[^0-9]}" != "$THRESHOLD" ]]; then
+                die 1 "$CHECK:  Syntax error:  CPU utilization limit required."
+            fi
+            ;;
+        2)  if [[ -z "$THRESHOLD" ]]; then
+                die 1 "$CHECK:  Syntax error:  Memory utilization limit required."
+            elif [[ "${THRESHOLD%%%}" != "$THRESHOLD" ]]; then
+                die 1 "$CHECK:  Syntax error:  Percentage not supported by this check."
+            fi
+            nhc_common_parse_size "$THRESHOLD" THRESHOLD
+            COL=4
+            ;;
+        3)  if [[ -z "$THRESHOLD" ]]; then
+                die 1 "$CHECK:  Syntax error:  Memory utilization limit required."
+            elif [[ "${THRESHOLD%%%}" != "$THRESHOLD" ]]; then
+                COL=2
+                THRESHOLD="${THRESHOLD%%%}"
+            else
+                COL=3
+                nhc_common_parse_size "$THRESHOLD" THRESHOLD
+            fi
+            ;;
+        4)  if [[ -z "$THRESHOLD" ]]; then
+                die 1 "$CHECK:  Syntax error:  CPU time utilization limit required."
+            elif [[ "${THRESHOLD//[0-9MmSs]}" != "" ]]; then
+                die 1 "$CHECK:  Syntax error:  Invalid characters in CPU time limit \"$THRESHOLD\""
+            fi
+            COL=5
+            THRESHOLD="${THRESHOLD//s}"
+            if [[ "${THRESHOLD//*[Mm]}" != "$THRESHOLD" ]]; then
+                T_MIN="${THRESHOLD//[Mm]*}"
+                T_SEC="${THRESHOLD//*[Mm]}"
+                THRESHOLD=$((T_MIN*60+T_SEC))
+            fi
+            ;;
+    esac
+
+    if [[ -z "$MATCH" ]]; then
+        MATCH="*"
+    fi
+    if [[ -n "$OWNER" && "${OWNER//[0-9]}" == "" ]]; then
+        # Owner is a numeric UID, so resolve it to a userid.
+        nhc_common_get_userid $OWNER OWNER
+    fi
+
+    for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
+        THIS_PID=${PS_PROCS[$i]}
+        if [[ $FULLMATCH == 1 ]]; then
+            THIS_PROG="${PS_ARGS[$THIS_PID]}"
+        else
+            ARGS=( ${PS_ARGS[$THIS_PID]} )
+            THIS_PROG="${ARGS[0]}"
+        fi
+        dbg "Checking $THIS_PID:  \"$MATCH\" vs. \"$THIS_PROG\""
+        if [[ "${MATCH/#\!}" != "$MATCH" ]]; then
+            if mcheck "$THIS_PROG" "${MATCH/#\!}" ; then
+                continue
+            fi
+        elif ! mcheck "$THIS_PROG" "$MATCH" ; then
+            continue
+        fi
+        dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
+        if [[ -n "$OWNER" ]]; then
+            if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
+                # Owner begins with !.  Negate the check.
+                if [[ "${PS_USER[$THIS_PID]}" == "${OWNER/#\!}" ]]; then
+                    continue
+                fi
+            elif [[ "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+                continue
+            fi
+        fi
+        # We have a matching process with the correct owner.  Now check resource consumption.
+        case $COL in
+            1)  if [[ ${PS_PCPU[$THIS_PID]%%.*} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using ${PS_PCPU[$THIS_PID]}% CPU (limit $THRESHOLD%)"
+                ;;
+            2)  if [[ ${PS_PMEM[$THIS_PID]%%.*} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using ${PS_PMEM[$THIS_PID]}% RAM (limit $THRESHOLD%)"
+                ;;
+            3)  if [[ ${PS_RSS[$THIS_PID]} -lt $THRESHOLD ]]; then continue ; fi
+                nhc_common_unparse_size ${PS_RSS[$THIS_PID]} NUM
+                nhc_common_unparse_size $THRESHOLD LIM
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM RAM (limit $LIM)"
+                ;;
+            4)  if [[ ${PS_VSZ[$THIS_PID]} -lt $THRESHOLD ]]; then continue ; fi
+                nhc_common_unparse_size ${PS_RSS[$THIS_PID]} NUM
+                nhc_common_unparse_size $THRESHOLD LIM
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM memory (RAM+swap) (limit $LIM)"
+                ;;
+            5)  T_MIN=${PS_TIME[$THIS_PID]/:*}
+                T_SEC=${PS_TIME[$THIS_PID]/*:}
+                if [[ $((T_MIN*60+T_SEC)) -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) has consumed ${PS_TIME[$THIS_PID]} of CPU time (limit ${T_MIN}m${T_SEC}s)"
+                ;;
+        esac
+        # We have a winner.  Or loser, as the case may be.
+        if [[ "$LOG" == "1" ]]; then
+            log $MSG
+        fi
+        if [[ "$SYSLOG" == "1" ]]; then
+            syslog $MSG
+        fi
+        if [[ "$ACTION" != "" ]]; then
+            ${SHELL:-/bin/bash} -c "$ACTION" &
+        fi
+        if [[ "$KILL" == "1" ]]; then
+            [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
+            MSG="$MSG; killed"
+        elif [[ "$RENICE" != "" ]]; then
+            [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID
+            [[ "${RENICE##-}" == "${RENICE}" ]] && RENICE="+$RENICE"
+            MSG="$MSG; reniced $RENICE"
+        fi
+        if [[ $ALL -ge 1 ]]; then
+            ((ALL++))
+            continue
+        elif [[ $NONFATAL == 1 ]]; then
+            return 0
+        fi
+        die 1 "$MSG"
+        return 1
+    done
+    # -a (all) does not necessarily imply -0 (non-fatal)
+    if [[ $ALL -gt 1 ]]; then
+        # We had at least 1 flagged process.  Fail unless we're also non-fatal.
+        [[ $NONFATAL == 1 ]] && return 0
+        die 1 "$MSG (1 of $((--ALL)))"
+        return $ALL
+    fi
+    return 0
+}
+
 # Check to make sure a process ($1) is running.  Includes optional
 # checks for owner ($2) and arguments ($3).
 function check_ps_daemon() {
@@ -209,7 +376,7 @@ function check_ps_service() {
     if [[ "$MATCH" == "" ]]; then
         MATCH="*$DAEMON"
     fi
-    if mcheck_regexp "$OWNER" '[0-9]+$' ; then
+    if [[ -n "$OWNER" && "${OWNER//[0-9]}" == "" ]]; then
         # Owner is a numeric UID, so resolve it to a userid.
         nhc_common_get_userid $OWNER OWNER
     fi
@@ -284,6 +451,37 @@ function check_ps_service() {
     fi
     die 1 "$MSG"
     return 1
+}
+
+# Checks for processes using more than a certain percentage of CPU.
+#  check_ps_cpu [-0] [-f] [-a] [-l] [-s] [-k] [-r <renice>] [-u <user>] [-m <match>] [-e <action>] <threshold>
+function check_ps_cpu() {
+    nhc_ps_check_res $FUNCNAME 1 "$@"
+    return $?
+}
+
+# Checks for processes using more than a certain percentage or absolute
+# quantity of total memory.
+#  check_ps_mem [-0] [-f] [-a] [-l] [-s] [-k] [-r <renice>] [-u <user>] [-m <match>] [-e <action>] <threshold>
+function check_ps_mem() {
+    nhc_ps_check_res $FUNCNAME 2 "$@"
+    return $?
+}
+
+# Checks for processes using more than a certain percentage or absolute
+# quantity of physical memory (RAM).
+#  check_ps_physmem [-0] [-f] [-a] [-l] [-s] [-k] [-r <renice>] [-u <user>] [-m <match>] [-e <action>] <threshold>
+function check_ps_physmem() {
+    nhc_ps_check_res $FUNCNAME 3 "$@"
+    return $?
+}
+
+# Checks for processes using more than a certain number of seconds of
+# CPU time.
+#  check_ps_time [-0] [-f] [-a] [-l] [-s] [-k] [-r <renice>] [-u <user>] [-m <match>] [-e <action>] <threshold>
+function check_ps_time() {
+    nhc_ps_check_res $FUNCNAME 4 "$@"
+    return $?
 }
 
 # Checks all processes to make sure they are owned by users authorized

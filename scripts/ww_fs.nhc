@@ -31,28 +31,22 @@ DFI_PCT=( )
 DFI_MNTPT=( )
 
 function nhc_fs_mounts_gather_data() {
-    local IFS FS_CNT i
-    local -a LINES FIELD
+    local FS_CNT LINE i
+    local -a FIELD
 
     if [[ ! -r /proc/mounts ]]; then
         return 1
     fi
-    IFS=$'\n'
-    LINES=( $(< /proc/mounts) )
-    IFS=$' \t\n'
 
     ((FS_CNT=0))
-    for ((i=0; i<${#LINES[*]}; i++)); do
-        # Split line on whitespace to create fields.
-        FIELD=( ${LINES[$i]} )
-
+    while read -a FIELD ; do
         FS_DEV[$FS_CNT]="${FIELD[0]}"
         FS_MNTPT[$FS_CNT]="${FIELD[1]}"
         FS_TYPE[$FS_CNT]="${FIELD[2]}"
         FS_OPTS[$FS_CNT]="${FIELD[3]}"
         dbg "Got filesystem ${FS_DEV[$FS_CNT]} ${FS_MNTPT[$FS_CNT]} ${FS_TYPE[$FS_CNT]} ${FS_OPTS[$FS_CNT]}"
         ((FS_CNT++))
-    done
+    done < /proc/mounts
     #set | grep ^FS_ | sed 's/\[/\n        [/g;s/)$/\n)/' | sed '/\[\(3\|4\|5\|6\|7\|8\|9\|1[2-9]\|2[0-9]\)\]/d'
 }
 

@@ -17,6 +17,12 @@ PS_TIME=( )
 PS_ARGS=( )
 export PS_PROCS PS_USER PS_PPID PS_PCPU PS_PMEM PS_RSS PS_VSZ PS_TIME PS_ARGS
 
+LOADAVG=( )
+RUNPROCS=0
+TOTPROCS=0
+LASTPID=0
+export LOADAVG RUNPROCS TOTPROCS LASTPID
+
 function nhc_ps_gather_data() {
     local IFS PS_DATA THIS_PID i
     local -a LINES LINE
@@ -71,6 +77,22 @@ function nhc_ps_gather_data() {
         dbg "Got process $THIS_PID:  ${PS_USER[$THIS_PID]} ${PS_UID[$THIS_PID]} ${PS_PPID[$THIS_PID]} ${PS_PCPU[$THIS_PID]} ${PS_PMEM[$THIS_PID]} ${PS_RSS[$THIS_PID]} ${PS_VSZ[$THIS_PID]} ${PS_TIME[$THIS_PID]} ${PS_ARGS[$THIS_PID]}"
     done
     export PS_PROCS PS_USER PS_UID PS_PPID PS_PCPU PS_PMEM PS_RSS PS_VSZ PS_TIME PS_ARGS
+}
+
+function nhc_loadavg_gather_data() {
+    local i
+
+    read -a LOADAVG < /proc/loadavg
+    RUNPROCS="${LOADAVG[3]}"
+    TOTPROCS="${LOADAVG[3]}"
+    LASTPID="${LOADAVG[4]}"
+    unset LOADAVG[3] LOADAVG[4]
+
+    RUNPROCS="${RUNPROCS/\/*}"
+    TOTPROCS="${TOTPROCS/*\/}"
+    for ((i=0; i<${#LOADAVG[*]}; i++)); do
+        LOADAVG[$i]="${LOADAVG[$i]//.*}"
+    done
 }
 
 # Check the lineage (i.e., parent process tree) of a process ($1) for a particular
@@ -661,4 +683,24 @@ function check_ps_kswapd() {
             esac
         done
     fi
+}
+
+# Checks the 1-, 5-, and 15-minute load averages to see if any of them
+# exceeds the specified threshold(s) ($1, $2, and $3, respectively).
+function check_loadavg() {
+    local -a LOADLIMS=( "$@" )
+    local -a INFO=( 1 5 15 )
+    local i
+
+    if [[ "$TOTPROCS" == 0 ]]; then
+        nhc_loadavg_gather_data
+    fi
+
+    for ((i=0; i<${#LOADAVG[*]}; i++)); do
+        if [[ -n "${LOADLIMS[$i]}" && "${LOADAVG[$i]}" -ge "${LOADLIMS[$i]}" ]]; then
+            die 1 "${INFO[$i]}-minute load average too high:  ${LOADAVG[$i]} >= ${LOADLIMS[$i]}"
+            return 1
+        fi
+    done
+    return 0
 }

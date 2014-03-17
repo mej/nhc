@@ -503,3 +503,14 @@ function nhc_common_unparse_count() {
 # Aliases for backward compatibility, just in case
 #function nhc_fs_parse_count { nhc_common_parse_count "$@" }
 #function nhc_fs_unparse_count { nhc_common_unparse_count "$@" }
+
+# Convert the built-in bash variable $SECONDS to the current UNIX time.
+function nhc_common_get_unix_time() {
+    local NOW
+
+    if [[ $SECONDS -lt 946684800 ]]; then
+        NOW=$(date '+%s')
+        ELAPSED_SECONDS=$SECONDS
+        SECONDS=$((ELAPSED_SECONDS+NOW))
+    fi
+}

@@ -3,8 +3,10 @@
 # $Id$
 #
 
-plan $((1+5+5+3+9+6+8)) "ww_file.nhc" && {
+plan $((3+5+5+3+9+6+8+9+22)) "ww_file.nhc" && {
     is "`type -t check_file_contents 2>&1`" 'function' 'check_file_contents() loaded properly'
+    is "`type -t check_file_test 2>&1`" 'function' 'check_file_test() loaded properly'
+    is "`type -t check_file_stat 2>&1`" 'function' 'check_file_stat() loaded properly'
 
     FILEDATA=$'line1\nline2\nline3\nline4\nline5\nline6\n'
 
@@ -88,5 +90,77 @@ plan $((1+5+5+3+9+6+8)) "ww_file.nhc" && {
     is $? 0 'Real world example:  Match TORQUE variable names against MOM config (mixed positive/negative)'
     check_file_contents <(echo "$FILEDATA") '!$pbs*'
     is $? 1 'Real world example:  Match TORQUE configuration (negated, failed)'
+
+    # Check some file attributes of a dynamically-created file
+    check_file_test -a <(echo "$FILEDATA") -e <(echo "$FILEDATA") -r <(echo "$FILEDATA")
+    is $? 0 'Bash process substitution file exists and is readable.'
+    check_file_test -d <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not a directory.'
+    check_file_test -f <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not a regular file.'
+    check_file_test -g <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not setgid.'
+    check_file_test -k <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not sticky.'
+    check_file_test -u <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not setuid.'
+    check_file_test -x <(echo "$FILEDATA")
+    is $? 1 'Bash process substitution file is not executable.'
+    check_file_test -O <(echo "$FILEDATA")
+    is $? 0 'Bash process substitution file is owned by uid $EUID.'
+    check_file_test -G <(echo "$FILEDATA")
+    is $? 0 'Bash process substitution file is owned by gid of $$.'
+
+    # Check file stats and compare to expected values
+    TEST_STATS=( `/bin/stat -c '%a %b %B %D %g %h %i %m %s %t %T %u %Y %Z' /` )
+    check_file_stat -m 0123 "/"
+    is $? 1 'stat() exact permissions, unlikely value'
+    check_file_stat -m 0${TEST_STATS[0]} "/"
+    is $? 0 'stat() exact permissions, correct value'
+    check_file_stat -M 0777 "/"
+    is $? 1 'stat() matching permissions, unlikely value'
+    check_file_stat -M 0100 "/"
+    is $? 0 'stat() matching permissions, likely value'
+    ### TODO:  Block count and size [1] and [2]
+    check_file_stat -d 0xdeadbeef "/"
+    is $? 1 'stat() device number, unlikely value'
+    check_file_stat -d 0x${TEST_STATS[3]} "/"
+    is $? 0 'stat() device number, correct value'
+    check_file_stat -g 31415 "/"
+    is $? 1 'stat() GID, unlikely value'
+    check_file_stat -g ${TEST_STATS[4]} "/"
+    is $? 0 'stat() GID, correct value'
+    ### TODO:  Link count [5]
+    ### TODO:  Inode number [6]
+    ### TODO:  Mountpoint [7]
+    ### TODO:  Size [8]
+    check_file_stat -t 0xff "/"
+    is $? 1 'stat() device major number, unlikely value'
+    check_file_stat -t ${TEST_STATS[9]} "/"
+    is $? 0 'stat() device major number, correct value'
+    check_file_stat -T 123 "/"
+    is $? 1 'stat() device minor number, unlikely value'
+    check_file_stat -T ${TEST_STATS[10]} "/"
+    is $? 0 'stat() device minor number, correct value'
+    check_file_stat -u 31415 "/"
+    is $? 1 'stat() UID, unlikely value'
+    check_file_stat -u ${TEST_STATS[11]} "/"
+    is $? 0 'stat() UID, correct value'
+    check_file_stat -n $((SECONDS-TEST_STATS[12]-86400)) "/"
+    is $? 1 'stat() mtime newer than 1 day later'
+    check_file_stat -n $((SECONDS-TEST_STATS[12]+86400)) "/"
+    is $? 0 'stat() mtime newer than 1 day earlier'
+    check_file_stat -o $((SECONDS-TEST_STATS[12]-86400)) "/"
+    is $? 0 'stat() mtime newer than 1 day later'
+    check_file_stat -o $((SECONDS-TEST_STATS[12]+86400)) "/"
+    is $? 1 'stat() mtime newer than 1 day earlier'
+    check_file_stat -N $((SECONDS-TEST_STATS[13]-86400)) "/"
+    is $? 1 'stat() ctime newer than 1 day later'
+    check_file_stat -N $((SECONDS-TEST_STATS[13]+86400)) "/"
+    is $? 0 'stat() ctime newer than 1 day earlier'
+    check_file_stat -O $((SECONDS-TEST_STATS[13]-86400)) "/"
+    is $? 0 'stat() ctime newer than 1 day later'
+    check_file_stat -O $((SECONDS-TEST_STATS[13]+86400)) "/"
+    is $? 1 'stat() ctime newer than 1 day earlier'
 
 } ; unplan

@@ -6,6 +6,79 @@
 # $Id$
 #
 
+STAT_CMD='/bin/stat'
+STAT_FMT_ARGS='-c'
+NHC_STAT_FILES=( )
+NHC_STAT_MODE=( )
+NHC_STAT_BLOCKS=( )
+NHC_STAT_BLKSIZE=( )
+NHC_STAT_DEVNO=( )
+NHC_STAT_GID=( )
+NHC_STAT_GROUP=( )
+NHC_STAT_NLINKS=( )
+NHC_STAT_INODE=( )
+NHC_STAT_MNTPNT=( )
+NHC_STAT_REALNAME=( )
+NHC_STAT_SIZE=( )
+NHC_STAT_MAJOR=( )
+NHC_STAT_MINOR=( )
+NHC_STAT_UID=( )
+NHC_STAT_USER=( )
+NHC_STAT_ATIME=( )
+NHC_STAT_MTIME=( )
+NHC_STAT_CTIME=( )
+
+# Pull stat() data for a file and store in cache.
+function nhc_file_stat() {
+    local FNAME="$1" VAR="$2" ERR="$3"
+    local -a STINFO=( )
+    local IFS STAT_STR="" RET i
+
+    # Search cache for filename
+    for ((i = 0; i < ${#NHC_STAT_FILES[*]}; i++)); do
+        if [[ "$FNAME" == "${NHC_STAT_FILES[$i]}" ]]; then
+            eval $VAR=$i
+            return 0
+        fi
+    done
+
+    # If we make it here, it's not in the cache.
+    IFS=$'\f'
+    STINFO=( $($STAT_CMD $STAT_FMT_ARGS $'%a\f%b\f%B\f%D\f%g\f\"%G\"\f%h\f%i\f%m\f%N\f%s\f%t\f%T\f%u\f\"%U\"\f%X\f%Y\f%Z' "$FNAME") )
+    RET=$?
+    IFS=$' \t\n'
+
+    if [[ $RET -ne 0 ]]; then
+        eval $ERR="${STINFO[*]}"
+        return $RET
+    fi
+    NHC_STAT_FILES[$i]="$FNAME"
+    NHC_STAT_MODE[$i]="0${STINFO[0]}"
+    NHC_STAT_BLOCKS[$i]="${STINFO[1]}"
+    NHC_STAT_BLKSIZE[$i]="${STINFO[2]}"
+    NHC_STAT_DEVNO[$i]="0x${STINFO[3]}"
+    NHC_STAT_GID[$i]="${STINFO[4]}"
+    NHC_STAT_GROUP[$i]="${STINFO[5]}"
+    NHC_STAT_GROUP[$i]="${NHC_STAT_GROUP[$i]##\"}"
+    NHC_STAT_GROUP[$i]="${NHC_STAT_GROUP[$i]%%\"}"
+    NHC_STAT_NLINKS[$i]="${STINFO[6]}"
+    NHC_STAT_INODE[$i]="${STINFO[7]}"
+    NHC_STAT_MNTPNT[$i]="${STINFO[8]}"
+    NHC_STAT_REALNAME[$i]="${STINFO[9]}"
+    NHC_STAT_SIZE[$i]="${STINFO[10]}"
+    NHC_STAT_MAJOR[$i]="0x${STINFO[11]}"
+    NHC_STAT_MINOR[$i]="0x${STINFO[12]}"
+    NHC_STAT_UID[$i]="${STINFO[13]}"
+    NHC_STAT_USER[$i]="${STINFO[14]}"
+    NHC_STAT_USER[$i]="${NHC_STAT_USER[$i]##\"}"
+    NHC_STAT_USER[$i]="${NHC_STAT_USER[$i]%%\"}"
+    NHC_STAT_ATIME[$i]="${STINFO[15]}"
+    NHC_STAT_MTIME[$i]="${STINFO[16]}"
+    NHC_STAT_CTIME[$i]="${STINFO[17]}"
+    eval $VAR=$i
+    return 0
+}
+
 # Check to make sure the contents of a file ($1) match the expressions
 # given ($2-).  The check fails if any of the supplied expressions
 # fail to match the file's contents.  Matching is done line by line.
@@ -74,3 +147,202 @@ function check_file_contents() {
     return 2
 }
 
+# Check various attributes of one or more files using bash's built-in
+# "test" command (a.k.a. "[").  Any number of pairs of options and
+# filenames may be specified.  The check fails if any one of the
+# supplied arguments to the "test" command returns false.
+function check_file_test() {
+    local OP ARG RESULT
+
+    while [[ $# -ge 2 ]]; do
+        OP="$1"
+        ARG="$2"
+        shift 2
+
+        case "$OP" in
+            -[abcdefghkprstuwxOGLSN]) ;;
+            *) die 1 "$FUNCNAME:  Syntax error:  Invalid operator \"$OP\"." ; return 1 ;;
+        esac
+        eval test $OP "$ARG" $LOGFILE
+        RESULT=$?
+        if [[ $RESULT -ne 0 ]]; then
+            die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Check various aspects of the results of stat() on a file.
+function check_file_stat() {
+    local DEVNO="" GROUP="" CTIME_NEWER="" CTIME_OLDER="" MINOR="" USERID=""
+    local FGID="" MTIME_NEWER="" MTIME_OLDER="" MAJOR="" FUID="" MODE_IS=""
+    local MODE_MATCHES=""
+    local FNAME IDX RET ERR
+
+    nhc_common_get_unix_time   # Needed for mtime/ctime checks
+
+    OPTIND=1
+    while getopts ":D:G:M:N:O:T:U:d:g:m:n:o:t:u:" OPTION ; do
+        case "$OPTION" in
+            D) DEVNO="$OPTARG" ;;
+            G) GROUP="$OPTARG" ;;
+            M) MODE_MATCHES="$OPTARG" ;;
+            N) CTIME_NEWER="$OPTARG" ;;
+            O) CTIME_OLDER="$OPTARG" ;;
+            T) MINOR="$OPTARG" ;;
+            U) USERID="$OPTARG" ;;
+            d) DEVNO="$OPTARG" ;;
+            g) FGID="$OPTARG" ;;
+            m) MODE_IS="$OPTARG" ;;
+            n) MTIME_NEWER="$OPTARG" ;;
+            o) MTIME_OLDER="$OPTARG" ;;
+            t) MAJOR="$OPTARG" ;;
+            u) FUID="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    for FNAME in "$@" ; do
+        nhc_file_stat "$FNAME" IDX ERR
+        RET=$?
+        if [[ $RET -ne 0 ]]; then
+            die 1 "$FUNCNAME:  stat($FNAME) returned $RET:  $ERR"
+            return 1
+        fi
+    
+        if [[ -n "$CTIME_NEWER" ]]; then
+            if [[ -z "${NHC_STAT_CTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_CTIME[$IDX]} -lt $((SECONDS-CTIME_NEWER)) ]]; then
+                # File should be newer than $CTIME_NEWER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" ctime is not newer than ${CTIME_NEWER}s"
+                return 1
+            fi
+        fi
+        if [[ -n "$CTIME_OLDER" ]]; then
+            if [[ -z "${NHC_STAT_CTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_CTIME[$IDX]} -ge $((SECONDS-CTIME_OLDER)) ]]; then
+                # File should be older than $CTIME_OLDER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" ctime is not older than ${CTIME_OLDER}s"
+                return 1
+            fi
+        fi
+        if [[ -n "$DEVNO" ]]; then
+            if [[ -z "${NHC_STAT_DEVNO[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_DEVNO[$IDX]} -ne $DEVNO ]]; then
+                # File device number should be $DEVNO, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" device number is ${NHC_STAT_DEVNO[$IDX]}; should be $DEVNO"
+                return 1
+            fi
+        fi
+        if [[ -n "$FGID" ]]; then
+            if [[ -z "${NHC_STAT_GID[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ "${NHC_STAT_GID[$IDX]}" != "$FGID" ]]; then
+                # File should be owned by gid $FGID, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" GID is \"${NHC_STAT_GID[$IDX]}\"; should be \"${FGID}\""
+                return 1
+            fi
+        fi
+        if [[ -n "$FUID" ]]; then
+            if [[ -z "${NHC_STAT_UID[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ "${NHC_STAT_UID[$IDX]}" != "$FUID" ]]; then
+                # File should be owned by uid $FUID, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" UID is \"${NHC_STAT_UID[$IDX]}\"; should be \"${FUID}\""
+                return 1
+            fi
+        fi
+        if [[ -n "$GROUP" ]]; then
+            if [[ -z "${NHC_STAT_GROUP[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ "${NHC_STAT_GROUP[$IDX]}" != "$GROUP" ]]; then
+                # File should be owned by group $GROUP, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" groupname is \"${NHC_STAT_GROUP[$IDX]}\"; should be \"${GROUP}\""
+                return 1
+            fi
+        fi
+        if [[ -n "$MAJOR" ]]; then
+            if [[ -z "${NHC_STAT_MAJOR[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_MAJOR[$IDX]} -ne $MAJOR ]]; then
+                # Device file major number should be $MAJOR, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has device major number ${NHC_STAT_MAJOR[$IDX]}; should be $MAJOR"
+                return 1
+            fi
+        fi
+        if [[ -n "$MINOR" ]]; then
+            if [[ -z "${NHC_STAT_MINOR[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_MINOR[$IDX]} -ne $MINOR ]]; then
+                # Device file minor number should be $MINOR, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has device minor number ${NHC_STAT_MINOR[$IDX]}; should be $MINOR"
+                return 1
+            fi
+        fi
+        if [[ -n "$MODE_IS" ]]; then
+            if [[ -z "${NHC_STAT_MODE[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_MODE[$IDX]} -ne $MODE_IS ]]; then
+                # File permissions should exactly equal $MODE_IS, but they don't.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be $MODE_IS"
+                return 1
+            fi
+        fi
+        if [[ -n "$MODE_MATCHES" ]]; then
+            if [[ -z "${NHC_STAT_MODE[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ $((NHC_STAT_MODE[IDX] & MODE_MATCHES)) -ne $MODE_MATCHES ]]; then
+                # File permissions should include those specified in $MODE_MATCHES, but they don't.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be at least $MODE_MATCHES"
+                return 1
+            fi
+        fi
+        if [[ -n "$MTIME_NEWER" ]]; then
+            if [[ -z "${NHC_STAT_MTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_MTIME[$IDX]} -lt $((SECONDS-MTIME_NEWER)) ]]; then
+                # File should be newer than $MTIME_NEWER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" mtime is not newer than ${MTIME_NEWER}s"
+                return 1
+            fi
+        fi
+        if [[ -n "$MTIME_OLDER" ]]; then
+            if [[ -z "${NHC_STAT_MTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_MTIME[$IDX]} -ge $((SECONDS-MTIME_OLDER)) ]]; then
+                # File should be older than $MTIME_OLDER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" mtime is not older than ${MTIME_OLDER}s"
+                return 1
+            fi
+        fi
+        if [[ -n "$USERID" ]]; then
+            if [[ -z "${NHC_STAT_USER[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ "${NHC_STAT_USER[$IDX]}" != "$USERID" ]]; then
+                # File should be owned by user $USERID, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" username is \"${NHC_STAT_USER[$IDX]}\"; should be \"${USERID}\""
+                return 1
+            fi
+        fi
+    done
+    return 0
+}

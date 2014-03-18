@@ -154,8 +154,7 @@ function check_hw_cpuinfo() {
 # Check RAM size against minimum ($1) and maximum ($2) allowable size in kB.  To
 # require an exact amount of RAM, pass the same value for both parameters.
 function check_hw_physmem() {
-    local RAM_MIN=$1
-    local RAM_MAX=$2
+    local RAM_MIN="$1" RAM_MAX="$2" FUDGE="$3"
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
         nhc_hw_gather_data
@@ -163,12 +162,22 @@ function check_hw_physmem() {
 
     nhc_common_parse_size "$RAM_MIN" RAM_MIN
     nhc_common_parse_size "$RAM_MAX" RAM_MAX
+    if [[ -n "$FUDGE" ]]; then
+        if [[ "${FUDGE%%%}" != "$FUDGE" ]]; then
+            FUDGE="${FUDGE%%%}"
+            FUDGE=$((FUDGE*HW_RAM_TOTAL/100))
+        else
+            nhc_common_parse_size "$FUDGE" FUDGE
+        fi
+    else
+        FUDGE=0
+    fi
 
-    if [[ $HW_RAM_TOTAL -lt $RAM_MIN ]]; then
+    if [[ $((HW_RAM_TOTAL+FUDGE)) -lt $RAM_MIN ]]; then
         die 1 "Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
         return 1
     fi
-    if [[ $HW_RAM_TOTAL -gt $RAM_MAX ]]; then
+    if [[ $((HW_RAM_TOTAL-FUDGE)) -gt $RAM_MAX ]]; then
         die 1 "Actual RAM size ($HW_RAM_TOTAL kB) greater than maximum allowed ($RAM_MAX kB)."
         return 1
     fi
@@ -178,8 +187,7 @@ function check_hw_physmem() {
 # Check swap size against minimum ($1) and maximum ($2) allowable size in kB.  To
 # require an exact amount of swap, pass the same value for both parameters.
 function check_hw_swap() {
-    local SWAP_MIN=$1
-    local SWAP_MAX=$2
+    local SWAP_MIN="$1" SWAP_MAX="$2" FUDGE="$3"
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
         nhc_hw_gather_data
@@ -187,12 +195,22 @@ function check_hw_swap() {
 
     nhc_common_parse_size "$SWAP_MIN" SWAP_MIN
     nhc_common_parse_size "$SWAP_MAX" SWAP_MAX
+    if [[ -n "$FUDGE" ]]; then
+        if [[ "${FUDGE%%%}" != "$FUDGE" ]]; then
+            FUDGE="${FUDGE%%%}"
+            FUDGE=$((FUDGE*HW_SWAP_TOTAL/100))
+        else
+            nhc_common_parse_size "$FUDGE" FUDGE
+        fi
+    else
+        FUDGE=0
+    fi
 
-    if [[ $HW_SWAP_TOTAL -lt $SWAP_MIN ]]; then
+    if [[ $((HW_SWAP_TOTAL+FUDGE)) -lt $SWAP_MIN ]]; then
         die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
         return 1
     fi
-    if [[ $HW_SWAP_TOTAL -gt $SWAP_MAX ]]; then
+    if [[ $((HW_SWAP_TOTAL-FUDGE)) -gt $SWAP_MAX ]]; then
         die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) greater than maximum allowed ($SWAP_MAX kB)."
         return 1
     fi
@@ -201,8 +219,7 @@ function check_hw_swap() {
 # Check total memory (RAM + swap) against minimum ($1) and maximum ($2) allowable size
 # in kB.  To require an exact amount of memory, pass the same value for both parameters.
 function check_hw_mem() {
-    local MEM_MIN=$1
-    local MEM_MAX=$2
+    local MEM_MIN="$1" MEM_MAX="$2" FUDGE="$3"
     local MEM_TOTAL
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
@@ -211,13 +228,23 @@ function check_hw_mem() {
 
     nhc_common_parse_size "$MEM_MIN" MEM_MIN
     nhc_common_parse_size "$MEM_MAX" MEM_MAX
+    if [[ -n "$FUDGE" ]]; then
+        if [[ "${FUDGE%%%}" != "$FUDGE" ]]; then
+            FUDGE="${FUDGE%%%}"
+        else
+            nhc_common_parse_size "$FUDGE" FUDGE
+        fi
+    else
+        FUDGE=0
+    fi
 
     MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
-    if [[ $MEM_TOTAL -lt $MEM_MIN ]]; then
+    FUDGE=$((FUDGE*MEM_TOTAL/100))
+    if [[ $((MEM_TOTAL+FUDGE)) -lt $MEM_MIN ]]; then
         die 1 "Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
         return 1
     fi
-    if [[ $MEM_TOTAL -gt $MEM_MAX ]]; then
+    if [[ $((MEM_TOTAL-FUDGE)) -gt $MEM_MAX ]]; then
         die 1 "Actual system memory ($MEM_TOTAL kB) greater than maximum allowed ($MEM_MAX kB)."
         return 1
     fi

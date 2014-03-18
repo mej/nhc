@@ -112,7 +112,7 @@ plan $((3+5+5+3+9+6+8+9+22)) "ww_file.nhc" && {
     is $? 0 'Bash process substitution file is owned by gid of $$.'
 
     # Check file stats and compare to expected values
-    TEST_STATS=( `/bin/stat -c '%a %b %B %D %g %h %i %m %s %t %T %u %Y %Z' /` )
+    TEST_STATS=( `/usr/bin/stat -c '%a %b %B %D %g %h %i %m %s %t %T %u %Y %Z' /` )
     check_file_stat -m 0123 "/"
     is $? 1 'stat() exact permissions, unlikely value'
     check_file_stat -m 0${TEST_STATS[0]} "/"

@@ -6,7 +6,7 @@
 # $Id$
 #
 
-STAT_CMD='/bin/stat'
+STAT_CMD='/usr/bin/stat'
 STAT_FMT_ARGS='-c'
 NHC_STAT_FILES=( )
 NHC_STAT_MODE=( )

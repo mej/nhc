@@ -113,7 +113,6 @@ function nhcmain_init_env() {
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
     SYSCONFIGDIR="/etc/sysconfig"
     LIBEXECDIR="/usr/libexec"
-    RESULTFILE="/var/run/nhc.status"
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
     elif [[ -z "$HOSTNAME" ]]; then
@@ -125,13 +124,14 @@ function nhcmain_init_env() {
     NHC_PID=$$
     WATCHDOG_PID=0
     FAIL_CNT=0
-    export PATH SYSCONFIGDIR LIBEXECDIR RESULTFILE HOSTNAME HOSTNAME_S RET LOGGER_TEXT NHC_PID WATCHDOG_PID FAIL_CNT
+    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT NHC_PID WATCHDOG_PID FAIL_CNT
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT MAX_SYS_UID NHC_RM NHC_CHECK_ALL
+    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT
+    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -222,13 +222,14 @@ function nhcmain_load_sysconfig() {
 function nhcmain_finalize_env() {
     # Set some variables relative to possible /etc/sysconfig/nhc
     # modifications.  Users may have overridden some of these.
-    CONFDIR="${CONFDIR:-/etc/$NAME}"
+    CONFDIR="${CONFDIR:-/etc/nhc}"
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
     INCDIR="${INCDIR:-$CONFDIR/scripts}"
-    HELPERDIR="${HELPERDIR:-$LIBEXECDIR/$NAME}"
+    HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
     ONLINE_NODE="${ONLINE_NODE:-$HELPERDIR/node-mark-online}"
     OFFLINE_NODE="${OFFLINE_NODE:-$HELPERDIR/node-mark-offline}"
     LOGFILE="${LOGFILE:->>/var/log/$NAME.log}"
+    RESULTFILE="${RESULTFILE:-/var/run/nhc/$NAME.status}"
     DEBUG=${DEBUG:-0}
     TS=${TS:-$DEBUG}
     SILENT=${SILENT:-0}

@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
+plan $((11+7+13+13+13+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
@@ -66,6 +66,18 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 0 "RAM range minimum equal to actual physical RAM size"
     check_hw_physmem 98GB 99GB
     is $? 1 "RAM range minimum is above actual physical RAM size"
+    check_hw_physmem 32g 32g 10%
+    is $? 0 "RAM range includes actual physical RAM size given 10% fudge factor"
+    check_hw_physmem 32g 32g 0%
+    is $? 1 "RAM range does not include actual physical RAM size given 0% fudge factor"
+    check_hw_physmem 42g 48g 50%
+    is $? 0 "RAM range includes actual physical RAM size given 50% fudge factor (low end)"
+    check_hw_physmem 24g 24g 50%
+    is $? 0 "RAM range includes actual physical RAM size given 50% fudge factor (high end)"
+    check_hw_physmem 48g 64g 10%
+    is $? 1 "RAM range does not include actual physical RAM size given 10% fudge factor"
+    check_hw_physmem 12g 24g 20%
+    is $? 1 "RAM range does not include actual physical RAM size given 20% fudge factor"
 
     # Check ranges of swap:  0, exact, max below, at max, in range, at min, min above
     check_hw_swap 0 0
@@ -82,6 +94,18 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 0 "Swap range minimum equal to actual swap size"
     check_hw_swap 999999999 99G
     is $? 1 "Swap range minimum is above actual swap size"
+    check_hw_swap 18g 18g 10%
+    is $? 0 "Swap range includes actual swap size given 10% fudge factor"
+    check_hw_swap 18g 18g 0%
+    is $? 1 "Swap range does not include actual swap size given 0% fudge factor"
+    check_hw_swap 22g 28g 50%
+    is $? 0 "Swap range includes actual swap size given 50% fudge factor (low end)"
+    check_hw_swap 5g 15g 50%
+    is $? 0 "Swap range includes actual swap size given 50% fudge factor (high end)"
+    check_hw_swap 24g 48g 10%
+    is $? 1 "Swap range does not include actual swap size given 10% fudge factor"
+    check_hw_swap 4g 8g 20%
+    is $? 1 "Swap range does not include actual swap size given 20% fudge factor"
 
     # Check ranges of memory:  0, exact, max below, at max, in range, at min, min above
     check_hw_mem 0 0
@@ -98,6 +122,18 @@ plan $((11+7+7+7+7+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 0 "Memory range minimum equal to actual memory size"
     check_hw_mem 99999999 99G
     is $? 1 "Memory range minimum is above actual memory size"
+    check_hw_mem 50g 50g 10%
+    is $? 0 "Memory range includes actual memory size given 10% fudge factor"
+    check_hw_mem 50g 50g 0%
+    is $? 1 "Memory range does not include actual memory size given 0% fudge factor"
+    check_hw_mem 60g 72g 50%
+    is $? 0 "Memory range includes actual memory size given 50% fudge factor (low end)"
+    check_hw_mem 24g 32g 50%
+    is $? 0 "Memory range includes actual memory size given 50% fudge factor (high end)"
+    check_hw_mem 72g 84g 10%
+    is $? 1 "Memory range does not include actual memory size given 10% fudge factor"
+    check_hw_mem 12g 24g 20%
+    is $? 1 "Memory range does not include actual memory size given 20% fudge factor"
 
     # Check free RAM minima:  0, below actual, exact, above actual
     check_hw_physmem_free 0

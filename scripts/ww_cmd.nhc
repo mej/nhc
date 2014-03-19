@@ -1,0 +1,13 @@
+# NHC - Warewulf Command/Subprogram Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 19 March 2014
+#
+# $Id$
+#
+
+# Check the output of a command for one or more matching strings.  A
+# required return code may also be supplied.
+function check_cmd_output() {
+    :
+}

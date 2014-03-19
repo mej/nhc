@@ -1,0 +1,9 @@
+# Tests for ww_cmd.nhc
+#
+# $Id$
+#
+
+plan $((1+0)) "ww_cmd.nhc" && {
+    is "`type -t check_cmd_output 2>&1`" 'function' 'check_cmd_output() loaded properly'
+    
+} ; unplan

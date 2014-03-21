@@ -7,20 +7,18 @@
 #
 
 JOBUSERS=( )
-PBS_SERVER_HOME="${PBS_SERVER_HOME:-/var/spool/torque}"
-JOBFILE_PATH="${JOBFILE_PATH:-$PBS_SERVER_HOME/mom_priv/jobs}"
 NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local JOBFILE
-    local JOBUSER
-    local LINE
-    local -a JOBLIST
+    local IFS JOBFILE JOBUSER LINE
+    local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
     JOBUSERS=( $NHC_AUTH_USERS )
     if [[ "$NHC_RM" == "pbs" ]]; then
+        PBS_SERVER_HOME="${PBS_SERVER_HOME:-/var/spool/torque}"
+        JOBFILE_PATH="${JOBFILE_PATH:-$PBS_SERVER_HOME/mom_priv/jobs}"
         JOBLIST=( $JOBFILE_PATH/*.JB )
         dbg "Found ${#JOBLIST[*]} job files in $JOBFILE_PATH"
         if [[ ${#JOBLIST[*]} -eq 1 && ! -f "${JOBLIST[0]}" && -d $PWD/jobs ]]; then
@@ -43,8 +41,17 @@ function nhc_job_find_users() {
             done < "$JOBFILE"
         done 2>/dev/null || :
     elif [[ "$NHC_RM" == "slurm" ]]; then
-        # FIXME:  SLURM not yet supported
-        :
+        SLURM_SERVER_HOME="${SLURM_SERVER_HOME:-/var/spool/slurmd}"
+        JOBFILE_PATH="${JOBFILE_PATH:-$SLURM_SERVER_HOME}"
+        IFS=$'\n'
+        USERLIST=( $(${STAT_CMD:-/usr/bin/stat} ${STAT_FMT_ARGS:--c} %U $JOBFILE_PATH/job*/slurm_script) )
+        IFS=$' \t\n'
+        dbg "Found ${#USERLIST[*]} job files in $JOBFILE_PATH"
+        for JOBUSER in "${USERLIST[@]}" ; do
+            if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
+                JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
+            fi
+        done
     elif [[ "$NHC_RM" == "sge" ]]; then
         # FIXME:  SGE not yet supported
         :
@@ -57,8 +64,7 @@ function nhc_job_find_users() {
 # Check to see if a user ($1) is authorized to have processes on this node.
 # Returns true (0) if user is authorized, false (non-zero) otherwise.
 function nhc_job_user_auth() {
-    local JOBUSER="$1"
-    local JOBUSER_UID="$2"
+    local JOBUSER="$1" JOBUSER_UID="$2"
     local i
 
     # Initialize the data array if needed.

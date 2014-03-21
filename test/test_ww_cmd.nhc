@@ -3,15 +3,17 @@
 # $Id$
 #
 
-plan $((2+1+1)) "ww_cmd.nhc" && {
+plan $((2+2+1)) "ww_cmd.nhc" && {
     is "`type -t check_cmd_output 2>&1`" 'function' 'check_cmd_output() loaded properly'
     is "`type -t check_cmd_status 2>&1`" 'function' 'check_cmd_status() loaded properly'
 
     # Needed to bypass sanity check on timeout values.
     export TIMEOUT=99999
 
-    check_cmd_output -t 1 -e "echo Test" "/Test/"
+    check_cmd_output -t 1 -m "/Test/" echo Test
     is $? 0 "Simple command output match"
+    check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+    is $? 0 "Multiple command output match, 3 positive"
 
     check_cmd_status -t 1 true
     is $? 0 "Simple command status test"

@@ -12,13 +12,15 @@ function check_cmd_output() {
     local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME"
     local IFS PID TIMER RET CMD
     local LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
-    local -a LINES MATCHES MATCHED
+    local -a CMD_LIST LINES MATCHES MATCHED
 
+    MATCHES=( )
     OPTIND=1
-    while getopts ":c:e:r:t:" OPTION ; do
+    while getopts ":C:e:m:r:t:" OPTION ; do
         case "$OPTION" in
-            c) CHECKNAME="$OPTARG" ;;
+            C) CHECKNAME="$OPTARG" ;;  # INTERNAL USE ONLY
             e) CMD="$OPTARG" ;;
+            m) MATCHES[${#MATCHES[*]}]="$OPTARG" ;;
             r) CMD_RETVAL="$OPTARG" ;;
             t) CMD_TIMEOUT="$OPTARG" ;;
             :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
@@ -26,10 +28,16 @@ function check_cmd_output() {
         esac
     done
     shift $((OPTIND-1))
-    MATCHES=( "$@" )
 
-    if [[ -z "$CMD" ]]; then
-        die 1 "$CHECKNAME:  Syntax error:  No command specified (use -e)"
+    if [[ -n "$CMD" ]]; then
+        CMD_LIST=( $CMD )
+    else
+        CMD_LIST=( "$@" )
+        CMD="${CMD_LIST[*]}"
+    fi
+
+    if [[ -z "${CMD_LIST[*]}" ]]; then
+        die 1 "$CHECKNAME:  Syntax error:  No command specified"
         return 1
     elif [[ -n "$CMD_TIMEOUT" && $CMD_TIMEOUT -gt $TIMEOUT ]]; then
         die 1 "$CHECKNAME:  Command timeout $CMD_TIMEOUT exceeds NHC timeout $TIMEOUT"
@@ -49,14 +57,15 @@ function check_cmd_output() {
     # FIXME:  We can't do this as a pipeline because the contents of
     # the while loop will execute in a subshell, and all our variable
     # values will get lost.
-    # nhc_cmd_with_timeout $CMD_TIMEOUT $CMD | while read LINE ; do
+    # nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}" | while read LINE ; do
     #
     # Once we can drop support for RHEL4 and 5, we can use "coproc"
     # For now, this means we have to run the command and grab all its
     # output all in 1 go, so commands with lengthy output must be
     # avoided.
     IFS=$'\n'
-    LINES=( $(nhc_cmd_with_timeout $CMD_TIMEOUT $CMD) )
+    LINES=( $(nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}") )
+    RET=$?
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
@@ -79,13 +88,12 @@ function check_cmd_output() {
             fi
         done
     done
-    RET=$?
 
     # None of the negated matches matched, so add them to our success count.
     ((MATCH_CNT += NEG_MATCH_CNT))
 
     if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
-        die 1 "$CHECKNAME:  Command \"$@\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        die 1 "$CHECKNAME:  Command \"$CMD\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
         return 1
     elif [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
         # All matches (some positive, some negative) were successful.  Return.
@@ -118,9 +126,9 @@ function check_cmd_status() {
     local CMD_TIMEOUT=5 CMD_RETVAL PID TIMER RET CHECKNAME="$FUNCNAME"
 
     OPTIND=1
-    while getopts ":c:r:t:" OPTION ; do
+    while getopts ":C:r:t:" OPTION ; do
         case "$OPTION" in
-            c) CHECKNAME="$OPTARG" ;;
+            C) CHECKNAME="$OPTARG" ;;  # INTERNAL USE ONLY
             r) CMD_RETVAL="$OPTARG" ;;
             t) CMD_TIMEOUT="$OPTARG" ;;
             :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;

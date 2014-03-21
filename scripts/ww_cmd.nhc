@@ -10,7 +10,9 @@
 # required return code may also be supplied.
 function check_cmd_output() {
     local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME"
-    local PID TIMER RET CMD LINE
+    local IFS PID TIMER RET CMD
+    local LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
+    local -a LINES MATCHES MATCHED
 
     OPTIND=1
     while getopts ":c:e:r:t:" OPTION ; do
@@ -24,6 +26,7 @@ function check_cmd_output() {
         esac
     done
     shift $((OPTIND-1))
+    MATCHES=( "$@" )
 
     if [[ -z "$CMD" ]]; then
         die 1 "$CHECKNAME:  Syntax error:  No command specified (use -e)"
@@ -33,16 +36,77 @@ function check_cmd_output() {
         return 1
     fi
 
-    nhc_cmd_with_timeout $CMD_TIMEOUT $CMD | while read LINE ; do
-        :
+    # Initialize a parallel array for tracking which matches have been found.
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
+            MATCHED[$i]=1
+            ((NEG_MATCH_CNT++))
+        else
+            MATCHED[$i]=0
+        fi
+    done
+
+    # FIXME:  We can't do this as a pipeline because the contents of
+    # the while loop will execute in a subshell, and all our variable
+    # values will get lost.
+    # nhc_cmd_with_timeout $CMD_TIMEOUT $CMD | while read LINE ; do
+    #
+    # Once we can drop support for RHEL4 and 5, we can use "coproc"
+    # For now, this means we have to run the command and grab all its
+    # output all in 1 go, so commands with lengthy output must be
+    # avoided.
+    IFS=$'\n'
+    LINES=( $(nhc_cmd_with_timeout $CMD_TIMEOUT $CMD) )
+    IFS=$' \t\n'
+
+    # Iterate through $LINES[] array to gather process data.
+    for ((LINENO = 0; LINENO <= ${#LINES[*]}; LINENO++)); do
+        for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+            if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
+                # Match expression is negated.  Fail if the line matches this expression.
+                if mcheck "${LINES[$LINENO]}" "${MATCHES[$i]:1}" ; then
+                    die 1 "$CHECKNAME:  Command \"$CMD\" output line $((LINENO+1)) matches \"${MATCHES[$i]:1}\"."
+                    return 1
+                fi
+            elif [ ${MATCHED[$i]} -eq 0 ] && mcheck "${LINES[$LINENO]}" "${MATCHES[$i]}" ; then
+                MATCHED[$i]=1
+                ((MATCH_CNT++))
+                if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
+                    # All match expression(s) are positive and have
+                    # matched successfully.  Stop processing output.
+                    break
+                fi
+            fi
+        done
     done
     RET=$?
+
+    # None of the negated matches matched, so add them to our success count.
+    ((MATCH_CNT += NEG_MATCH_CNT))
 
     if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
         die 1 "$CHECKNAME:  Command \"$@\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
         return 1
+    elif [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
+        # All matches (some positive, some negative) were successful.  Return.
+        return 0
     fi
-    return 0
+
+    # At least one expression failed to match.  Locate the first such expression.
+    if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
+        # Special case for cleaner output.
+        die 1 "$CHECKNAME:  Command \"$CMD\" output failed to match \"${MATCHES[0]}\"."
+        return 1
+    fi
+
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        if [[ ${MATCHED[$i]} == 0 ]]; then
+            die 1 "$CHECKNAME:  Command \"$CMD\" output matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
+            return 1
+        fi
+    done
+    die 2 "No unmatched expressions found for command \"$CMD\" output but $CHECKNAME() failed to terminate."
+    return 2
 }
 
 # Execute a command and evaluate only its return code.  Output is

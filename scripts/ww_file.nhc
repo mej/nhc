@@ -108,7 +108,7 @@ function check_file_contents() {
             if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
                 # Match expression is negated.  Fail if the line matches this expression.
                 if mcheck "$LINE" "${MATCHES[$i]:1}" ; then
-                    die 1 "File \"$FILENAME\" line $LINENO matches \"${MATCHES[$i]:1}\"."
+                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENO matches \"${MATCHES[$i]:1}\"."
                     return 1
                 fi
             elif [ ${MATCHED[$i]} -eq 0 ] && mcheck "$LINE" "${MATCHES[$i]}" ; then
@@ -133,13 +133,13 @@ function check_file_contents() {
     # At least one expression failed to match.  Locate the first such expression.
     if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
         # Special case for cleaner output.
-        die 1 "File \"$FILENAME\" failed to match \"${MATCHES[0]}\"."
+        die 1 "$FUNCNAME:  File \"$FILENAME\" failed to match \"${MATCHES[0]}\"."
         return 1
     fi
 
     for ((i = 0; i < ${#MATCHES[*]}; i++)); do
         if [[ ${MATCHED[$i]} == 0 ]]; then
-            die 1 "File \"$FILENAME\" matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
+            die 1 "$FUNCNAME:  File \"$FILENAME\" matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
             return 1
         fi
     done

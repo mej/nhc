@@ -540,7 +540,7 @@ function check_ps_unauth_users() {
         if [[ -z "$THIS_UID" ]]; then
             nhc_common_get_uid "$THIS_USER" THIS_UID
         fi
-        UNAUTH_MSG="Unauthorized user $THIS_USER ($THIS_UID) running process $THIS_CMD ($THIS_PID)."
+        UNAUTH_MSG="$FUNCNAME:  Unauthorized user $THIS_USER ($THIS_UID) running process $THIS_CMD ($THIS_PID)."
         for ACTION in $ACTIONS ; do
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;
@@ -587,7 +587,7 @@ function check_ps_userproc_lineage() {
             continue
         fi
         # Not a child of pbs_mom.  Take action.
-        UNAUTH_MSG="Rogue process $THIS_CMD ($THIS_PID) from user $THIS_USER ($THIS_UID) detected."
+        UNAUTH_MSG="$FUNCNAME:  Rogue process $THIS_CMD ($THIS_PID) from user $THIS_USER ($THIS_UID) detected."
         for ACTION in $ACTIONS ; do
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;
@@ -673,7 +673,7 @@ function check_ps_kswapd() {
 
     if [[ $KSWAPD_IMB -eq 1 ]]; then
         # NUMA imbalance detected.  Take action.
-        KSWAPD_MSG="NUMA imbalance detected among PIDs ${KSWAPD_PROC[*]}."
+        KSWAPD_MSG="$FUNCNAME:  NUMA imbalance detected among PIDs ${KSWAPD_PROC[*]}."
         for ACTION in $ACTIONS ; do
             case "$ACTION" in
                 log )    log "$KSWAPD_MSG" ;;
@@ -698,7 +698,7 @@ function check_loadavg() {
 
     for ((i=0; i<${#LOADAVG[*]}; i++)); do
         if [[ -n "${LOADLIMS[$i]}" && "${LOADAVG[$i]}" -ge "${LOADLIMS[$i]}" ]]; then
-            die 1 "${INFO[$i]}-minute load average too high:  ${LOADAVG[$i]} >= ${LOADLIMS[$i]}"
+            die 1 "$FUNCNAME:  ${INFO[$i]}-minute load average too high:  ${LOADAVG[$i]} >= ${LOADLIMS[$i]}"
             return 1
         fi
     done

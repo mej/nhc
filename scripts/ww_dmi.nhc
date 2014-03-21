@@ -118,8 +118,8 @@ function check_dmi_data_match() {
             h) HANDLES=( $OPTARG ) ;;
             t) TYPE="$OPTARG" ;;
             n) NEG=1 ;;
-            :) die 1 "Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "Invalid option:  -$OPTARG" ; return 1 ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -156,7 +156,7 @@ function check_dmi_data_match() {
     fi
     if [[ ${#HANDLES[*]} == 0 ]]; then
         # No handles are valid for the given parameters
-        die 1 "No valid DMI handles found"
+        die 1 "$FUNCNAME:  No valid DMI handles found"
         return 1
     fi
 
@@ -174,7 +174,7 @@ function check_dmi_data_match() {
                 # If the match is negated, we're making sure a matching line *isn't* there.
                 # Otherwise, we're making sure it *is* there.
                 if [[ $NEG == 1 ]]; then
-                    die 1 "Match found for $MATCH:  ${TMPDATA[$j]}"
+                    die 1 "$FUNCNAME:  Match found for $MATCH:  ${TMPDATA[$j]}"
                     return 1
                 else
                     return 0
@@ -187,7 +187,7 @@ function check_dmi_data_match() {
     if [[ $NEG == 1 ]]; then
         return 0
     else
-        die 1 "No match found for $MATCH"
+        die 1 "$FUNCNAME:  No match found for $MATCH"
         return 1
     fi
 }
@@ -212,7 +212,7 @@ function check_dmi_raw_data_match() {
             # If the match is negated, we're making sure a matching line *isn't* there.
             # Otherwise, we're making sure it *is* there.
             if [[ $NEG == 1 ]]; then
-                die 1 "Match found for $MATCH:  ${DMI_RAW_DATA[$i]}"
+                die 1 "$FUNCNAME:  Match found for $MATCH:  ${DMI_RAW_DATA[$i]}"
                 return 1
             else
                 return 0
@@ -224,7 +224,7 @@ function check_dmi_raw_data_match() {
     if [[ $NEG == 1 ]]; then
         return 0
     else
-        die 1 "No match found for $MATCH"
+        die 1 "$FUNCNAME:  No match found for $MATCH"
         return 1
     fi
 }

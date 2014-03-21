@@ -137,15 +137,15 @@ function check_hw_cpuinfo() {
     fi
 
     if [[ -n "$SOCKETS" && $SOCKETS -ne $HW_SOCKETS ]]; then
-        die 1 "Actual CPU socket count ($HW_SOCKETS) does not match expected ($SOCKETS)."
+        die 1 "$FUNCNAME:  Actual CPU socket count ($HW_SOCKETS) does not match expected ($SOCKETS)."
         return 1
     fi
     if [[ -n "$CORES" && $CORES -ne $HW_CORES ]]; then
-        die 1 "Actual CPU core count ($HW_CORES) does not match expected ($CORES)."
+        die 1 "$FUNCNAME:  Actual CPU core count ($HW_CORES) does not match expected ($CORES)."
         return 1
     fi
     if [[ -n "$THREADS" && $THREADS -ne $HW_THREADS ]]; then
-        die 1 "Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
+        die 1 "$FUNCNAME:  Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
         return 1
     fi
     return 0
@@ -174,11 +174,11 @@ function check_hw_physmem() {
     fi
 
     if [[ $((HW_RAM_TOTAL+FUDGE)) -lt $RAM_MIN ]]; then
-        die 1 "Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
+        die 1 "$FUNCNAME:  Actual RAM size ($HW_RAM_TOTAL kB) less than minimum allowed ($RAM_MIN kB)."
         return 1
     fi
     if [[ $((HW_RAM_TOTAL-FUDGE)) -gt $RAM_MAX ]]; then
-        die 1 "Actual RAM size ($HW_RAM_TOTAL kB) greater than maximum allowed ($RAM_MAX kB)."
+        die 1 "$FUNCNAME:  Actual RAM size ($HW_RAM_TOTAL kB) greater than maximum allowed ($RAM_MAX kB)."
         return 1
     fi
     return 0
@@ -207,11 +207,11 @@ function check_hw_swap() {
     fi
 
     if [[ $((HW_SWAP_TOTAL+FUDGE)) -lt $SWAP_MIN ]]; then
-        die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
+        die 1 "$FUNCNAME:  Actual SWAP size ($HW_SWAP_TOTAL kB) less than minimum allowed ($SWAP_MIN kB)."
         return 1
     fi
     if [[ $((HW_SWAP_TOTAL-FUDGE)) -gt $SWAP_MAX ]]; then
-        die 1 "Actual SWAP size ($HW_SWAP_TOTAL kB) greater than maximum allowed ($SWAP_MAX kB)."
+        die 1 "$FUNCNAME:  Actual SWAP size ($HW_SWAP_TOTAL kB) greater than maximum allowed ($SWAP_MAX kB)."
         return 1
     fi
 }
@@ -241,11 +241,11 @@ function check_hw_mem() {
     MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
     FUDGE=$((FUDGE*MEM_TOTAL/100))
     if [[ $((MEM_TOTAL+FUDGE)) -lt $MEM_MIN ]]; then
-        die 1 "Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
+        die 1 "$FUNCNAME:  Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
         return 1
     fi
     if [[ $((MEM_TOTAL-FUDGE)) -gt $MEM_MAX ]]; then
-        die 1 "Actual system memory ($MEM_TOTAL kB) greater than maximum allowed ($MEM_MAX kB)."
+        die 1 "$FUNCNAME:  Actual system memory ($MEM_TOTAL kB) greater than maximum allowed ($MEM_MAX kB)."
         return 1
     fi
 }
@@ -261,7 +261,7 @@ function check_hw_physmem_free() {
     nhc_common_parse_size "$RAM_MINFREE" RAM_MINFREE
 
     if [[ $HW_RAM_FREE -lt $RAM_MINFREE ]]; then
-        die 1 "Not enough RAM free ($HW_RAM_FREE kB < $RAM_MINFREE kB)."
+        die 1 "$FUNCNAME:  Not enough RAM free ($HW_RAM_FREE kB < $RAM_MINFREE kB)."
         return 1
     fi
     return 0
@@ -278,7 +278,7 @@ function check_hw_swap_free() {
     nhc_common_parse_size "$SWAP_MINFREE" SWAP_MINFREE
 
     if [[ $HW_SWAP_FREE -lt $SWAP_MINFREE ]]; then
-        die 1 "Not enough swap free ($HW_SWAP_FREE kB < $SWAP_MINFREE kB)."
+        die 1 "$FUNCNAME:  Not enough swap free ($HW_SWAP_FREE kB < $SWAP_MINFREE kB)."
         return 1
     fi
     return 0
@@ -297,7 +297,7 @@ function check_hw_mem_free() {
 
     MEM_FREE=$((HW_RAM_FREE + HW_SWAP_FREE))
     if [[ $MEM_FREE -lt $MEM_MINFREE ]]; then
-        die 1 "Not enough free memory ($MEM_FREE kB < $MEM_MINFREE kB)."
+        die 1 "$FUNCNAME:  Not enough free memory ($MEM_FREE kB < $MEM_MINFREE kB)."
         return 1
     fi
     return 0
@@ -330,7 +330,7 @@ function check_hw_ib() {
         RATE=", $RATE Gb/sec"
     fi
 
-    die 1 "No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
+    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
     return 1
 }
 
@@ -359,7 +359,7 @@ function check_hw_gm() {
         fi
     done
 
-    die 1 "GM device $DEV not active, either driver is not loaded, or interface not created."
+    die 1 "$FUNCNAME:  GM device $DEV not active, either driver is not loaded, or interface not created."
     return 1
 }
 
@@ -378,7 +378,7 @@ function check_hw_eth() {
         fi
     done
 
-    die 1 "Ethernet device $DEV not detected."
+    die 1 "$FUNCNAME:  Ethernet device $DEV not detected."
     return 1
 }
 
@@ -395,6 +395,6 @@ function check_hw_mcelog() {
         return 0
     fi
     log "check_hw_mcelog():  MCEs detected:  $HW_MCELOG_ERRS"
-    die 1 "MCEs detected in log."
+    die 1 "$FUNCNAME:  MCEs detected in log."
     return 1
 }

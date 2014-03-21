@@ -514,3 +514,16 @@ function nhc_common_get_unix_time() {
         SECONDS=$((ELAPSED_SECONDS+NOW))
     fi
 }
+
+# Run a subcommand with a timeout
+function nhc_cmd_with_timeout() {
+    local RET
+
+    export NHC_TO="$1"
+    shift
+    exec 3>&2 2>/dev/null
+    $SHELL -c '( for ((s=NHC_TO; s>0; s--)); do sleep 1 ; kill -0 $$ || exit 0 ; done ; kill -s SIGTERM $$ && kill -0 $$ || exit 0 ; sleep 1 ; kill -s SIGKILL $$ ) >&/dev/null & exec "$@"' $1 "$@"
+    RET=$?
+    exec 2>&3 3>&-
+    return $RET
+}

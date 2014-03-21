@@ -9,5 +9,76 @@
 # Check the output of a command for one or more matching strings.  A
 # required return code may also be supplied.
 function check_cmd_output() {
-    :
+    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME"
+    local PID TIMER RET CMD LINE
+
+    OPTIND=1
+    while getopts ":c:e:r:t:" OPTION ; do
+        case "$OPTION" in
+            c) CHECKNAME="$OPTARG" ;;
+            e) CMD="$OPTARG" ;;
+            r) CMD_RETVAL="$OPTARG" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [[ -z "$CMD" ]]; then
+        die 1 "$CHECKNAME:  Syntax error:  No command specified (use -e)"
+        return 1
+    elif [[ -n "$CMD_TIMEOUT" && $CMD_TIMEOUT -gt $TIMEOUT ]]; then
+        die 1 "$CHECKNAME:  Command timeout $CMD_TIMEOUT exceeds NHC timeout $TIMEOUT"
+        return 1
+    fi
+
+    nhc_cmd_with_timeout $CMD_TIMEOUT $CMD | while read LINE ; do
+        :
+    done
+    RET=$?
+
+    if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
+        die 1 "$CHECKNAME:  Command \"$@\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        return 1
+    fi
+    return 0
+}
+
+# Execute a command and evaluate only its return code.  Output is
+# suppressed.  Granted, this could be done via check_cmd_output()
+# above, but for programs which generate huge amounts of output (like
+# a tar, or a compilation), suppressing output or redirecting it to
+# /dev/null is immensely faster than parsing it in bash.
+function check_cmd_status() {
+    local CMD_TIMEOUT=5 CMD_RETVAL PID TIMER RET CHECKNAME="$FUNCNAME"
+
+    OPTIND=1
+    while getopts ":c:r:t:" OPTION ; do
+        case "$OPTION" in
+            c) CHECKNAME="$OPTARG" ;;
+            r) CMD_RETVAL="$OPTARG" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [[ -n "$CMD_TIMEOUT" && $CMD_TIMEOUT -gt $TIMEOUT ]]; then
+        die 1 "$CHECKNAME:  Command timeout $CMD_TIMEOUT exceeds NHC timeout $TIMEOUT"
+        return 1
+    fi
+
+    "$@" </dev/null >&/dev/null &
+    PID=$!
+    nhcmain_watchdog_timer "$CMD_TIMEOUT" "$PID" </dev/null >&/dev/null &
+    wait $PID
+    RET=$?
+
+    if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
+        die 1 "$CHECKNAME:  Command \"$@\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        return 1
+    fi
+    return 0
 }

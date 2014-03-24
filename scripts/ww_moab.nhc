@@ -1,0 +1,22 @@
+# NHC - Moab/TORQUE Status Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 24 March 2014
+#
+# $Id$
+#
+
+# Examine output of "mdiag -S -v" for anomalies.
+function check_moab_sched() {
+    :
+}
+
+# Examine output of "mdiag -R -v" for anomalies.
+function check_moab_rm() {
+    :
+}
+
+# Check TORQUE for responsiveness and server configuration errors.
+function check_moab_torque() {
+    :
+}

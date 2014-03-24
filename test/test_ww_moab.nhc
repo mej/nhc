@@ -1,0 +1,13 @@
+# Tests for ww_moab.nhc
+#
+# $Id$
+#
+
+plan $((3+0+0+0)) "ww_moab.nhc" && {
+    is "`type -t check_moab_sched 2>&1`" 'function' 'check_moab_sched() loaded properly'
+    is "`type -t check_moab_rm 2>&1`" 'function' 'check_moab_rm() loaded properly'
+    is "`type -t check_moab_torque 2>&1`" 'function' 'check_moab_torque() loaded properly'
+
+
+
+} ; unplan

@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((2+2+1)) "ww_cmd.nhc" && {
+plan $((2+9+2)) "ww_cmd.nhc" && {
     is "`type -t check_cmd_output 2>&1`" 'function' 'check_cmd_output() loaded properly'
     is "`type -t check_cmd_status 2>&1`" 'function' 'check_cmd_status() loaded properly'
 
@@ -13,9 +13,25 @@ plan $((2+2+1)) "ww_cmd.nhc" && {
     check_cmd_output -t 1 -m "/Test/" echo Test
     is $? 0 "Simple command output match"
     check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-    is $? 0 "Multiple command output match, 3 positive"
+    is $? 0 "Multiple command output match, 3 positive (success)"
+    check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line4\nline5\nline6"
+    is $? 1 "Multiple command output match, 3 positive (failure)"
+    check_cmd_output -t 1 -m "!/line4/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+    is $? 0 "Multiple command output match, 2 positive, 1 negative (success)"
+    check_cmd_output -t 1 -m "!/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+    is $? 1 "Multiple command output match, 2 positive, 1 negative (negative failure)"
+    check_cmd_output -t 1 -m "!/line4/" -m "/line5/" -m "/line3/" echo -e "line1\nline2\nline3"
+    is $? 1 "Multiple command output match, 2 positive, 1 negative (positive failure)"
+    check_cmd_output -t 1 -m "!/line1/" -m "/line5/" -m "/line6/" echo -e "line1\nline2\nline3"
+    is $? 1 "Multiple command output match, 2 positive, 1 negative (failure)"
+    check_cmd_output -t 1 -m "!/line4/" -m "!/line5/" -m "!/line6/" echo -e "line1\nline2\nline3"
+    is $? 0 "Multiple command output match, 3 negative (success)"
+    check_cmd_output -t 1 -m "!/line1/" -m "!/line2/" -m "!/line3/" echo -e "line1\nline2\nline3"
+    is $? 1 "Multiple command output match, 3 negative (failure)"
 
     check_cmd_status -t 1 true
-    is $? 0 "Simple command status test"
+    is $? 0 "Simple command status test (success)"
+    check_cmd_status -t 1 false
+    is $? 1 "Simple command status test (failure)"
 
 } ; unplan

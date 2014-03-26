@@ -487,9 +487,9 @@ plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     SHELL=: check_ps_service -e "/sbin/shutdown -r 1" httpd
     is $? 1 "Service check with missing action (failure)"
     SHELL=: check_ps_service -E "true" trqauthd
-    is $? 0 "Service check with missing action (success)"
+    is $? 0 "Service check with found action (success)"
     SHELL=: check_ps_service -E "true" httpd
-    is $? 1 "Service check with missing action (failure)"
+    is $? 1 "Service check with found action (failure)"
 
     # Checks for excessive CPU utilization
     check_ps_cpu 99

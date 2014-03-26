@@ -360,7 +360,7 @@ function check_ps_blacklist() {
 # Check to make sure a service is (or isn't) running.  Syntax:
 #  check_ps_service [-0] [-f] [-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
 function check_ps_service() {
-    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 STOP=0 KILL=0 ACTION FOUND_ACTION
+    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 ACTION FOUND_ACTION
     local THIS_PID THIS_SVC i MSG
     local -a ARGS
 
@@ -369,9 +369,10 @@ function check_ps_service() {
     fi
 
     OPTIND=1
-    while getopts ":0frcsku:d:m:e:E:" OPTION ; do
+    while getopts ":0Sfrcsku:d:m:e:E:" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
+            S) START=1 ;;
             f) FULLMATCH=1 ;;
             r) RESTART=1 ;;
             c) CYCLE=1 ;;
@@ -458,7 +459,10 @@ function check_ps_service() {
     fi
 
     MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
-    if [[ $RESTART == 1 ]]; then
+    if [[ $START == 1 ]]; then
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" &
+        MSG="$MSG; start in progress"
+    elif [[ $RESTART == 1 ]]; then
         ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
         MSG="$MSG; restart in progress"
     elif [[ $CYCLE == 1 ]]; then

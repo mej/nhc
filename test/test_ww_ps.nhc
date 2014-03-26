@@ -375,7 +375,7 @@ function populate_loadavg_data() {
     LOADAVG=( 15 9 4 )
 }
 
-plan $((14+10+6+27+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
+plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t nhc_ps_check_res 2>&1`" 'function' 'nhc_ps_check_res() loaded properly'
@@ -450,10 +450,14 @@ plan $((14+10+6+27+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     is $? 1 "Missing service with restart directive"
     SHELL=: check_ps_service -c httpd
     is $? 1 "Missing service with cycle directive"
+    SHELL=: check_ps_service -S httpd
+    is $? 1 "Missing service with start directive"
     SHELL=: check_ps_service -s httpd
     is $? 0 "Missing service with stop directive"
     SHELL=: check_ps_service -k httpd
     is $? 0 "Missing service with kill directive"
+    SHELL=: check_ps_service -S -u root sshd
+    is $? 0 "Running service with start directive"
     SHELL=: check_ps_service -s -u root sshd
     is $? 1 "Running service with stop directive"
     SHELL=: check_ps_service -k -u root sshd

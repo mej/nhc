@@ -9,16 +9,17 @@
 # Check the output of a command for one or more matching strings.  A
 # required return code may also be supplied.
 function check_cmd_output() {
-    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME"
+    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME" OUTPUT_VAR
     local IFS PID TIMER RET CMD
     local LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
     local -a CMD_LIST LINES MATCHES MATCHED
 
     MATCHES=( )
     OPTIND=1
-    while getopts ":C:e:m:r:t:" OPTION ; do
+    while getopts ":C:O:e:m:r:t:" OPTION ; do
         case "$OPTION" in
             C) CHECKNAME="$OPTARG" ;;  # INTERNAL USE ONLY
+            O) OUTPUT_VAR="$OPTARG" ;;  # INTERNAL USE ONLY
             e) CMD="$OPTARG" ;;
             m) MATCHES[${#MATCHES[*]}]="$OPTARG" ;;
             r) CMD_RETVAL="$OPTARG" ;;
@@ -66,6 +67,9 @@ function check_cmd_output() {
     IFS=$'\n'
     LINES=( $(nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}") )
     RET=$?
+    if [[ -n "$OUTPUT_VAR" ]]; then
+        eval "$OUTPUT_VAR"'=( "${LINES[@]}" )'
+    fi
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.

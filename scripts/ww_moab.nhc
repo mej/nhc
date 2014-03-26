@@ -6,17 +6,133 @@
 # $Id$
 #
 
+MDIAG_CMD="${MDIAG_CMD:-mdiag}"
+
+NHC_RE_MOAB_VERSION='Version:[[:space:]]+([0-9]+\.[0-9]+\.[0-9])[[:space:]]+'
+NHC_RE_MOAB_ALERT='ALERT:[[:space:]]+(.*)$'
+
+NHC_RE_RM_STATE='^([A-Z][A-Z]\[[^\]]+\]\)[[:space:]]+State: ([A-Za-z0-9_]+)'
+NHC_RE_QMGR_NOSCHED='set server scheduling = ([A-Za-z0-9]+)'
+
 # Examine output of "mdiag -S -v" for anomalies.
 function check_moab_sched() {
-    :
+    local RET LINENO CMD_TIMEOUT MATCHSTR MOABVER ALERTMATCH
+    local -a OUTPUT MATCHES
+
+    MATCHES=( )
+    OPTIND=1
+    while getopts ":a:m:t:v:" OPTION ; do
+        case "$OPTION" in
+            a) ALERTMATCH="$OPTARG" ;;
+            m) MATCHES[${#MATCHES[*]}]="-m \"$OPTARG\"" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            v) MOABVER="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    check_cmd_output -t ${CMD_TIMEOUT:-5} -C "$FUNCNAME" -O OUTPUT ${MATCHES[*]} $MDIAG_CMD -S -v
+    RET=$?
+    if [[ $RET -ne 0 ]]; then
+        return $RET
+    fi
+
+    # Additional checks require regexp support, so skip them in old versions.
+    if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
+        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
+            if [[ -n "$MOABVER" && "${OUTPUT[$LINENO]}" =~ $NHC_RE_MOAB_VERSION ]]; then
+                MATCHSTR="${BASH_REMATCH[1]}"
+                if ! mcheck "$MATCHSTR" "$MOABVER" ; then
+                    die 1 "$FUNCNAME:  Moab version $MATCHSTR != expected version $MOABVER"
+                    return 1
+                fi
+            elif [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_MOAB_ALERT ]]; then
+                MATCHSTR="${BASH_REMATCH[1]}"
+                if mcheck "$MATCHSTR" "$ALERTMATCH" ; then
+                    die 1 "$FUNCNAME:  Moab Alert:  $MATCHSTR"
+                    return 1
+                fi
+            fi
+        done
+    fi
+    return 0
 }
 
 # Examine output of "mdiag -R -v" for anomalies.
 function check_moab_rm() {
-    :
+    local RET LINENO CMD_TIMEOUT RMID MATCHSTR
+    local -a OUTPUT MATCHES
+
+    MATCHES=( )
+    OPTIND=1
+    while getopts ":m:t:" OPTION ; do
+        case "$OPTION" in
+            m) MATCHES[${#MATCHES[*]}]="-m \"$OPTARG\"" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    check_cmd_output -t ${CMD_TIMEOUT:-5} -C "$FUNCNAME" -O OUTPUT ${MATCHES[*]} $MDIAG_CMD -R -v
+    RET=$?
+    if [[ $RET -ne 0 ]]; then
+        return $RET
+    fi
+
+    # Additional checks require regexp support, so skip them in old versions.
+    if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
+        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
+            if [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_RM_STATE ]]; then
+                RMID="${BASH_REMATCH[1]}"
+                MATCHSTR="${BASH_REMATCH[2]}"
+                if [[ "$RMID" != "*internal*" && "$MATCHSTR" != "Active" ]]; then
+                    die 1 "$FUNCNAME:  External resource manager \"$RMID\" is in state \"$MATCHSTR\""
+                    return 1
+                fi
+            fi
+        done
+    fi
+    return 0
 }
 
 # Check TORQUE for responsiveness and server configuration errors.
 function check_moab_torque() {
-    :
+    local RET LINENO CMD_TIMEOUT RMID MATCHSTR
+    local -a OUTPUT MATCHES
+
+    MATCHES=( )
+    OPTIND=1
+    while getopts ":m:t:" OPTION ; do
+        case "$OPTION" in
+            m) MATCHES[${#MATCHES[*]}]="-m \"$OPTARG\"" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    check_cmd_output -t ${CMD_TIMEOUT:-5} -C "$FUNCNAME" -O OUTPUT ${MATCHES[*]} qmgr -c 'print server'
+    RET=$?
+    if [[ $RET -ne 0 ]]; then
+        return $RET
+    fi
+
+    # Additional checks require regexp support, so skip them in old versions.
+    if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
+        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
+            if [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_QMGR_NOSCHED ]]; then
+                MATCHSTR="${BASH_REMATCH[1]}"
+                if [[ "$MATCHSTR" != "True" ]]; then
+                    die 1 "$FUNCNAME:  Scheduling not active (set to \"$MATCHSTR\") in TORQUE configuration"
+                    return 1
+                fi
+            fi
+        done
+    fi
+    return 0
 }

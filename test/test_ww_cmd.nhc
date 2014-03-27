@@ -10,24 +10,29 @@ plan $((2+9+2)) "ww_cmd.nhc" && {
     # Needed to bypass sanity check on timeout values.
     export TIMEOUT=99999
 
-    check_cmd_output -t 1 -m "/Test/" echo Test
-    is $? 0 "Simple command output match"
-    check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-    is $? 0 "Multiple command output match, 3 positive (success)"
-    check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line4\nline5\nline6"
-    is $? 1 "Multiple command output match, 3 positive (failure)"
-    check_cmd_output -t 1 -m "!/line4/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-    is $? 0 "Multiple command output match, 2 positive, 1 negative (success)"
-    check_cmd_output -t 1 -m "!/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-    is $? 1 "Multiple command output match, 2 positive, 1 negative (negative failure)"
-    check_cmd_output -t 1 -m "!/line4/" -m "/line5/" -m "/line3/" echo -e "line1\nline2\nline3"
-    is $? 1 "Multiple command output match, 2 positive, 1 negative (positive failure)"
-    check_cmd_output -t 1 -m "!/line1/" -m "/line5/" -m "/line6/" echo -e "line1\nline2\nline3"
-    is $? 1 "Multiple command output match, 2 positive, 1 negative (failure)"
-    check_cmd_output -t 1 -m "!/line4/" -m "!/line5/" -m "!/line6/" echo -e "line1\nline2\nline3"
-    is $? 0 "Multiple command output match, 3 negative (success)"
-    check_cmd_output -t 1 -m "!/line1/" -m "!/line2/" -m "!/line3/" echo -e "line1\nline2\nline3"
-    is $? 1 "Multiple command output match, 3 negative (failure)"
+    # Bash 3.0 (RHEL4) apparently has a bug in handling "${ARRAY[@]}" expansion, so we have to skip these.
+    if [[ "${BASH_VERSINFO[0]}" == "3" && "${BASH_VERSINFO[1]}" -lt 1 ]]; then
+        skip 9
+    else
+        check_cmd_output -t 1 -m "/Test/" echo Test
+        is $? 0 "Simple command output match"
+        check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+        is $? 0 "Multiple command output match, 3 positive (success)"
+        check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line4\nline5\nline6"
+        is $? 1 "Multiple command output match, 3 positive (failure)"
+        check_cmd_output -t 1 -m "!/line4/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+        is $? 0 "Multiple command output match, 2 positive, 1 negative (success)"
+        check_cmd_output -t 1 -m "!/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (negative failure)"
+        check_cmd_output -t 1 -m "!/line4/" -m "/line5/" -m "/line3/" echo -e "line1\nline2\nline3"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (positive failure)"
+        check_cmd_output -t 1 -m "!/line1/" -m "/line5/" -m "/line6/" echo -e "line1\nline2\nline3"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (failure)"
+        check_cmd_output -t 1 -m "!/line4/" -m "!/line5/" -m "!/line6/" echo -e "line1\nline2\nline3"
+        is $? 0 "Multiple command output match, 3 negative (success)"
+        check_cmd_output -t 1 -m "!/line1/" -m "!/line2/" -m "!/line3/" echo -e "line1\nline2\nline3"
+        is $? 1 "Multiple command output match, 3 negative (failure)"
+    fi
 
     check_cmd_status -t 1 true
     is $? 0 "Simple command status test (success)"

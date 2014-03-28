@@ -58,7 +58,7 @@ function die() {
 function dbg() {
     local PREFIX=""
 
-    if [[ "$DEBUG" != "0" ]]; then
+    if [[ "$DEBUG" == "1" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
         eval echo '"${PREFIX}DEBUG:  $*"' $LOGFILE
         if [[ $? -ne 0 ]]; then

@@ -358,7 +358,7 @@ function check_ps_blacklist() {
 }
 
 # Check to make sure a service is (or isn't) running.  Syntax:
-#  check_ps_service [-0] [-f] [-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
+#  check_ps_service [-0] [-f] [-S|-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
 function check_ps_service() {
     local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 ACTION FOUND_ACTION
     local THIS_PID THIS_SVC i MSG

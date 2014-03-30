@@ -16,7 +16,7 @@ NHCLIBDIR="${NHCLIBDIR:-/var/lib/nhc}"
 STOPFILE="${STOPFILE:-$NHCLIBDIR/nhc.stopfile}"
 NHCMESG="${NHCMESG:-$NHCLIBDIR/nhc.message}"
 
-if "$NHC" 2>&1 > "$NHCMESG"
+if "$NHC" "$@" 2>&1 > "$NHCMESG"
 then
 	if [ -f "$STOPFILE" ]
 	then

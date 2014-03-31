@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((3+5+5+3+9+6+8+9+22)) "ww_file.nhc" && {
+plan $((3+5+5+3+9+6+8+10+22)) "ww_file.nhc" && {
     is "`type -t check_file_contents 2>&1`" 'function' 'check_file_contents() loaded properly'
     is "`type -t check_file_test 2>&1`" 'function' 'check_file_test() loaded properly'
     is "`type -t check_file_stat 2>&1`" 'function' 'check_file_stat() loaded properly'
@@ -92,8 +92,11 @@ plan $((3+5+5+3+9+6+8+9+22)) "ww_file.nhc" && {
     is $? 1 'Real world example:  Match TORQUE configuration (negated, failed)'
 
     # Check some file attributes of a dynamically-created file
+    FILEDATA='stuff'
     check_file_test -a <(echo "$FILEDATA") -e <(echo "$FILEDATA") -r <(echo "$FILEDATA")
     is $? 0 'Bash process substitution file exists and is readable.'
+    check_file_test -a -e -r <(echo "$FILEDATA")
+    is $? 0 'Bash process substitution file exists and is readable (single file, multiple operators).'
     check_file_test -d <(echo "$FILEDATA")
     is $? 1 'Bash process substitution file is not a directory.'
     check_file_test -f <(echo "$FILEDATA")

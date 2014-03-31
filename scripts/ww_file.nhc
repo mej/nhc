@@ -153,22 +153,28 @@ function check_file_contents() {
 # supplied arguments to the "test" command returns false.
 function check_file_test() {
     local OP ARG RESULT
+    local -a FLAGS=( ) ARGS=( )
 
-    while [[ $# -ge 2 ]]; do
-        OP="$1"
-        ARG="$2"
-        shift 2
-
-        case "$OP" in
-            -[abcdefghkprstuwxOGLSN]) ;;
-            *) die 1 "$FUNCNAME:  Syntax error:  Invalid operator \"$OP\"." ; return 1 ;;
+    for ARG in "$@" ; do
+        case "$ARG" in
+            -[abcdefghkprstuwxOGLSN]) FLAGS[${#FLAGS[*]}]="$ARG" ;;
+            -*) die 1 "$FUNCNAME:  Syntax error:  Invalid/unsupported operator \"$ARG\"." ; return 1 ;;
+            *) ARGS[${#ARGS[*]}]="$ARG" ;;
         esac
-        eval test $OP "$ARG" $LOGFILE
-        RESULT=$?
-        if [[ $RESULT -ne 0 ]]; then
-            die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
-            return 1
-        fi
+    done
+    if [[ ${#FLAGS[*]} -eq 0 || ${#ARGS[*]} -eq 0 ]]; then
+        die 1 "$FUNCNAME:  Syntax error:  Missing parameters."
+        return 1
+    fi
+    for OP in "${FLAGS[@]}" ; do
+        for ARG in "${ARGS[@]}" ; do
+            eval test $OP "$ARG" $LOGFILE
+            RESULT=$?
+            if [[ $RESULT -ne 0 ]]; then
+                die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+                return 1
+            fi
+        done
     done
     return 0
 }

@@ -691,7 +691,7 @@ function check_ps_kswapd() {
 
 # Checks the 1-, 5-, and 15-minute load averages to see if any of them
 # exceeds the specified threshold(s) ($1, $2, and $3, respectively).
-function check_loadavg() {
+function check_ps_loadavg() {
     local -a LOADLIMS=( "$@" )
     local -a INFO=( 1 5 15 )
     local i
@@ -708,3 +708,10 @@ function check_loadavg() {
     done
     return 0
 }
+
+# Alias
+#function check_loadavg() {
+#    check_ps_loadavg "$@"
+#    return $?
+#}
+

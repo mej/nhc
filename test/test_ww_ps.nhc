@@ -389,7 +389,7 @@ plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     is "`type -t check_ps_unauth_users 2>&1`" 'function' 'check_ps_unauth_users() loaded properly'
     is "`type -t check_ps_userproc_lineage 2>&1`" 'function' 'check_ps_userproc_lineage() loaded properly'
     is "`type -t check_ps_kswapd 2>&1`" 'function' 'check_ps_kswapd() loaded properly'
-    is "`type -t check_loadavg 2>&1`" 'function' 'check_loadavg() loaded properly'
+    is "`type -t check_ps_loadavg 2>&1`" 'function' 'check_ps_loadavg() loaded properly'
 
     # Fake process listing data for testing
     populate_ps_data
@@ -610,23 +610,23 @@ plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     # Fake load average data
     populate_loadavg_data
 
-    check_loadavg 64
+    check_ps_loadavg 64
     is $? 0 "1m load average >= 64"
-    check_loadavg '' 64
+    check_ps_loadavg '' 64
     is $? 0 "5m load average >= 64"
-    check_loadavg '' '' 64
+    check_ps_loadavg '' '' 64
     is $? 0 "15m load average >= 64"
-    check_loadavg 1
+    check_ps_loadavg 1
     is $? 1 "1m load average >= 1"
-    check_loadavg '' 1
+    check_ps_loadavg '' 1
     is $? 1 "5m load average >= 1"
-    check_loadavg '' '' 1
+    check_ps_loadavg '' '' 1
     is $? 1 "15m load average >= 1"
-    check_loadavg 16 16 16
+    check_ps_loadavg 16 16 16
     is $? 0 "1m/5m/15m load average >= 16"
-    check_loadavg 12 12 12
+    check_ps_loadavg 12 12 12
     is $? 1 "1m/5m/15m load average >= 12"
-    check_loadavg 8 8 8
+    check_ps_loadavg 8 8 8
     is $? 1 "1m/5m/15m load average >= 8"
 
 

@@ -5,7 +5,7 @@
 # Michael Jennings <mej@lbl.gov>
 # 29 June 2012
 #
-# $Id$
+# $Id: nhc-test 1343 2013-04-01 23:27:08Z mej $
 #
 
 # This script is used to perform unit testing on the NHC driver script

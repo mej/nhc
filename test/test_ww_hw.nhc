@@ -1,6 +1,6 @@
 # Tests for ww_hw.nhc
 #
-# $Id$
+# $Id: test_ww_hw.nhc 1620 2014-03-19 16:20:07Z mej $
 #
 
 plan $((11+7+13+13+13+4+4+4+10+3+6+2)) "ww_hw.nhc" && {

@@ -1,6 +1,6 @@
 # Tests for ww_dmi.nhc
 #
-# $Id$
+# $Id: test_ww_dmi.nhc 1299 2013-03-12 00:44:02Z mej $
 #
 
 function populate_dmi_data() {

@@ -1,4 +1,4 @@
-# $Id$
+# $Id: Makefile.am 1628 2014-03-24 19:22:17Z mej $
 
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = bench test

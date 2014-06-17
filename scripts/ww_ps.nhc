@@ -36,7 +36,7 @@ function nhc_ps_gather_data() {
     if [[ "$NHC_RM" == "pbs" ]]; then
         RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
     elif [[ "$NHC_RM" == "slurm" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmd\b/}"
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
     elif [[ "$NHC_RM" == "sge" ]]; then
         RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_execd\b/}"
     else

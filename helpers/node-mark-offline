@@ -65,9 +65,9 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
-        alloc*|comp*|drain*|drng*|fail*|idle*)
+        alloc*|comp*|drain*|drng*|fail*|idle*|mixed*|resume*|undrain*)
             case "$STATUS" in
-                drain*|drng*)
+                drain*|drng*|fail*)
                     # If the node is already offline, and there is no old note, and
                     # we've not been told to ignore that, do not touch the node.
                     if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
@@ -84,6 +84,10 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
             ;;
+        down*)
+            echo "$0:  Not changing state of down node $HOSTNAME."
+            ;;
+        *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;
     esac
 
 ### IBM Platform LSF

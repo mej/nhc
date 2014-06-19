@@ -6,6 +6,7 @@
 # $Id: ww_fs.nhc 1614 2014-03-14 23:28:50Z mej $
 #
 
+MOUNT_CMD="${MOUNT_CMD:-mount}"
 DF_CMD="${DF_CMD:-df}"
 DFI_CMD="${DFI_CMD:-${DF_CMD}}"
 DF_FLAGS="${DF_FLAGS:--Tka}"
@@ -118,15 +119,17 @@ function nhc_fs_dfi_gather_data() {
     #set | grep ^DFI_ | sed 's/\[/\n        [/g;s/)$/\n)/' | sed '/\[\(3\|4\|7\|8\|9\|1[0-9]\)\]/d'
 }
 
-# Check to make sure a filesystem ($1) is mounted.  Includes optional
-# checks for source ($2), filesystem type ($3), and a regular
-# expression for mount options ($4).
+# Check to make sure a filesystem is mounted.  Includes optional
+# checks for source, filesystem type, and a regular expression for
+# mount options.
+#
+# Old syntax:  check_fs_mount fs [ src [ fstype [ options ] ] ]
+# New syntax:  check_fs_mount [ -0 ] [ -r ] [ -s src ] [ -t fstype ] [ -o options ] [ -O mount_options ] [ -e cmd ] [ -E cmd ] -f fs
 function check_fs_mount() {
-    local FS=$1
-    local SRC=$2
-    local TYPE=$3
-    local OPTIONS=$4
-    local i
+    local FS="$1" SRC="$2" TYPE="$3" OPTIONS="$4"
+    local REMOUNT=0 NONFATAL=0 MOUNT_OPTS="" ACTION="" FOUND_ACTION=""
+    local -a FS_LIST SRC_LIST TYPE_LIST OPTIONS_LIST
+    local i FOUND
 
     if [[ ${#FS_DEV[*]} -eq 0 ]]; then
         nhc_fs_mounts_gather_data || {
@@ -135,40 +138,130 @@ function check_fs_mount() {
         }
     fi
 
-    for ((i=0; i < ${#FS_DEV[*]}; i++)); do
-        if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then
+    if [[ "${FS##/}" != "$FS" ]]; then
+        # First parameter starts with a '/'.  Use the old syntax.
+        FS_LIST=( "$FS" )
+        [[ -n "$SRC" ]] && SRC_LIST=( "$SRC" )
+        [[ -n "$TYPE" ]] && TYPE_LIST=( "$TYPE" )
+        [[ -n "$OPTIONS" ]] && OPTIONS_LIST=( "$OPTIONS" )
+    else
+        OPTIND=1
+        while getopts ":0rE:O:e:f:o:s:t:" OPTION ; do
+            case "$OPTION" in
+                0) NONFATAL=1 ;;
+                r) REMOUNT=1 ;;
+                f) FS_LIST[${#FS_LIST[*]}]="$OPTARG" ;;
+                o) OPTIONS_LIST[${#OPTIONS_LIST[*]}]="$OPTARG" ;;
+                O) MOUNT_OPTS="$OPTARG" ;;
+                s) SRC_LIST[${#SRC_LIST[*]}]="$OPTARG" ;;
+                t) TYPE_LIST[${#TYPE_LIST[*]}]="$OPTARG" ;;
+                e) ACTION="$OPTARG" ;;
+                E) FOUND_ACTION="$OPTARG" ;;
+                -) ((OPTIND++)) ; break ;;
+                :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+                \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+            esac
+        done
+        shift $((OPTIND-1))
+        while [[ -n "$1" ]]; do
+            FS_LIST[${#FS_LIST[*]}]="$1"
+            shift
+        done
+    fi
+
+    for FS in "${FS_LIST[@]}" ; do
+        FOUND=0
+        for ((i=0; i < ${#FS_DEV[*]}; i++)); do
+            if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then
+                continue
+            fi
+            if [[ ${#SRC_LIST[*]} > 0 ]]; then
+                for SRC in "${SRC_LIST[@]}" ; do
+                    if [[ "${SRC/#\!}" != "$SRC" ]]; then
+                        # Source begins with !.  Negate the check.
+                        if mcheck "${FS_DEV[$i]}" "${SRC/#\!}" ; then
+                            die 1 "$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (matches \"${SRC/#\!}\") but shouldn't be"
+                            return 1
+                        fi
+                    elif ! mcheck "${FS_DEV[$i]}" "$SRC" ; then
+                        die 1 "$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (should be $SRC)"
+                        return 1
+                    fi
+                done
+            fi
+            if [[ ${#TYPE_LIST[*]} > 0 ]]; then
+                for TYPE in "${TYPE_LIST[@]}" ; do
+                    if [[ "${TYPE/#\!}" != "$TYPE" ]]; then
+                        # Type begins with !.  Negate the check.
+                        if mcheck "${FS_TYPE[$i]}" "${TYPE/#\!}" ; then
+                            die 1 "$FUNCNAME:  $FS has type ${FS_TYPE[$i]} (matches \"${TYPE/#\!}\") but shouldn't"
+                            return 1
+                        fi
+                    elif ! mcheck "${FS_TYPE[$i]}" "$TYPE" ; then
+                        die 1 "$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]} (should be $TYPE)"
+                        return 1
+                    fi
+                done
+            fi
+            if [[ ${#OPTIONS_LIST[*]} > 0 ]]; then
+                for OPTIONS in "${OPTIONS_LIST[@]}" ; do
+                    if [[ "${OPTIONS/#\!}" != "$OPTIONS" ]]; then
+                        # Options begin with !.  Negate the check.
+                        if mcheck "${FS_OPTS[$i]}" "${OPTIONS/#\!}" ; then
+                            die 1 "$FUNCNAME:  $FS mount options incorrect (match \"${OPTIONS/#\!}\" but shouldn't)"
+                            return 1
+                        fi
+                    elif ! mcheck "${FS_OPTS[$i]}" "$OPTIONS" ; then
+                        die 1 "$FUNCNAME:  $FS mount options incorrect (don't match \"$OPTIONS\")"
+                        return 1
+                    fi
+                done
+            fi
+            # If we get here successfully, the filesystem is mounted correctly.
+            FOUND=1
+            break
+        done
+        if [[ "$FOUND" == "1" ]]; then
+            # The filesystem is mounted correctly.  Move on to the next one.
+            if [[ -n "$FOUND_ACTION" ]]; then
+                ${SHELL:-/bin/bash} -c "$FOUND_ACTION" $LOGFILE &
+            fi
             continue
         fi
-        if [[ "$SRC" != "" ]]; then
-            if ! mcheck "${FS_DEV[$i]}" "$SRC" ; then
-                die 1 "$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (should be $SRC)"
-                return 1
-            fi
+        # The filesystem is not mounted.
+        if [[ "$REMOUNT" == "1" ]]; then
+            ${SHELL:-/bin/bash} -c "$MOUNT_CMD '$FS'" $LOGFILE &
         fi
-        if [[ "$TYPE" != "" ]]; then
-            if ! mcheck "${FS_TYPE[$i]}" "$TYPE" ; then
-                die 1 "$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]} (should be $TYPE)"
-                return 1
-            fi
+        if [[ -n "$ACTION" ]]; then
+            ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
         fi
-        if [[ "$OPTIONS" != "" ]]; then
-            if ! mcheck "${FS_OPTS[$i]}" "$OPTIONS" ; then
-                die 1 "$FUNCNAME:  $FS mount options incorrect"
-                return 1
-            fi
+        if [[ "$NONFATAL" == 1 ]]; then
+            log "$FUNCNAME:  $FS not mounted (non-fatal)"
+        else
+            die 1 "$FUNCNAME:  $FS not mounted"
+            return 1
         fi
-        return 0
     done
-    die 1 "$FUNCNAME:  $FS not mounted"
-    return 1
+    # All tested filesystems were found (or were non-fatal).
+    return 0
 }
 
 # Some shortcuts that use check_fs_mount()
 function check_fs_mount_rw() {
-    check_fs_mount "$1" "$2" "$3" '/(^|,)rw($|,)/'
+    if [[ "${1##/}" != "$1" ]]; then
+        # First parameter starts with a '/'.  Use the old syntax.
+        check_fs_mount "$1" "$2" "$3" '/(^|,)rw($|,)/'
+    else
+        check_fs_mount -o '/(^|,)rw($|,)/' "$@"
+    fi
 }
 function check_fs_mount_ro() {
-    check_fs_mount "$1" "$2" "$3" '/(^|,)ro($|,)/'
+    if [[ "${1##/}" != "$1" ]]; then
+        # First parameter starts with a '/'.  Use the old syntax.
+        check_fs_mount "$1" "$2" "$3" '/(^|,)ro($|,)/'
+    else
+        check_fs_mount -o '/(^|,)ro($|,)/' "$@"
+    fi
 }
 
 # Check to make sure a filesystem ($1) has between a minimum ($2) and

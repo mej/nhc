@@ -250,20 +250,26 @@ function nhc_ps_check_res() {
             syslog $MSG
         fi
         if [[ "$ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$ACTION" &
+            ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
         fi
         if [[ "$KILL" == "1" ]]; then
-            [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
+            [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID $LOGFILE
             MSG="$MSG; killed"
         elif [[ "$RENICE" != "" ]]; then
-            [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID
+            [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID $LOGFILE
             [[ "${RENICE##-}" == "${RENICE}" ]] && RENICE="+$RENICE"
             MSG="$MSG; reniced $RENICE"
         fi
         if [[ $ALL -ge 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG ($ALL)"
+            fi
             ((ALL++))
             continue
         elif [[ $NONFATAL == 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG (non-fatal)"
+            fi
             return 0
         fi
         die 1 "$MSG"
@@ -272,9 +278,14 @@ function nhc_ps_check_res() {
     # -a (all) does not necessarily imply -0 (non-fatal)
     if [[ $ALL -gt 1 ]]; then
         # We had at least 1 flagged process.  Fail unless we're also non-fatal.
-        [[ $NONFATAL == 1 ]] && return 0
-        die 1 "$MSG (1 of $((--ALL)))"
-        return $ALL
+        if [[ $NONFATAL == 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG (non-fatal)"
+            fi
+            return 0
+        fi
+        die 1 "$MSG ($((ALL-1)) of $((ALL-1)))"
+        return $((--ALL))
     fi
     return 0
 }
@@ -429,20 +440,23 @@ function check_ps_service() {
         fi
         # We have a matching process with the correct owner.
         if [[ "$FOUND_ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
+            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" $LOGFILE &
         fi
         if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
             # Logic is inverted; we DON'T want this process running, so finding it is a failure.
             MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }running"
             if [[ "$KILL" == "1" ]]; then
-                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
+                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID $LOGFILE
                 MSG="$MSG; killed process ID $THIS_PID"
             else
                 # $STOP must be 1
-                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" &
+                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" $LOGFILE &
                 MSG="$MSG; termination in progress"
             fi
             if [[ $NONFATAL == 1 ]]; then
+                if [[ -n "$MSG" ]]; then
+                    log "$MSG (non-fatal)"
+                fi
                 return 0
             fi
             die 1 "$MSG"
@@ -460,19 +474,22 @@ function check_ps_service() {
 
     MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
     if [[ $START == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" $LOGFILE &
         MSG="$MSG; start in progress"
     elif [[ $RESTART == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" $LOGFILE &
         MSG="$MSG; restart in progress"
     elif [[ $CYCLE == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" $LOGFILE &
         MSG="$MSG; cycle in progress"
     elif [[ "$ACTION" != "" ]]; then
-        ${SHELL:-/bin/bash} -c "$ACTION" &
+        ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
         MSG="$MSG; executed \"$ACTION\""
     fi
     if [[ $NONFATAL == 1 ]]; then
+        if [[ -n "$MSG" ]]; then
+            log "$MSG (non-fatal)"
+        fi
         return 0
     fi
     die 1 "$MSG"

@@ -79,6 +79,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
         undrain*|resume*|alloc*|idle*)
             # Node is already online.
             echo "$0:  Node $HOSTNAME is already online."
+            ;;
         *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;
     esac
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"

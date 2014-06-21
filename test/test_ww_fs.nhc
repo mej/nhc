@@ -150,7 +150,7 @@ function populate_fs_data() {
     )
 }
 
-plan $((9+5+5+5+3+10+7+7+10+7+7)) "ww_fs.nhc" && {
+plan $((9+5+3+5+5+4+4+4+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
@@ -163,47 +163,98 @@ plan $((9+5+5+5+3+10+7+7+10+7+7)) "ww_fs.nhc" && {
 
     populate_fs_data
 
+    ### Check old syntax first.  These are the original tests.
     check_fs_mount /
-    is $? 0 "check_fs_mount() for /"
+    is $? 0 "check_fs_mount() for / (OLD)"
     check_fs_mount / "" "" ""
-    is $? 0 "check_fs_mount() for / (blank args)"
+    is $? 0 "check_fs_mount() for / (blank args) (OLD)"
     check_fs_mount /FAKE/filesystem/NAME
-    is $? 1 "check_fs_mount() for bogus filesystem"
+    is $? 1 "check_fs_mount() for bogus filesystem (OLD)"
     check_fs_mount /FAKE/filesystem/NAME "" "" ""
-    is $? 1 "check_fs_mount() for bogus filesystem (blank args)"
-
+    is $? 1 "check_fs_mount() for bogus filesystem (blank args) (OLD)"
     check_fs_mount /proc "" proc
-    is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument)"
-
-    check_fs_mount_ro /global/software
-    is $? 0 "check_fs_mount_ro(), single argument (known good)"
-    check_fs_mount_ro /global/software bluearc0:/software
-    is $? 0 "check_fs_mount_ro(), two arguments (known good)"
-    check_fs_mount_ro /global/software bluearc0:/software nfs
-    is $? 0 "check_fs_mount_ro(), three arguments (known good)"
-    check_fs_mount_ro /global/software master:/global/software nfs
-    is $? 1 "check_fs_mount_ro(), three arguments (2nd bad)"
-    check_fs_mount_ro /global/software bluearc0:/software nfs4
-    is $? 1 "check_fs_mount_ro(), three arguments (3rd bad)"
-
-    check_fs_mount_rw /boot
-    is $? 0 "check_fs_mount_rw(), single argument (known good)"
-    check_fs_mount_rw /boot /dev/sda1
-    is $? 0 "check_fs_mount_rw(), two arguments (known good)"
-    check_fs_mount_rw /boot /dev/sda1 ext4
-    is $? 0 "check_fs_mount_rw(), three arguments (known good)"
-    check_fs_mount_rw /boot /dev/sdb3 ext4
-    is $? 1 "check_fs_mount_rw(), three arguments (2nd bad)"
-    check_fs_mount_rw /boot /dev/sda1 btrfs
-    is $? 1 "check_fs_mount_rw(), three arguments (3rd bad)"
+    is $? 0 "check_fs_mount() for /proc, type only (empty 2nd argument) (OLD)"
 
     check_fs_mount /home bluearc0:/home nfs
-    is $? 0 "check_fs_mount() for NFS (source/type)"
+    is $? 0 "check_fs_mount() for NFS (source/type) (OLD)"
     check_fs_mount /home "" "" "*,vers=3*"
-    is $? 0 "check_fs_mount() for NFS version (glob)"
+    is $? 0 "check_fs_mount() for NFS version (glob) (OLD)"
     check_fs_mount /home "" "" "/(^|,)vers=3(,|\$)/"
-    is $? 0 "check_fs_mount() for NFS version (regex)"
+    is $? 0 "check_fs_mount() for NFS version (regex) (OLD)"
 
+    check_fs_mount_ro /global/software
+    is $? 0 "check_fs_mount_ro(), single argument (known good) (OLD)"
+    check_fs_mount_ro /global/software bluearc0:/software
+    is $? 0 "check_fs_mount_ro(), two arguments (known good) (OLD)"
+    check_fs_mount_ro /global/software bluearc0:/software nfs
+    is $? 0 "check_fs_mount_ro(), three arguments (known good) (OLD)"
+    check_fs_mount_ro /global/software master:/global/software nfs
+    is $? 1 "check_fs_mount_ro(), three arguments (2nd bad) (OLD)"
+    check_fs_mount_ro /global/software bluearc0:/software nfs4
+    is $? 1 "check_fs_mount_ro(), three arguments (3rd bad) (OLD)"
+
+    check_fs_mount_rw /boot
+    is $? 0 "check_fs_mount_rw(), single argument (known good) (OLD)"
+    check_fs_mount_rw /boot /dev/sda1
+    is $? 0 "check_fs_mount_rw(), two arguments (known good) (OLD)"
+    check_fs_mount_rw /boot /dev/sda1 ext4
+    is $? 0 "check_fs_mount_rw(), three arguments (known good) (OLD)"
+    check_fs_mount_rw /boot /dev/sdb3 ext4
+    is $? 1 "check_fs_mount_rw(), three arguments (2nd bad) (OLD)"
+    check_fs_mount_rw /boot /dev/sda1 btrfs
+    is $? 1 "check_fs_mount_rw(), three arguments (3rd bad) (OLD)"
+
+    ### Also check the new syntax.
+    check_fs_mount -f /
+    is $? 0 "check_fs_mount() for /"
+    check_fs_mount -f /FAKE/filesystem/NAME
+    is $? 1 "check_fs_mount() for bogus filesystem"
+    check_fs_mount -0 -f /FAKE/filesystem/NAME
+    is $? 0 "check_fs_mount() for bogus filesystem in non-fatal mode"
+    SHELL=: check_fs_mount -r -f /FAKE/filesystem/NAME
+    is $? 1 "check_fs_mount() for bogus filesystem with remount request"
+
+    check_fs_mount -t proc -f /proc
+    is $? 0 "check_fs_mount() for /proc, type only"
+    check_fs_mount -s proc -f /proc
+    is $? 0 "check_fs_mount() for /proc, source only"
+    check_fs_mount -t tmpfs -f /proc
+    is $? 1 "check_fs_mount() for /proc, bad type"
+    check_fs_mount -s canadia -f /proc
+    is $? 1 "check_fs_mount() for /proc, bad source"
+
+    check_fs_mount -s '/bluearc[0-9]/' -t 'nfs*' -f /home -f /global/software
+    is $? 0 "check_fs_mount() for 2 filesystems with regexps and globs"
+    SHELL=: check_fs_mount -o "*,vers=3*" -e true -f /home
+    is $? 0 "check_fs_mount() for NFS version (glob) with action"
+    SHELL=: check_fs_mount -o "/(^|,)vers=3(,|\$)/" -E true -f /global/software
+    is $? 0 "check_fs_mount() for NFS version (regex) with found action"
+    SHELL=: check_fs_mount -r -O ro -f /boot
+    is $? 0 "check_fs_mount() with remount directive and mount options"
+
+    check_fs_mount_ro -f /global/software
+    is $? 0 "check_fs_mount_ro(), just filesystem"
+    check_fs_mount_ro -s bluearc0:/software /global/software
+    is $? 0 "check_fs_mount_ro(), good source"
+    check_fs_mount_ro -s bluearc0:/software -t nfs /global/software
+    is $? 0 "check_fs_mount_ro(), good source, good type"
+    check_fs_mount_ro -s master:/global/software -t nfs -f /global/software
+    is $? 1 "check_fs_mount_ro(), bad source, good type"
+    check_fs_mount_ro -s bluearc0:/software -t nfs4 -f /global/software
+    is $? 1 "check_fs_mount_ro(), good source, bad type"
+
+    check_fs_mount_rw -f /boot
+    is $? 0 "check_fs_mount_rw(), just filesystem"
+    check_fs_mount_rw -s /dev/sda1 /boot
+    is $? 0 "check_fs_mount_rw(), good source"
+    check_fs_mount_rw -s /dev/sda1 -t ext4 /boot
+    is $? 0 "check_fs_mount_rw(), good source, good type"
+    check_fs_mount_rw -s /dev/sdb3 -t ext4 -f /boot
+    is $? 1 "check_fs_mount_rw(), bad source, good type"
+    check_fs_mount_rw -s /dev/sda1 -t btrfs -f /boot
+    is $? 1 "check_fs_mount_rw(), good source, bad type"
+
+    ### Filesystem size/space checks
     check_fs_size /boot 100M 1G
     is $? 0 "check_fs_size() - /boot is between 100M and 1G"
     check_fs_size /boot 1 2k
@@ -255,6 +306,7 @@ plan $((9+5+5+5+3+10+7+7+10+7+7)) "ww_fs.nhc" && {
     check_fs_used /proc 1G
     is $? 0 "check_fs_used() on pseudofilesystem passes (with warning)"
 
+    ### Inode checks
     check_fs_inodes /boot 100k 200000
     is $? 0 "check_fs_inodes() - /boot has between 100k and 200k inodes"
     check_fs_inodes /boot 1 2k

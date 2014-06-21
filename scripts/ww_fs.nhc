@@ -230,7 +230,7 @@ function check_fs_mount() {
         fi
         # The filesystem is not mounted.
         if [[ "$REMOUNT" == "1" ]]; then
-            ${SHELL:-/bin/bash} -c "$MOUNT_CMD '$FS'" $LOGFILE &
+            ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" $LOGFILE &
         fi
         if [[ -n "$ACTION" ]]; then
             ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &

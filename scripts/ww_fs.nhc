@@ -224,16 +224,16 @@ function check_fs_mount() {
         if [[ "$FOUND" == "1" ]]; then
             # The filesystem is mounted correctly.  Move on to the next one.
             if [[ -n "$FOUND_ACTION" ]]; then
-                ${SHELL:-/bin/bash} -c "$FOUND_ACTION" $LOGFILE &
+                ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
             fi
             continue
         fi
         # The filesystem is not mounted.
         if [[ "$REMOUNT" == "1" ]]; then
-            ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" $LOGFILE &
+            ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" &
         fi
         if [[ -n "$ACTION" ]]; then
-            ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
+            ${SHELL:-/bin/bash} -c "$ACTION" &
         fi
         if [[ "$NONFATAL" == 1 ]]; then
             log "$FUNCNAME:  $FS not mounted (non-fatal)"

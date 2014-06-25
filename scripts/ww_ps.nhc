@@ -250,13 +250,13 @@ function nhc_ps_check_res() {
             syslog $MSG
         fi
         if [[ "$ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
+            ${SHELL:-/bin/bash} -c "$ACTION" &
         fi
         if [[ "$KILL" == "1" ]]; then
-            [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID $LOGFILE
+            [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
             MSG="$MSG; killed"
         elif [[ "$RENICE" != "" ]]; then
-            [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID $LOGFILE
+            [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID
             [[ "${RENICE##-}" == "${RENICE}" ]] && RENICE="+$RENICE"
             MSG="$MSG; reniced $RENICE"
         fi
@@ -440,17 +440,17 @@ function check_ps_service() {
         fi
         # We have a matching process with the correct owner.
         if [[ "$FOUND_ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" $LOGFILE &
+            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
         fi
         if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
             # Logic is inverted; we DON'T want this process running, so finding it is a failure.
             MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }running"
             if [[ "$KILL" == "1" ]]; then
-                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID $LOGFILE
+                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
                 MSG="$MSG; killed process ID $THIS_PID"
             else
                 # $STOP must be 1
-                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" $LOGFILE &
+                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" &
                 MSG="$MSG; termination in progress"
             fi
             if [[ $NONFATAL == 1 ]]; then
@@ -474,16 +474,16 @@ function check_ps_service() {
 
     MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
     if [[ $START == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" $LOGFILE &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" &
         MSG="$MSG; start in progress"
     elif [[ $RESTART == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" $LOGFILE &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
         MSG="$MSG; restart in progress"
     elif [[ $CYCLE == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" $LOGFILE &
+        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" &
         MSG="$MSG; cycle in progress"
     elif [[ "$ACTION" != "" ]]; then
-        ${SHELL:-/bin/bash} -c "$ACTION" $LOGFILE &
+        ${SHELL:-/bin/bash} -c "$ACTION" &
         MSG="$MSG; executed \"$ACTION\""
     fi
     if [[ $NONFATAL == 1 ]]; then

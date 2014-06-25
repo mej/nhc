@@ -33,7 +33,7 @@ function die() {
     syslog "Health check failed:  $*"
     syslog_flush
     if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
-        eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'" '</dev/null >/dev/null' $LOGFILE '2>&1 &'
+        eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         echo "$RET $*" > $RESULTFILE
@@ -44,13 +44,14 @@ function die() {
         echo "end"
         return 77
     else
-        echo "ERROR Health check failed:  $*"
+        oecho "ERROR Health check failed:  $*"
     fi
     if [[ "$NHC_CHECK_ALL" == "1" ]]; then
         ((FAIL_CNT++))
         return 0
     fi
     kill_watchdog
+    exec 1>&3- 2>&4-
     exit $RET
 }
 
@@ -60,11 +61,7 @@ function dbg() {
 
     if [[ "$DEBUG" == "1" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        eval echo '"${PREFIX}DEBUG:  $*"' $LOGFILE
-        if [[ $? -ne 0 ]]; then
-            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
-            export LOGFILE=">/dev/null"
-        fi
+        echo "${PREFIX}DEBUG:  $*"
     fi
 }
 
@@ -72,13 +69,49 @@ function dbg() {
 function log() {
     local PREFIX=""
 
-    if [[ "$SILENT" = "0" ]]; then
+    if [[ "$SILENT" == "0" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        eval echo '"$PREFIX$@"' $LOGFILE
-        if [[ $? -ne 0 ]]; then
-            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
-            export LOGFILE=">/dev/null"
-        fi
+        echo "$PREFIX$@"
+    fi
+}
+
+# Log output only in VERBOSE mode
+function vlog() {
+    local PREFIX=""
+
+    if [[ "$VERBOSE" == "1" ]]; then
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
+        echo "$PREFIX$@"
+    fi
+}
+
+# Send information to previous stdout
+function oecho() {
+    local PREFIX=""
+
+    if [[ "$SILENT" == "0" ]]; then
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
+        echo "$PREFIX$@" >&3
+    fi
+}
+
+# Send information to previous stderr
+function eecho() {
+    local PREFIX=""
+
+    if [[ "$SILENT" == "0" ]]; then
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
+        echo "$PREFIX$@" >&4
+    fi
+}
+
+# Echo only if VERBOSE
+function vecho() {
+    local PREFIX=""
+
+    if [[ "$VERBOSE" == "1" ]]; then
+        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
+        echo "$PREFIX$@" >&3
     fi
 }
 
@@ -130,7 +163,7 @@ function nhcmain_init_env() {
     NAME=${0/#*\/}
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT TIMEOUT
+    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
     unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL
 
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -163,6 +196,7 @@ $UNDERLINE
  -d                Activate debugging output (i.e., DEBUG=1)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
+ -v                Run verbosely (i.e., VERBOSE=1)
  -t <timeout>      Use timeout of <timeout> seconds (default: 10)
  -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
 
@@ -188,18 +222,19 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:c:dhn:qt:a" OPTION ; do
+    while getopts ":D:ac:dhn:qt:v" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
             h) nhcmain_help ; exit 0 ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
-            a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
-            :) nhcmain_help ; echo "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
-            \?) nhcmain_help ; echo "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
+            v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
+            :) nhcmain_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
+            \?) nhcmain_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -228,11 +263,12 @@ function nhcmain_finalize_env() {
     HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
     ONLINE_NODE="${ONLINE_NODE:-$HELPERDIR/node-mark-online}"
     OFFLINE_NODE="${OFFLINE_NODE:-$HELPERDIR/node-mark-offline}"
-    LOGFILE="${LOGFILE:->>/var/log/$NAME.log}"
+    LOGFILE="${LOGFILE:->>/var/log/$NAME.log 2>&1}"
     RESULTFILE="${RESULTFILE:-/var/run/nhc/$NAME.status}"
     DEBUG=${DEBUG:-0}
     TS=${TS:-$DEBUG}
     SILENT=${SILENT:-0}
+    VERBOSE=${VERBOSE:-0}
     MARK_OFFLINE=${MARK_OFFLINE:-1}
     DETACHED_MODE=${DETACHED_MODE:-0}
     DETACHED_MODE_FAIL_NODATA=${DETACHED_MODE_FAIL_NODATA:-0}
@@ -308,6 +344,19 @@ function nhcmain_find_rm() {
     fi
 }
 
+function nhcmain_redirect_output() {
+    if [[ -n "$LOGFILE" ]]; then
+        exec 3>&1- 4>&2-
+        eval exec $LOGFILE
+        if [[ $? -ne 0 ]]; then
+            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
+            exec >/dev/null
+        else
+            dbg "Output redirected per LOGFILE variable $LOGFILE"
+        fi
+    fi
+}
+
 function nhcmain_check_conffile() {
     # Check for config file before we do too much work.
     if [[ ! -f "$CONFFILE" ]]; then
@@ -318,7 +367,7 @@ function nhcmain_check_conffile() {
 }
 
 function nhcmain_load_scripts() {
-    log "Node Health Check starting."
+    vlog "Node Health Check starting."
 
     # Load all include scripts.
     dbg "Loading scripts from $INCDIR..."
@@ -351,7 +400,7 @@ function nhcmain_watchdog_timer() {
 function nhcmain_set_watchdog() {
     # Set ALARM to timeout script.
     if [[ $TIMEOUT -gt 0 ]]; then
-        eval nhcmain_watchdog_timer $TIMEOUT $NHC_PID $LOGFILE &
+        eval nhcmain_watchdog_timer $TIMEOUT $NHC_PID &
         WATCHDOG_PID=$!
         export WATCHDOG_PID
         dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
@@ -405,7 +454,7 @@ function nhcmain_run_checks() {
         CHECK_DIED=0
 
         # Run the check.
-        log "Running check:  \"$CHECK\""
+        vlog "Running check:  \"$CHECK\""
         eval $CHECK
         RET=$?
 
@@ -424,7 +473,7 @@ function nhcmain_run_checks() {
         NHC_CHECK_ALL=0
         log "$FAIL_CNT health checks failed."
         syslog "$FAIL_CNT health checks failed."
-        echo "ERROR $FAIL_CNT health checks failed."
+        oecho "ERROR $FAIL_CNT health checks failed."
         syslog_flush
         kill_watchdog
         exit $FAIL_CNT
@@ -433,7 +482,7 @@ function nhcmain_run_checks() {
 
 function nhcmain_mark_online() {
     if [[ "$MARK_OFFLINE" = "1" ]]; then
-        eval $ONLINE_NODE "'$HOSTNAME'" '</dev/null >/dev/null' $LOGFILE '2>&1 &'
+        eval $ONLINE_NODE "'$HOSTNAME'"
     fi
 }
 
@@ -445,7 +494,7 @@ function nhcmain_finish() {
     if [[ $TS -ne 0 ]]; then
         ((ELAPSED-=TS))
     fi
-    log "Node Health Check completed successfully (${ELAPSED}s)."
+    vlog "Node Health Check completed successfully (${ELAPSED}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin"
         echo "$HOSTNAME:healthy:true"
@@ -454,6 +503,7 @@ function nhcmain_finish() {
         return 0
     fi        
     kill_watchdog
+    exec 1>&3- 2>&4-
     exit 0
 }
 
@@ -472,6 +522,7 @@ nhcmain_init_env
 nhcmain_parse_cmdline "$@" || exit 10
 nhcmain_load_sysconfig
 nhcmain_finalize_env
+nhcmain_redirect_output
 nhcmain_check_conffile || exit 0
 nhcmain_load_scripts
 if [[ "$NHC_RM" == "sge" ]]; then

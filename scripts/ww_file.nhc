@@ -168,7 +168,7 @@ function check_file_test() {
     fi
     for OP in "${FLAGS[@]}" ; do
         for ARG in "${ARGS[@]}" ; do
-            eval test $OP "$ARG" $LOGFILE
+            eval test $OP "$ARG"
             RESULT=$?
             if [[ $RESULT -ne 0 ]]; then
                 die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."

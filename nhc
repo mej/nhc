@@ -51,7 +51,7 @@ function die() {
         return 0
     fi
     kill_watchdog
-    exec 1>&3- 2>&4-
+    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
     exit $RET
 }
 
@@ -222,13 +222,14 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:dhn:qt:v" OPTION ; do
+    while getopts ":D:ac:dhl:n:qt:v" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
             h) nhcmain_help ; exit 0 ;;
+            l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
@@ -275,6 +276,11 @@ function nhcmain_finalize_env() {
     TIMEOUT=${TIMEOUT:-10}
     MAX_SYS_UID=${MAX_SYS_UID:-99}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
+
+    if [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
+        # If the log file looks like a path rather than a redirect, fix it.
+        LOGFILE=">>$LOGFILE 2>&1"
+    fi
 
     if [[ -z "$NHC_RM" ]]; then
         if ! nhcmain_find_rm ; then
@@ -503,7 +509,7 @@ function nhcmain_finish() {
         return 0
     fi        
     kill_watchdog
-    exec 1>&3- 2>&4-
+    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
     exit 0
 }
 

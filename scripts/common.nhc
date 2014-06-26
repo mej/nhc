@@ -293,8 +293,8 @@ function nhc_load_conf() {
     # Load configuration file and match lines to current hostname.
     dbg "Loading configuration from $CONFFILE."
     while read LINE ; do
-        TARGET="${LINE/%||*}"
-        CHECK="${LINE/#*||}"
+        TARGET="${LINE%%||*}"
+        CHECK="${LINE#*||}"
 
         # Trim whitespace.
         while [[ "${TARGET## }" != "${TARGET%% }" ]]; do

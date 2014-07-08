@@ -512,6 +512,7 @@ function nhc_common_get_unix_time() {
         NOW=$(date '+%s')
         ELAPSED_SECONDS=$SECONDS
         SECONDS=$((ELAPSED_SECONDS+NOW))
+        NHC_START_TS=$((NOW-ELAPSED_SECONDS))
     fi
 }
 

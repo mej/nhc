@@ -282,6 +282,9 @@ function nhcmain_finalize_env() {
     if [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
         # If the log file looks like a path rather than a redirect, fix it.
         LOGFILE=">>$LOGFILE 2>&1"
+    elif [[ "$LOGFILE" == "-" ]]; then
+        # Since bash doesn't distinguish between unset and empty, we use "-" instead.
+        unset LOGFILE
     fi
 
     if [[ -z "$NHC_RM" ]]; then

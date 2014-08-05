@@ -596,3 +596,482 @@ Wed Apr 03 15:10:17 2013                        Michael Jennings (mej)
 Note to self:  Write more unit tests based on potential stupid
 mistakes an admin could make rather than just real-world usage.
 ----------------------------------------------------------------------
+Fri Apr 05 18:26:52 2013                        Michael Jennings (mej)
+
+Release version 1.3.
+----------------------------------------------------------------------
+Wed Jun 19 11:57:55 2013                        Michael Jennings (mej)
+
+SLURM doesn't prohibit nodes with subdomains, so don't forceably
+eliminate them.
+----------------------------------------------------------------------
+Fri Sep 27 14:10:07 2013                        Michael Jennings (mej)
+
+Use "bsdtime" option instead of "time" to make sure we get a time
+value we can easily parse (MMM:SS instead of DD-HH:MM:SS).  Thanks to
+John Hanks <john.hanks@usu.edu> for pointing out this issue!
+----------------------------------------------------------------------
+Mon Oct 07 16:14:08 2013                        Michael Jennings (mej)
+
+If logging to the logfile fails for some reason, syslog an error
+message and redirect to /dev/null.  Thanks to Ole Holm Nielsen
+<Ole.H.Nielsen@fysik.dtu.dk> for catching this issue!
+----------------------------------------------------------------------
+Wed Nov 06 13:55:39 2013                        Michael Jennings (mej)
+
+Increment test count on failed test too.
+----------------------------------------------------------------------
+Wed Nov 06 13:55:41 2013                        Michael Jennings (mej)
+
+Add new check:  check_ps_service [options] <service>
+
+This check takes a service-oriented posture.  It's similar to
+check_ps_daemon but allows for glob- and regexp-based matching along
+with optionally restarting the service if it's not running.  The user
+can also specify arbitrary commands to be run if the appropriate
+service daemon isn't (or is) found.
+----------------------------------------------------------------------
+Tue Jan 14 07:41:12 2014                        Michael Jennings (mej)
+
+Add new "test-debug" target for generating verbose debugging output
+when running the unit test suite.
+
+Work around bash regexp implementations which do not support the \b
+"word boundary" binding operator.
+----------------------------------------------------------------------
+Tue Jan 14 08:15:39 2014                        Michael Jennings (mej)
+
+Add support for timestamping in log/debug output based on bash
+$SECONDS variable.  This adds a single fork() in order to get the
+current UNIX time_t value via date(1).  Off by default unless
+debugging.
+----------------------------------------------------------------------
+Sun Feb 09 02:24:11 2014                        Michael Jennings (mej)
+
+Properly handle missing script files.
+----------------------------------------------------------------------
+Sun Feb 09 02:24:18 2014                        Michael Jennings (mej)
+
+Preliminary setup for allowing checks to be done in a non-fatal manner
+for general monitoring purposes.
+----------------------------------------------------------------------
+Sun Feb 09 02:24:26 2014                        Michael Jennings (mej)
+
+Add option (-a) and config variable (NHC_CHECK_ALL) to make individual
+checks non-fatal.  This will cause NHC to continue running all checks,
+even if one or more of them fail, until it finishes.  It then reports
+how many checks failed and returns that number as its exit status.
+
+This is intended for more general monitoring use (e.g., from cron).
+----------------------------------------------------------------------
+Sun Feb 09 02:24:34 2014                        Michael Jennings (mej)
+
+Don't assume device files will always be there.
+----------------------------------------------------------------------
+Mon Feb 10 16:57:54 2014                        Michael Jennings (mej)
+
+Added two new options for check_ps_service (-s and -k) to stop/kill
+services which *are* running.  Similar to check_ps_blacklist but
+allows for blacklisted services to be actively terminated by NHC.
+----------------------------------------------------------------------
+Mon Feb 10 16:57:57 2014                        Michael Jennings (mej)
+
+Support negated user (owner) matches in check_ps_service just like in
+check_ps_blacklist.
+----------------------------------------------------------------------
+Mon Feb 10 16:58:01 2014                        Michael Jennings (mej)
+
+This was going to be 1.3.1, but the changes are extensive enough that
+it will need to be a 1.4 release.  Bump version accordingly.
+----------------------------------------------------------------------
+Mon Feb 10 17:01:53 2014                        Michael Jennings (mej)
+
+Add another svnversion fallback to spec file and uncomment.
+----------------------------------------------------------------------
+Wed Feb 12 12:29:58 2014                        Michael Jennings (mej)
+
+Remove the reference to $BASH_SUBSHELL.  I now realize what it does,
+and it's not at all what I was intending.
+----------------------------------------------------------------------
+Wed Feb 12 13:29:09 2014                        Michael Jennings (mej)
+
+Tweak how $OFFLINE_NODE and $ONLINE_NODE are invoked so that they can
+be customized with additional capabilities instead of just specifying
+a single command.  This is a potential alternative to customizing the
+scripts themselves.
+----------------------------------------------------------------------
+Wed Feb 12 13:29:11 2014                        Michael Jennings (mej)
+
+Mark pretty much everything, including nhc itself, as a config file so
+that customizations don't get overwritten.  Conceivably any or all of
+these elements could potentially acquire site-local modifications.
+
+The caveat, of course, being that updates would then have to be done
+by hand....
+----------------------------------------------------------------------
+Wed Feb 12 15:37:45 2014                        Michael Jennings (mej)
+
+Better way of securing permissions.
+----------------------------------------------------------------------
+Wed Feb 19 15:26:18 2014                        Michael Jennings (mej)
+
+Typo.
+----------------------------------------------------------------------
+Wed Feb 19 17:27:17 2014                        Michael Jennings (mej)
+
+This should fix the issue spotted by Anthony DelSorbo
+<adelsorb@csc.com> and Ken Nielson <knielson@adaptivecomputing.com>.
+
+When NHC exits, it tries to terminate the watchdog timer process (a
+bash process with a sleep process as a child).  Because of a "bug"
+(lack of feature, but that feature is specified by POSIX!) in bash,
+its internal implementation of the "kill" builtin is incapable of
+sending a signal to an entire process group (see also:  NHC's SVN
+r1201 commit).  So when we sent the signal to the watchdog (i.e.,
+bash) process, it died, but its child (the sleep process) didn't!
+
+This commit rewrites the watchdog timer (again) to try and make sure
+that the sleep goes away when the bash goes away.
+
+NOTE:  This was only an issue if the output of NHC was being piped
+(i.e., read()) somewhere.  Unfortunately, that includes pbs_mom....
+;-)  You can compare/verify this by running "nhc" by itself on the
+command line vs. running "nhc 2>&1 | less"
+----------------------------------------------------------------------
+Wed Feb 19 17:31:24 2014                        Michael Jennings (mej)
+
+Add EXIT for paranoia.
+----------------------------------------------------------------------
+Wed Mar 05 16:15:56 2014                        Michael Jennings (mej)
+
+Add support for negating file content matches in
+check_file_contents().  Prefixing the match expression with an
+exclamation mark (!) will cause the check to fail if any line in the
+file matches the expression.  Any combination of positive and negative
+match expressions may be used in the same check.
+----------------------------------------------------------------------
+Fri Mar 07 12:09:06 2014                        Michael Jennings (mej)
+
+Patch from Eliot Eshelman <eliot.eshelman@6by9.net> to ensure that NHC
+reads the correct exit code from nvidia-healthmon.
+----------------------------------------------------------------------
+Fri Mar 07 22:31:57 2014                        Michael Jennings (mej)
+
+Further input from Eliot Eshelman <eliot.eshelman@6by9.net> led me to
+reorder and rework the subcommand execution for the nVidia healthmon
+check to ensure that command-line options were handled in the most
+portable way possible.
+----------------------------------------------------------------------
+Fri Mar 07 22:56:51 2014                        Michael Jennings (mej)
+
+What on earth was that??
+----------------------------------------------------------------------
+Fri Mar 14 10:10:54 2014                        Michael Jennings (mej)
+
+Clarification of comment verbiage.
+----------------------------------------------------------------------
+Fri Mar 14 10:10:59 2014                        Michael Jennings (mej)
+
+Added 4 new checks, all with similar syntax, for looking at process
+resource consumption.  Each check looks for processes using more than
+a specified amount of the resource and can take various actions when
+they are found.  The checks and their respective resources are:
+
+check_ps_cpu     - Percentage of CPU utilization
+check_ps_mem     - Amount of total system memory (absolute size)
+check_ps_physmem - Amount of physical RAM (absolute or percentage)
+check_ps_time    - Total CPU time
+
+Syntax is, e.g.:  check_ps_cpu [flags] <threshold>
+Flags accepted:
+   -0          Non-fatal; report on matches, but don't terminate
+   -a          Find and alert on all matches; don't die after the 1st
+   -e action   Execute a command if a match is found
+   -f          Full match; match against the entire command line
+   -k          Kill matching processes if found
+   -l          Log processes found to the NHC log
+   -m match    Specifies a command (or command line) to match
+   -r value    Renice matching processes by the specified factor
+   -s          Log processes found to the syslog
+   -u [!]user  Match only processes owned (or not owned) by user
+
+Thresholds are specified as percentages (percent sign is optional for
+check_ps_cpu), sizes (in kB or with appropriate suffix), or time (in
+seconds or XXXmYYs).
+
+Examples:
+  check_ps_cpu -r 19 -u '!root' 99
+  check_ps_mem -k -u mej -m '/leakyprog/' 24g
+  check_ps_physmem -l -s 90%
+  check_ps_time -l 720m
+----------------------------------------------------------------------
+Fri Mar 14 16:28:50 2014                        Michael Jennings (mej)
+
+Slight efficiency improvement by reading directly from the file
+instead of creating a subprocess.
+----------------------------------------------------------------------
+Fri Mar 14 16:28:52 2014                        Michael Jennings (mej)
+
+Fix minor cosmetic bug when timestamps are turned on -- the completion
+line in the log file gave the timestamp instead of the elapsed time.
+----------------------------------------------------------------------
+Fri Mar 14 17:18:12 2014                        Michael Jennings (mej)
+
+Add check_loadavg() for looking at the 1-, 5-, and 15-minute load
+averages on a system.  Any or all may be capped.  Syntax is:
+  check_loadavg <limit_1m> <limit_5m> <limit_15m>
+
+Blank limits are ignored.
+
+This check was originally written in front of a live studio audience
+at MoabCon 2013!  (See the video at:  http://go.lbl.gov/nhc-2013-mc)
+----------------------------------------------------------------------
+Mon Mar 17 15:27:10 2014                        Michael Jennings (mej)
+
+Added 2 new checks for looking at the results of bash's built-in
+"test" command as well as file stat() values.
+
+check_file_test() provides an interface to certain options of the
+"test" command which examine file attributes without needing to shell
+out to run the /bin/stat command.  For example, you can check to see
+if a file is readable, or writable, or if it even exists at all.
+
+check_file_stat() goes further by actually running the /bin/stat
+command and allowing you to test its results against expected values.
+You can verify the owner or group of a file, or check to see if the
+last-modified-time for a file is newer or older than you think it
+should be.
+
+These checks both support a *ton* of options, so documenting them all
+here would make for a humongous changelog entry, but here are a few
+examples:
+
+To make sure /tmp is writable:
+check_file_test -w /tmp
+
+To make sure the passwd file isn't empty or missing:
+check_file_test -s /etc/passwd
+
+To make sure /dev/null is a character special device:
+check_file_test -c /dev/null
+
+To do a full integrity check on /dev/null:
+check_file_stat -m 0666 -u 0 -g 0 -t 1 -T 3 /dev/null
+
+To make sure /var/log/messages has recent activity:
+check_file_stat -n 7200 /var/log/messages
+
+To verify access to a user's ~/.ssh/ tree:
+check_file_stat -m 0700 -U someuser /home/someuser
+
+Full documentation for these checks will be on the web once I have a
+chance to write them all up!
+----------------------------------------------------------------------
+Tue Mar 18 16:18:20 2014                        Michael Jennings (mej)
+
+Fix path to stat command.
+----------------------------------------------------------------------
+Tue Mar 18 16:18:23 2014                        Michael Jennings (mej)
+
+Add optional "fudge" factor to mem/swap size checks.  This allows the
+actual size to be within some percentage or specific number of kB of
+the specified minimum/maximum and still pass the check.  If not
+specified, obviously, no fudge factor is used.
+
+Example:  To verify RAM size is 32GB +/- 10%:
+
+check_hw_physmem 32g 32g 10%
+  -OR-
+check_hw_physmem 32g 32g 3200m
+----------------------------------------------------------------------
+Wed Mar 19 09:20:07 2014                        Michael Jennings (mej)
+
+Add unit tests for fudge factor code.
+----------------------------------------------------------------------
+Wed Mar 19 13:54:01 2014                        Michael Jennings (mej)
+
+Create /var/run/nhc and put run-time files (like results) in there
+instead of directly in /var/run.
+
+Make $RESULTFILE depend on $NAME.  Each named instance should have
+independent results.
+
+Don't have $CONFDIR or $HELPERDIR depend on $NAME; that requires a
+duplicate of /etc/nhc and /usr/libexec/nhc per named instance.  I
+think the overwhelming majority of users will want checks and helper
+scripts to be universal and only have the configuration file(s) differ
+(at most).  If anyone wants it the old way, it can still be overridden
+via sysconfig or command line.
+----------------------------------------------------------------------
+Wed Mar 19 15:46:12 2014                        Michael Jennings (mej)
+
+Add new script file ww_cmd.nhc for checks based on arbitrary subcommands.
+----------------------------------------------------------------------
+Thu Mar 20 17:14:02 2014                        Michael Jennings (mej)
+
+Initial implementations of command-based checks.  These may get further refinement.
+----------------------------------------------------------------------
+Fri Mar 21 12:30:45 2014                        Michael Jennings (mej)
+
+Patch from Eliot Eshelman <eliot.eshelman@6by9.net> (slightly
+modified) for SLURM support in check_ps_unauth_users().
+----------------------------------------------------------------------
+Fri Mar 21 13:42:39 2014                        Michael Jennings (mej)
+
+Command output matching is (preliminarily) working now.
+
+Fixed some missing check name labels in error messages.
+----------------------------------------------------------------------
+Fri Mar 21 14:46:45 2014                        Michael Jennings (mej)
+
+Redo the command output check a better way.
+----------------------------------------------------------------------
+Mon Mar 24 12:22:14 2014                        Michael Jennings (mej)
+
+Additional unit tests for command checks.
+----------------------------------------------------------------------
+Mon Mar 24 12:22:17 2014                        Michael Jennings (mej)
+
+Add stubs for Moab/TORQUE checks.
+----------------------------------------------------------------------
+Wed Mar 26 15:11:07 2014                        Michael Jennings (mej)
+
+Added a flag to check_ps_service to just start (instead of restart)
+the service.  Useful for cases like sshd where "restart" when the
+daemon isn't running will kill user login sessions!
+----------------------------------------------------------------------
+Wed Mar 26 15:11:10 2014                        Michael Jennings (mej)
+
+Fix typos in check_ps_service unit tests.
+----------------------------------------------------------------------
+Wed Mar 26 15:11:12 2014                        Michael Jennings (mej)
+
+Add TORQUE/Moab-specific checks.  These are still preliminary, and
+unit tests for them are still pending, but they're already at least
+somewhat useful.
+
+ check_moab_sched -t <timeout> -a <alert> -v <version> -m <match>
+
+Checks the output of "mdiag -S -v" against the specified version,
+alert, and/or arbitrary match expression(s).  If a matching alert is
+found, if the versions don't match, or if any of the match expressions
+(possibly negated) trigger, the check fails.  All parameters are
+optional.  Multiple occurrences of -m are supported.
+
+ check_moab_rm -t <timeout> -m <match>
+
+Checks the output of "mdiag -R -v" against any specified match
+expression(s).  It also looks for any RMs that are not in the "Active"
+state.  If any RM is inactive, or if any of the match expressions
+(possibly negated) trigger, the check fails.  All parameters are
+optional.  Multiple occurrences of -m are supported.
+
+ check_moab_torque -t <timeout> -m <match>
+
+Checks the output of "mdiag -R -v" against any specified match
+expression(s).  It also looks for the "scheduling" parameter to be
+turned on.  If "scheduling" is false, or if any of the match
+expressions (possibly negated) trigger, the check fails.  All
+parameters are optional.  Multiple occurrences of -m are supported.
+----------------------------------------------------------------------
+Thu Mar 27 16:10:28 2014                        Michael Jennings (mej)
+
+Skip a few tests on RHEL4 due to apparent bash bug.
+----------------------------------------------------------------------
+Thu Mar 27 17:01:46 2014                        Michael Jennings (mej)
+
+Explicitly test $DEBUG for ==1, not !=0
+----------------------------------------------------------------------
+Sun Mar 30 16:19:36 2014                        Michael Jennings (mej)
+
+Allow nhc.cron to pass options to nhc.
+
+Fix missing flag in comment.
+----------------------------------------------------------------------
+Sun Mar 30 18:03:49 2014                        Michael Jennings (mej)
+
+Rewrite check_file_test to match check_file_stat calling conventions.
+----------------------------------------------------------------------
+Wed Apr 09 09:39:03 2014                        Michael Jennings (mej)
+
+check_loadavg() -> check_ps_loadavg()
+----------------------------------------------------------------------
+Fri Apr 18 14:59:17 2014                                      macabral
+
+Merge branch 'NO_OFFLOAD'
+----------------------------------------------------------------------
+Fri May 02 13:31:01 2014                        Michael Jennings (mej)
+
+Improved default config file for NHC.
+----------------------------------------------------------------------
+Tue Jun 17 11:59:26 2014                        Michael Jennings (mej)
+
+Fix name of SLURM job parent daemon noted by Eliot Eshelman <eliot.eshelman@6by9.net>.
+----------------------------------------------------------------------
+Wed Jun 18 17:06:03 2014                        Michael Jennings (mej)
+
+Rewrote check_fs_mount() to newer, more flexible syntax.  Old syntax
+is still supported, but the check now takes options.  New features
+include support for multiple filesystems in a single check_fs_mount
+invocation, ability to attempt mount of missing filesystems, ability
+to negate match strings for source/type/options, support for multiple
+match strings of each type, support for actions if found (or not), and
+support for making the check non-fatal.  check_fs_mount_ro() and
+check_fs_mount_rw() have also been updated to work with either syntax
+(based on whether or not the first argument is a mountpoint).
+
+Added logging of messages for non-fatal checks and logging of shell
+actions for check_ps_service() and nhc_ps_check_res().
+----------------------------------------------------------------------
+Thu Jun 19 12:34:32 2014                        Michael Jennings (mej)
+
+Adjust handling of updating SLURM node states.
+----------------------------------------------------------------------
+Thu Jun 19 12:40:03 2014                        Michael Jennings (mej)
+
+Fix typo.
+----------------------------------------------------------------------
+Fri Jun 20 17:39:53 2014                        Michael Jennings (mej)
+
+Use mount options if provided.  Add unit tests for new syntax.
+----------------------------------------------------------------------
+Wed Jun 25 16:46:25 2014                        Michael Jennings (mej)
+
+Revert logfile redirection; bash doesn't support it that way.
+----------------------------------------------------------------------
+Wed Jun 25 16:46:28 2014                        Michael Jennings (mej)
+
+Refactor I/O.  Now all check and subcommand executions' output is
+redirected according to the value of $LOGFILE; the original
+stdout/stderr are restored immediately before exit.  The ERROR message
+output, if any, is forceably routed to stdout to help ensure that
+ERROR is the first thing the RM daemon sees.  (This is especially
+important for TORQUE/PBS which only look at the first word of the
+first line of output and ignore everything else.)
+
+Along with this, the default execution is now quieter.  Status
+information is only printed in VERBOSE mode (-v).
+----------------------------------------------------------------------
+Wed Jun 25 16:46:30 2014                        Michael Jennings (mej)
+
+Add new -l option for specifying log file on command line.  If value
+of LOGFILE looks like a path instead of output redirection, assume
+it's just a filename and convert to an append-redirect statement.  So
+LOGFILE="/path/to/log" becomes LOGFILE=">>/path/to/log 2>&1" instead.
+----------------------------------------------------------------------
+Thu Jun 26 13:55:47 2014                        Michael Jennings (mej)
+
+Properly handle multiple double-pipes on the check line.  This allows
+things like:  * || check_name && something_else || :
+----------------------------------------------------------------------
+Tue Jul 08 15:01:39 2014                        Michael Jennings (mej)
+
+Update sample config with latest syntax and fix a couple typos.
+Correct yet another issue in the "overloading $SECONDS" vein.
+----------------------------------------------------------------------
+Tue Jul 08 15:01:42 2014                        Michael Jennings (mej)
+
+Since the shell doesn't distinguish between an unset variable (like
+"undef" in Perl) and an empty/null variable (like the empty string in
+Perl), we must use "-" for -l/LOGFILE to represent "no redirection."
+----------------------------------------------------------------------

@@ -32,12 +32,18 @@ DFI_PCT=( )
 DFI_MNTPT=( )
 
 function nhc_fs_mounts_gather_data() {
-    local FS_CNT LINE i
+    local FS_CNT LINE FS i
     local -a FIELD
 
     if [[ ! -r /proc/mounts ]]; then
         return 1
     fi
+
+    # Any filesystems passed as parameters should be actively
+    # queried to force auto-mounting to take place.
+    for FS in "$@" ; do
+        read -a FIELD < $FS/NHC/non-existent/path/FILE.xxxx >/dev/null 2>&1
+    done
 
     ((FS_CNT=0))
     while read -a FIELD ; do
@@ -128,15 +134,8 @@ function nhc_fs_dfi_gather_data() {
 function check_fs_mount() {
     local FS="$1" SRC="$2" TYPE="$3" OPTIONS="$4"
     local REMOUNT=0 NONFATAL=0 MOUNT_OPTS="" ACTION="" FOUND_ACTION=""
-    local -a FS_LIST SRC_LIST TYPE_LIST OPTIONS_LIST
+    local -a AUTOFS_LIST FS_LIST SRC_LIST TYPE_LIST OPTIONS_LIST
     local i FOUND
-
-    if [[ ${#FS_DEV[*]} -eq 0 ]]; then
-        nhc_fs_mounts_gather_data || {
-            die 1 "$FUNCNAME:  /proc/mounts unreadable"
-            return 1
-        }
-    fi
 
     if [[ "${FS##/}" != "$FS" ]]; then
         # First parameter starts with a '/'.  Use the old syntax.
@@ -146,11 +145,12 @@ function check_fs_mount() {
         [[ -n "$OPTIONS" ]] && OPTIONS_LIST=( "$OPTIONS" )
     else
         OPTIND=1
-        while getopts ":0rE:O:e:f:o:s:t:" OPTION ; do
+        while getopts ":0rE:F:O:e:f:o:s:t:" OPTION ; do
             case "$OPTION" in
                 0) NONFATAL=1 ;;
                 r) REMOUNT=1 ;;
                 f) FS_LIST[${#FS_LIST[*]}]="$OPTARG" ;;
+                F) AUTOFS_LIST[${#AUTOFS_LIST[*]}]="$OPTARG" ;;
                 o) OPTIONS_LIST[${#OPTIONS_LIST[*]}]="$OPTARG" ;;
                 O) MOUNT_OPTS="$OPTARG" ;;
                 s) SRC_LIST[${#SRC_LIST[*]}]="$OPTARG" ;;
@@ -169,7 +169,14 @@ function check_fs_mount() {
         done
     fi
 
-    for FS in "${FS_LIST[@]}" ; do
+    if [[ ${#FS_DEV[*]} -eq 0 ]]; then
+        nhc_fs_mounts_gather_data "${AUTOFS_LIST[@]}" || {
+            die 1 "$FUNCNAME:  /proc/mounts unreadable"
+            return 1
+        }
+    fi
+
+    for FS in "${FS_LIST[@]}" "${AUTOFS_LIST[@]}" ; do
         FOUND=0
         for ((i=0; i < ${#FS_DEV[*]}; i++)); do
             if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then

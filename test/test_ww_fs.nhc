@@ -150,7 +150,7 @@ function populate_fs_data() {
     )
 }
 
-plan $((9+5+3+5+5+4+4+4+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
+plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is "`type -t check_fs_mount 2>&1`" 'function' 'check_fs_mount() loaded properly'
     is "`type -t check_fs_mount_rw 2>&1`" 'function' 'check_fs_mount_rw() loaded properly'
     is "`type -t check_fs_mount_ro 2>&1`" 'function' 'check_fs_mount_ro() loaded properly'
@@ -231,6 +231,11 @@ plan $((9+5+3+5+5+4+4+4+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is $? 0 "check_fs_mount() for NFS version (regex) with found action"
     SHELL=: check_fs_mount -r -O ro -f /boot
     is $? 0 "check_fs_mount() with remount directive and mount options"
+
+    check_fs_mount -F /home
+    is $? 0 "check_fs_mount(), auto-mounted filesystem"
+    check_fs_mount -F /mnt/home
+    is $? 1 "check_fs_mount(), invalid auto-mounted filesystem"
 
     check_fs_mount_ro -f /global/software
     is $? 0 "check_fs_mount_ro(), just filesystem"

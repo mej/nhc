@@ -3,7 +3,7 @@
 # $Id: test_ww_fs.nhc 1351 2013-04-03 22:10:17Z mej $
 #
 
-function populate_fs_data() {
+function nhc_fs_mounts_gather_data() {
     DF_DEV=(
         [0]="/dev/mapper/vg0-lv_root_ext4"
         [1]="proc"
@@ -160,8 +160,6 @@ plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is "`type -t check_fs_inodes 2>&1`" 'function' 'check_fs_inodes() loaded properly'
     is "`type -t check_fs_ifree 2>&1`" 'function' 'check_fs_ifree() loaded properly'
     is "`type -t check_fs_iused 2>&1`" 'function' 'check_fs_iused() loaded properly'
-
-    populate_fs_data
 
     ### Check old syntax first.  These are the original tests.
     check_fs_mount /

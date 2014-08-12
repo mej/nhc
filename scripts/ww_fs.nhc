@@ -42,8 +42,8 @@ function nhc_fs_mounts_gather_data() {
     # Any filesystems passed as parameters should be actively
     # queried to force auto-mounting to take place.
     for FS in "$@" ; do
-        read -a FIELD < $FS/NHC/non-existent/path/FILE.xxxx >/dev/null 2>&1
-    done
+        read -a FIELD < $FS/NHC/non-existent/path/FILE.xxxx
+    done &>/dev/null
 
     ((FS_CNT=0))
     while read -a FIELD ; do
@@ -169,7 +169,8 @@ function check_fs_mount() {
         done
     fi
 
-    if [[ ${#FS_DEV[*]} -eq 0 ]]; then
+    if [[ ${#FS_DEV[*]} -eq 0 || ${#AUTOFS_LIST[*]} -gt 0 ]]; then
+        # Invalidate cache if automount filesystem(s) specified.
         nhc_fs_mounts_gather_data "${AUTOFS_LIST[@]}" || {
             die 1 "$FUNCNAME:  /proc/mounts unreadable"
             return 1

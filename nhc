@@ -361,8 +361,11 @@ function nhcmain_redirect_output() {
         exec 3>&1- 4>&2-
         eval exec $LOGFILE
         if [[ $? -ne 0 ]]; then
-            syslog "Unable to write to LOGFILE (\"$LOGFILE\") as user \"$USER\" (uid $EUID) -- Read-only filesystem?  Suppressing further output."
-            exec >/dev/null
+            exec 1>&3- 2>&4-
+            echo "ERROR NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
+            syslog "NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
+            syslog_flush
+            exit 1
         else
             dbg "Output redirected per LOGFILE variable $LOGFILE"
         fi
@@ -424,11 +427,11 @@ function nhcmain_set_watchdog() {
 function nhcmain_spawn_detached() {
     rm -f "$RESULTFILE" >/dev/null 2>&1
     export NHC_DETACHED=$$
-    exec -a nhc-detached $0 </dev/null >/dev/null 2>&1
+    exec -a ${NAME}-detached $0 </dev/null >/dev/null 2>&1
 }
 
 function nhcmain_detach() {
-    local RC MSG
+    local RC MSG ELAPSED
 
     # If the results file exists but the system has rebooted since its
     # creation, assume it's stale and remove it.
@@ -448,14 +451,18 @@ function nhcmain_detach() {
     # Launch detached process
     nhcmain_spawn_detached &
 
-    # Only mark offline/online in detached copy.
-    MARK_OFFLINE=0
-
+    syslog_flush
     if [[ "$RC" != "0" ]]; then
-        die $RC "$MSG"
-        return 1
+        oecho "ERROR Health check failed:  $MSG"
+        exit $RC
     fi
-    nhcmain_finish
+
+    # FIXME:  TODO or !TODO, that is the question....
+    #nhcmain_redirect_output
+    #ELAPSED=$((SECONDS-NHC_START_TS))
+    #vlog "Node Health Check detached parent completed successfully (${ELAPSED}s)."
+    #[[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
+    exit 0
 }
 
 function nhcmain_run_checks() {

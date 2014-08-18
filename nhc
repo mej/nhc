@@ -453,7 +453,7 @@ function nhcmain_detach() {
 
     syslog_flush
     if [[ "$RC" != "0" ]]; then
-        oecho "ERROR Health check failed:  $MSG"
+        echo "ERROR Health check failed:  $MSG"
         exit $RC
     fi
 

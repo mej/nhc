@@ -458,10 +458,10 @@ function nhcmain_detach() {
     fi
 
     # FIXME:  TODO or !TODO, that is the question....
-    #nhcmain_redirect_output
-    #ELAPSED=$((SECONDS-NHC_START_TS))
-    #vlog "Node Health Check detached parent completed successfully (${ELAPSED}s)."
-    #[[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
+    nhcmain_redirect_output
+    ELAPSED=$((SECONDS-NHC_START_TS))
+    vlog "Node Health Check detached parent completed successfully (${ELAPSED}s)."
+    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
     exit 0
 }
 

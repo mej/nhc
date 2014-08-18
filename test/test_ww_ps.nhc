@@ -375,7 +375,7 @@ function populate_loadavg_data() {
     LOADAVG=( 15 9 4 )
 }
 
-plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
+plan $((14+10+6+29+18+6+5+7+6+6+9)) "ww_ps.nhc" && {
     is "`type -t nhc_ps_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t nhc_ps_pid_lineage 2>&1`" 'function' 'nhc_ps_pid_lineage() loaded properly'
     is "`type -t nhc_ps_check_res 2>&1`" 'function' 'nhc_ps_check_res() loaded properly'
@@ -522,6 +522,8 @@ plan $((14+10+6+29+17+6+5+7+6+6+9)) "ww_ps.nhc" && {
     is $? 0 "CPU utilization >= 99% by bash (syslog directive)"
     SHELL=: check_ps_cpu -k -m '/wrf/' 99
     is $? 1 "CPU utilization >= 99% by WRF (kill directive)"
+    SHELL=: check_ps_cpu -K -k -m '/wrf/' 99
+    is $? 1 "CPU utilization >= 99% by WRF (kill-parent directive)"
     SHELL=: check_ps_cpu -r 15 -m '/bash/' 99
     is $? 0 "CPU utilization >= 99% by bash (renice directive)"
     SHELL=: check_ps_cpu -e /sbin/reboot -m '/mpirun/' 0

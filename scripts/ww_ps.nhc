@@ -116,7 +116,7 @@ function nhc_ps_pid_lineage() {
 # by check_ps_{cpu,mem,physmem}().  Additional parameters are the check
 # name and the type of resource to look at.
 function nhc_ps_check_res() {
-    local NONFATAL=0 FULLMATCH=0 ALL=0 SYSLOG=0 LOG=0 KILL=0 RENICE="" OWNER="" MATCH="" ACTION=""
+    local NONFATAL=0 FULLMATCH=0 ALL=0 SYSLOG=0 LOG=0 KILL=0 KILL_PARENT=0 RENICE="" OWNER="" MATCH="" ACTION=""
     local CHECK="$1" COL="$2" THRESHOLD
     local THIS_PID THIS_PROG MSG T_MIN T_SEC NUM LIM i
 
@@ -126,9 +126,10 @@ function nhc_ps_check_res() {
 
     shift 2
     OPTIND=1
-    while getopts ":0falskr:u:m:e:" OPTION ; do
+    while getopts ":0Kfalskr:u:m:e:" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
+            K) KILL_PARENT=1 ;;
             f) FULLMATCH=1 ;;
             a) ALL=1 ;;
             l) LOG=1 ;;
@@ -259,6 +260,16 @@ function nhc_ps_check_res() {
             [[ "$SHELL" != ":" ]] && renice -n "$RENICE" $THIS_PID
             [[ "${RENICE##-}" == "${RENICE}" ]] && RENICE="+$RENICE"
             MSG="$MSG; reniced $RENICE"
+        fi
+        if [[ "$KILL_PARENT" == "1" ]]; then
+            if [[ ${PS_PPID[$THIS_PID]} -eq 1 ]]; then
+                MSG="$MSG; parent ${PS_PPID[$THIS_PID]} not killed (PPID is 1)"
+            elif [[ ${PS_UID[$THIS_PID]} -ne ${PS_UID[${PS_PPID[$THIS_PID]}]} ]]; then
+                MSG="$MSG; parent ${PS_PPID[$THIS_PID]} not killed (owner mismatch)"
+            else
+                [[ "$SHELL" != ":" ]] && kill -9 ${PS_PPID[$THIS_PID]}
+                MSG="$MSG; killed parent ${PS_PPID[$THIS_PID]}"
+            fi
         fi
         if [[ $ALL -ge 1 ]]; then
             if [[ -n "$MSG" ]]; then

@@ -1,0 +1,252 @@
+#!/bin/bash
+#
+# Wrapper utility for NHC
+#
+# Michael Jennings <mej@lbl.gov>
+# 19 August 2014
+#
+# $Id: nhc 1633 2014-03-28 00:01:46Z mej $
+#
+
+# This script is intended to provide a convenient wrapper for
+# executing the Warewulf Node Health Check (NHC) driver program in an
+# out-of-band (i.e., outside a scheduler/resource manager) context.
+# It provides facilities for passing parameters to NHC, launching
+# specific NHC contexts, and sending notification e-mails when issues
+# are found (and includes some anti-annoyance features too).
+
+trap 'echo "Terminated by signal SIGHUP." ; exit 129' 1
+trap 'echo "Terminated by signal SIGINT." ; exit 130' 2
+trap 'echo "Terminated by signal SIGTERM." ; exit 143' 15
+
+function vecho() {
+    [[ "$VERBOSE" == "1" ]] && echo "$@"
+}
+
+function nhcwrap_init_env() {
+    umask 0077
+    PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+    SYSCONFIGDIR="/etc/sysconfig"
+    LIBEXECDIR="/usr/libexec"
+    if [[ -r /proc/sys/kernel/hostname ]]; then
+        read HOSTNAME < /proc/sys/kernel/hostname
+    else
+        HOSTNAME=$(/bin/hostname)
+    fi
+    HOSTNAME_S=${HOSTNAME/%.*}
+    RET=0
+    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET
+
+    # Set name of wrapped script/program based on invocation.
+    SUBPROG=${0/#*\/}
+    SUBPROG=${SUBPROG/%-wrapper}
+    export SUBPROG
+
+    unset ARGS STATEDIR MAILTO SUBJECT EXPIRE VERBOSE PREV_RESULTS
+}
+
+function nhcwrap_help() {
+    local PROGNAME=$0
+    local TITLE UNDERLINE
+
+    PROGNAME="${PROGNAME/#*\/}"
+    TITLE="$PROGNAME Usage"
+    UNDERLINE="${TITLE//?/-}"
+
+    cat <<EOF
+
+$TITLE
+$UNDERLINE
+
+  Syntax:  $PROGNAME [<options>] [<var>=<value> [...]]
+
+ OPTION            DESCRIPTION
+-------------------------------------------------------------------------------
+ -h                Show command line help (this info)
+ -A <args>         Pass <args> to $SUBPROG
+ -D <directory>    Use <directory> for cache/bookkeeping
+ -M <mailto>       Send output of $SUBPROG via e-mail to <mailto>
+ -S <subject>      Set e-mail subject header (for -M) to <subject>
+ -V                Activate verbose mode (extra diagnostic output)
+ -X <timespec>     Expire cached output after <timespec> (e.g., "6h" or "1d")
+ --                Stop parsing command line; pass remaining args to $SUBPROG
+
+ All other command line parameters, if any, are passed directly to $SUBPROG.
+
+EXAMPLES:
+---------
+ To run $SUBPROG, e-mail output to root, and pass parameters "-d -t 60":
+    # $PROGNAME -M root -- -d -t 60
+  OR
+    # $PROGNAME -M root -A "-d -t 60"
+
+ To only e-mail results if they change or every 12 hours:
+    # $PROGNAME -M root -X 12h
+
+EOF
+}
+
+function nhcwrap_parse_cmdline() {
+    local OPTION
+
+    OPTIND=1
+    while getopts ":A:D:M:P:S:VX:" OPTION ; do
+        case "$OPTION" in
+            A) ARGS="$OPTARG" ;;
+            D) STATEDIR="$OPTARG" ;;
+            M) MAILTO="$OPTARG" ;;
+            P) SUBPROG="$OPTARG" ;;
+            S) SUBJECT="$OPTARG" ;;
+            V) VERBOSE=1 ;;
+            X) EXPIRE="$OPTARG" ;;
+            h) nhcwrap_help ; exit 0 ;;
+            :) echo "ERROR:  Option -$OPTARG requires an argument." ; nhcwrap_help ; return 1 ;;
+            -) break ;;
+            \?) ((OPTIND--)) ; break ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    ARGLIST=( $ARGS "$@" )
+    return 0
+}
+
+function nhcwrap_finalize_env() {
+    local i SECS NUMSTR CHR
+
+    NW_DATEFMT="${NW_DATEFMT:-(%Y-%m-%d %H:%M:%S)}"
+    STATEDIR="${STATEDIR:-/tmp/$SUBPROG}"
+    SUBJECT="${SUBJECT:-NHC Report for ${HOSTNAME_S}}"
+    VERBOSE="${VERBOSE:-0}"
+    OUTFILE="$STATEDIR/$SUBPROG.out"
+    SAVEFILE="$STATEDIR/$SUBPROG.save"
+
+    [[ -d "$STATEDIR" ]] || mkdir -p "$STATEDIR"
+
+    if [[ "${SUBPROG#*/}" != "${SUBPROG}" ]]; then
+        PATH="${SUBPROG%/*}:$PATH"
+        SUBPROG="${SUBPROG##*/}"
+    fi
+
+    if [[ -n "$EXPIRE" ]]; then
+        SECS=0
+        NUMSTR=""
+        for ((i=0; i<${#EXPIRE}; i++)); do
+            CHR="${EXPIRE:$i:1}"
+            if [[ -z "${CHR#[0-9]}" ]]; then
+                NUMSTR="$NUMSTR$CHR"
+            elif [[ -z "$NUMSTR" ]]; then
+                echo "ERROR:  Missing number before character '$CHR' in timespec \"$EXPIRE\" at position $i."
+                echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
+                break
+            else
+                case "$CHR" in
+                    [Ww])  ((SECS += NUMSTR * 604800)) ;;
+                    [Dd])  ((SECS += NUMSTR * 86400))  ;;
+                    [Hh])  ((SECS += NUMSTR * 3600))   ;;
+                    [Mm])  ((SECS += NUMSTR * 60))     ;;
+                    [Ss])  ((SECS += NUMSTR))          ;;
+                    *)
+                        echo "ERROR:  Invalid character '$CHR' encountered in timespec \"$EXPIRE\" at position $i."
+                        echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
+                        NUMSTR=""
+                        break
+                        ;;
+                esac
+                NUMSTR=""
+            fi
+        done
+        [[ -n "$NUMSTR" ]] && ((SECS += NUMSTR))
+        if [[ $SECS -ne 0 ]]; then
+            EXPIRE=$SECS
+        fi
+        vecho "Note:  Results will expire after $EXPIRE seconds."
+    fi
+}
+
+function nhcwrap_spawn_command() {
+    local RC SAVEFILE_TIME NOW
+
+    # Expire old results file if too old.
+    if [[ -n "$EXPIRE" && -f "$SAVEFILE" ]]; then
+        SAVEFILE_TIME=$(stat -c '%Y' "$SAVEFILE")
+        NOW=$(date '+%s')
+        if ((NOW - SAVEFILE_TIME >= EXPIRE)); then
+            rm -f "$SAVEFILE"
+        fi
+    fi
+
+    vecho "Executing \"$SUBPROG ${ARGLIST[*]}\"" `date "+$NW_DATEFMT"`
+    "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
+    RC=$?
+    vecho "$SUBPROG returned $RC" `date "+$NW_DATEFMT"`
+
+    return $RC
+}
+
+function nhcwrap_check_output() {
+    local RC
+
+    if [[ -f "$SAVEFILE" ]]; then
+        # We have previous results, so compare them against the new results.
+        if [[ ! -s "$OUTFILE" && ! -s "$SAVEFILE" ]]; then
+            # Shortcut for common case:  Both files are zero-byte.
+            vecho "Output file matches saved results file (both empty)."
+            rm -f "$OUTFILE"
+            RC=0
+        elif diff -q "$OUTFILE" "$SAVEFILE" >&/dev/null; then
+            # Files are identical.
+            vecho "Output file matches saved results file."
+            rm -f "$OUTFILE"
+            RC=0
+        else
+            # Both files exist, but they differ.
+            vecho "Output file does not match saved results file."
+            PREV_RESULTS=$(< "$SAVEFILE")
+            rm -f "$SAVEFILE"
+            mv -f "$OUTFILE" "$SAVEFILE"
+            RC=1
+        fi
+    elif [[ ! -s "$OUTFILE" ]]; then
+        # Empty output and no previous save file.
+        vecho "Output file is empty (no saved results file found)."
+        mv -f "$OUTFILE" "$SAVEFILE"
+        RC=0
+    else
+        # Non-empty output and no saved results file.
+        vecho "Output file is non-empty (no saved results file found)."
+        mv -f "$OUTFILE" "$SAVEFILE"
+        RC=1
+    fi
+
+    return $RC
+}
+
+function nhcwrap_report_results() {
+    # If we get here, we have results to report.
+    if [[ ! -s "$SAVEFILE" ]]; then
+        # We have empty results this time but non-empty previous
+        # results.  This means a prior error is now cleared.
+        if [[ -n "$MAILTO" ]]; then
+            echo "$SUBPROG errors on $HOSTNAME_S now cleared." | /bin/mail -s "$SUBJECT" $MAILTO
+            vecho "E-mail notification of cleared error sent to $MAILTO."
+        else
+            echo "$SUBPROG errors on $HOSTNAME_S now cleared."
+        fi
+    else
+        if [[ -n "$MAILTO" ]]; then
+            /bin/mail -s "$SUBJECT" $MAILTO < "$SAVEFILE"
+            vecho "Results e-mailed to $MAILTO"
+        else
+            echo "$(< $SAVEFILE)"
+        fi
+    fi
+    return 0
+}
+
+nhcwrap_init_env
+nhcwrap_parse_cmdline "$@" || exit 99
+nhcwrap_finalize_env
+
+nhcwrap_spawn_command
+nhcwrap_check_output || nhcwrap_report_results
+

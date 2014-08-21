@@ -119,6 +119,7 @@ function nhcwrap_finalize_env() {
     VERBOSE="${VERBOSE:-0}"
     OUTFILE="$STATEDIR/$SUBPROG.out"
     SAVEFILE="$STATEDIR/$SUBPROG.save"
+    FUDGETIME="${FUDGETIME:-5}"
 
     [[ -d "$STATEDIR" ]] || mkdir -p "$STATEDIR"
 
@@ -145,6 +146,7 @@ function nhcwrap_finalize_env() {
                     [Hh])  ((SECS += NUMSTR * 3600))   ;;
                     [Mm])  ((SECS += NUMSTR * 60))     ;;
                     [Ss])  ((SECS += NUMSTR))          ;;
+                    [Ff])  FUDGETIME=$NUMSTR           ;;
                     *)
                         echo "ERROR:  Invalid character '$CHR' encountered in timespec \"$EXPIRE\" at position $i."
                         echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
@@ -164,21 +166,36 @@ function nhcwrap_finalize_env() {
 }
 
 function nhcwrap_spawn_command() {
-    local RC SAVEFILE_TIME NOW
-
-    # Expire old results file if too old.
-    if [[ -n "$EXPIRE" && -f "$SAVEFILE" ]]; then
-        SAVEFILE_TIME=$(stat -c '%Y' "$SAVEFILE")
-        NOW=$(date '+%s')
-        if ((NOW - SAVEFILE_TIME >= EXPIRE)); then
-            rm -f "$SAVEFILE"
-        fi
-    fi
+    local RC SAVEFILE_TIME CTIME MTIME NOW
 
     vecho "Executing \"$SUBPROG ${ARGLIST[*]}\"" `date "+$NW_DATEFMT"`
+    # Remove output file so that it will be recreated by bash with ctime of now.
+    rm -f "$OUTFILE"
     "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
     RC=$?
     vecho "$SUBPROG returned $RC" `date "+$NW_DATEFMT"`
+
+    # Expire old results file if too old.
+    # NOTE: We do the comparison *after* subprogram execution in an
+    # attempt to minimize jitter caused by variability in the
+    # execution time of the subprogram.  Otherwise the time difference
+    # may be off by however long the subprogram took to run because
+    # the comparison was done *before* subprogram execution but the
+    # timestamp on the results file is *after* the previous execution.
+    if [[ -n "$EXPIRE" && -f "$SAVEFILE" ]]; then
+        # Obtain the older of ctime/mtime and use that.
+        SAVEFILE_TIME=$(stat -c '%Y %Z' "$SAVEFILE")
+        MTIME="${SAVEFILE_TIME// *}"
+        CTIME="${SAVEFILE_TIME//* }"
+        ((SAVEFILE_TIME=MTIME<CTIME?MTIME:CTIME))
+        NOW=$(date '+%s')
+        if ((NOW + FUDGETIME - SAVEFILE_TIME >= EXPIRE)); then
+            vecho "Results file expired after $((NOW-SAVEFILE_TIME)) seconds (+/- ${FUDGETIME}s)."
+            rm -f "$SAVEFILE"
+        else
+            vecho "Results file found with age $((NOW-SAVEFILE_TIME)) seconds (+/- ${FUDGETIME}s)."
+        fi
+    fi
 
     return $RC
 }

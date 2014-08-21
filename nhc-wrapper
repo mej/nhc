@@ -23,6 +23,46 @@ function vecho() {
     [[ "$VERBOSE" == "1" ]] && echo "$@"
 }
 
+function nhc_parse_timespec() {
+    local VARNAME="$1"
+    local i TIMESPEC CHR SECS=0 NUMSTR=''
+
+    if [[ -n "$2" ]]; then
+        TIMESPEC="$2"
+    else
+        eval 'TIMESPEC="${'"$VARNAME"'}"'
+    fi
+
+    for ((i=0; i<${#TIMESPEC}; i++)); do
+        CHR="${TIMESPEC:$i:1}"
+        if [[ -z "${CHR#[0-9]}" ]]; then
+            NUMSTR="$NUMSTR$CHR"
+        elif [[ -z "$NUMSTR" ]]; then
+            echo "ERROR:  Missing number before character '$CHR' in timespec \"$TIMESPEC\" at position $i."
+            echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
+            break
+        else
+            case "$CHR" in
+                [Ww])  ((SECS += NUMSTR * 604800)) ;;
+                [Dd])  ((SECS += NUMSTR * 86400))  ;;
+                [Hh])  ((SECS += NUMSTR * 3600))   ;;
+                [Mm])  ((SECS += NUMSTR * 60))     ;;
+                [Ss])  ((SECS += NUMSTR))          ;;
+                [Ff])  FUDGETIME=$NUMSTR           ;;
+                *)
+                    echo "ERROR:  Invalid character '$CHR' encountered in timespec \"$TIMESPEC\" at position $i."
+                    echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
+                    NUMSTR=""
+                    break
+                    ;;
+            esac
+            NUMSTR=""
+        fi
+    done
+    [[ -n "$NUMSTR" ]] && ((SECS += NUMSTR))
+    eval $VARNAME='"$SECS"'
+}
+
 function nhcwrap_init_env() {
     umask 0077
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
@@ -111,8 +151,6 @@ function nhcwrap_parse_cmdline() {
 }
 
 function nhcwrap_finalize_env() {
-    local i SECS NUMSTR CHR
-
     NW_DATEFMT="${NW_DATEFMT:-(%Y-%m-%d %H:%M:%S)}"
     STATEDIR="${STATEDIR:-/tmp/$SUBPROG}"
     SUBJECT="${SUBJECT:-NHC Report for ${HOSTNAME_S}}"
@@ -129,38 +167,7 @@ function nhcwrap_finalize_env() {
     fi
 
     if [[ -n "$EXPIRE" ]]; then
-        SECS=0
-        NUMSTR=""
-        for ((i=0; i<${#EXPIRE}; i++)); do
-            CHR="${EXPIRE:$i:1}"
-            if [[ -z "${CHR#[0-9]}" ]]; then
-                NUMSTR="$NUMSTR$CHR"
-            elif [[ -z "$NUMSTR" ]]; then
-                echo "ERROR:  Missing number before character '$CHR' in timespec \"$EXPIRE\" at position $i."
-                echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
-                break
-            else
-                case "$CHR" in
-                    [Ww])  ((SECS += NUMSTR * 604800)) ;;
-                    [Dd])  ((SECS += NUMSTR * 86400))  ;;
-                    [Hh])  ((SECS += NUMSTR * 3600))   ;;
-                    [Mm])  ((SECS += NUMSTR * 60))     ;;
-                    [Ss])  ((SECS += NUMSTR))          ;;
-                    [Ff])  FUDGETIME=$NUMSTR           ;;
-                    *)
-                        echo "ERROR:  Invalid character '$CHR' encountered in timespec \"$EXPIRE\" at position $i."
-                        echo "ERROR:  Parsing terminated.  Using $SECS seconds for expiration of old results."
-                        NUMSTR=""
-                        break
-                        ;;
-                esac
-                NUMSTR=""
-            fi
-        done
-        [[ -n "$NUMSTR" ]] && ((SECS += NUMSTR))
-        if [[ $SECS -ne 0 ]]; then
-            EXPIRE=$SECS
-        fi
+        nhc_parse_timespec EXPIRE
         vecho "Note:  Results will expire after $EXPIRE seconds."
     fi
 }
@@ -182,7 +189,7 @@ function nhcwrap_spawn_command() {
     # may be off by however long the subprogram took to run because
     # the comparison was done *before* subprogram execution but the
     # timestamp on the results file is *after* the previous execution.
-    if [[ -n "$EXPIRE" && -f "$SAVEFILE" ]]; then
+    if [[ $EXPIRE -gt 0 && -f "$SAVEFILE" ]]; then
         # Obtain the older of ctime/mtime and use that.
         SAVEFILE_TIME=$(stat -c '%Y %Z' "$SAVEFILE")
         MTIME="${SAVEFILE_TIME// *}"
@@ -244,10 +251,10 @@ function nhcwrap_report_results() {
         # We have empty results this time but non-empty previous
         # results.  This means a prior error is now cleared.
         if [[ -n "$MAILTO" ]]; then
-            echo "$SUBPROG errors on $HOSTNAME_S now cleared." | /bin/mail -s "$SUBJECT" $MAILTO
+            echo -e "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:"$'\n\n'"${PREV_RESULTS}" | /bin/mail -s "$SUBJECT" $MAILTO
             vecho "E-mail notification of cleared error sent to $MAILTO."
         else
-            echo "$SUBPROG errors on $HOSTNAME_S now cleared."
+            echo -e "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:"$'\n\n'"${PREV_RESULTS}"
         fi
     else
         if [[ -n "$MAILTO" ]]; then

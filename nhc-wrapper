@@ -82,7 +82,7 @@ function nhcwrap_init_env() {
     SUBPROG=${SUBPROG/%-wrapper}
     export SUBPROG
 
-    unset ARGS STATEDIR MAILTO SUBJECT EXPIRE VERBOSE PREV_RESULTS
+    unset ARGS STATEDIR MAILTO SUBJECT EXPIRE VERBOSE LOOP_TS PREV_RESULTS
 }
 
 function nhcwrap_help() {
@@ -105,6 +105,7 @@ $UNDERLINE
  -h                Show command line help (this info)
  -A <args>         Pass <args> to $SUBPROG
  -D <directory>    Use <directory> for cache/bookkeeping
+ -L <timespec>     Executes $SUBPROG in a loop with interval of <timespec>
  -M <mailto>       Send output of $SUBPROG via e-mail to <mailto>
  -S <subject>      Set e-mail subject header (for -M) to <subject>
  -V                Activate verbose mode (extra diagnostic output)
@@ -112,6 +113,11 @@ $UNDERLINE
  --                Stop parsing command line; pass remaining args to $SUBPROG
 
  All other command line parameters, if any, are passed directly to $SUBPROG.
+
+ Timespecs may specify weeks (w), days (d), hours (h), minutes (m), and/or
+ seconds (s).  If no suffix is given, seconds are assumed.  Result expiration
+ timespec may have trailing fudge factor (f) in seconds (e.g., 6h10f).  Loop
+ timespec may contain trailing flags.
 
 EXAMPLES:
 ---------
@@ -130,10 +136,11 @@ function nhcwrap_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":A:D:M:P:S:VX:" OPTION ; do
+    while getopts ":A:D:L:M:P:S:VX:" OPTION ; do
         case "$OPTION" in
             A) ARGS="$OPTARG" ;;
             D) STATEDIR="$OPTARG" ;;
+            L) LOOP_TS="$OPTARG" ;;
             M) MAILTO="$OPTARG" ;;
             P) SUBPROG="$OPTARG" ;;
             S) SUBJECT="$OPTARG" ;;
@@ -151,7 +158,7 @@ function nhcwrap_parse_cmdline() {
 }
 
 function nhcwrap_finalize_env() {
-    NW_DATEFMT="${NW_DATEFMT:-(%Y-%m-%d %H:%M:%S)}"
+    NW_DATEFMT="${NW_DATEFMT:-(%F %T)}"
     STATEDIR="${STATEDIR:-/tmp/$SUBPROG}"
     SUBJECT="${SUBJECT:-NHC Report for ${HOSTNAME_S}}"
     VERBOSE="${VERBOSE:-0}"
@@ -267,10 +274,55 @@ function nhcwrap_report_results() {
     return 0
 }
 
+function nhcwrap_loop() {
+    local LOOP_FLAGS LOOP_INTERVAL NEXT_LOOP NOW
+    local LOOP_CLS=0 LOOP_TIME=0 LOOP_RULER
+
+    LOOP_FLAGS="${LOOP_TS//[0-9WwDdHhMmSs]}"
+    LOOP_TS="${LOOP_TS//[^0-9WwDdHhMmSs]}"
+    if [[ -n "$LOOP_FLAGS" ]]; then
+        if [[ "${LOOP_FLAGS//[Cc]}" != "$LOOP_FLAGS" ]]; then
+            LOOP_CLS=1
+        fi
+        if [[ "${LOOP_FLAGS//[Tt]}" != "$LOOP_FLAGS" ]]; then
+            LOOP_TIME=1
+        fi
+        if [[ "${LOOP_FLAGS//[Rr]}" != "$LOOP_FLAGS" ]]; then
+            LOOP_RULER=1
+        fi
+    fi
+    nhc_parse_timespec LOOP_INTERVAL "$LOOP_TS"
+    if [[ $LOOP_INTERVAL -eq 0 ]]; then
+        vecho "WARNING:  Looping requested but no interval found.  Defaulting to 5 minutes."
+        LOOP_INTERVAL=300
+    fi
+
+    while : ; do
+        NOW=$(date '+%s')
+        NEXT_LOOP=$((LOOP_INTERVAL-NOW%LOOP_INTERVAL))
+        vecho "Looping every $LOOP_INTERVAL seconds.  Next loop in $NEXT_LOOP seconds."
+        sleep $NEXT_LOOP
+        if [[ $LOOP_CLS -eq 1 && -t 0 ]]; then
+            clear
+        fi
+        if [[ $LOOP_RULER -eq 1 ]]; then
+            echo "----------------------------------------------------------------------------"
+        fi
+        if [[ $LOOP_TIME -eq 1 ]]; then
+            echo "Invoking $SUBPROG at" `date "+$NW_DATEFMT"`
+        fi
+        nhcwrap_spawn_command
+        nhcwrap_check_output || nhcwrap_report_results
+    done
+    return 0
+}
+
 nhcwrap_init_env
 nhcwrap_parse_cmdline "$@" || exit 99
 nhcwrap_finalize_env
 
 nhcwrap_spawn_command
 nhcwrap_check_output || nhcwrap_report_results
-
+if [[ -n "$LOOP_TS" ]]; then
+    nhcwrap_loop
+fi

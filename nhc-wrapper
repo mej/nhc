@@ -275,7 +275,7 @@ function nhcwrap_report_results() {
 }
 
 function nhcwrap_loop() {
-    local LOOP_FLAGS LOOP_INTERVAL NEXT_LOOP NOW
+    local LOOP_FLAGS LOOP_INTERVAL NEXT_LOOP MIDNIGHT NOW
     local LOOP_CLS=0 LOOP_TIME=0 LOOP_RULER
 
     LOOP_FLAGS="${LOOP_TS//[0-9WwDdHhMmSs]}"
@@ -297,9 +297,10 @@ function nhcwrap_loop() {
         LOOP_INTERVAL=300
     fi
 
+    MIDNIGHT=$(date '+%s' -d '00:00')
     while : ; do
         NOW=$(date '+%s')
-        NEXT_LOOP=$((LOOP_INTERVAL-NOW%LOOP_INTERVAL))
+        NEXT_LOOP=$((LOOP_INTERVAL-(NOW-MIDNIGHT)%LOOP_INTERVAL))
         vecho "Looping every $LOOP_INTERVAL seconds.  Next loop in $NEXT_LOOP seconds."
         sleep $NEXT_LOOP
         if [[ $LOOP_CLS -eq 1 && -t 0 ]]; then

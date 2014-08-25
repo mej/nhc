@@ -194,13 +194,14 @@ $UNDERLINE
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
  -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
+ -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
+ -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
- -v                Run verbosely (i.e., VERBOSE=1)
  -t <timeout>      Use timeout of <timeout> seconds (default: 10)
- -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
+ -v                Run verbosely (i.e., VERBOSE=1)
 
  All other command line parameters, if any, must be environment variable
  settings in the form VARNAME=value.

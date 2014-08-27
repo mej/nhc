@@ -104,6 +104,14 @@ function nhc_hw_gather_data() {
     done
     export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
 
+    # Check if user-leved mad driver loaded and IB diag tools will succeed to run
+    if [[ -f /sys/class/infiniband_mad/abi_version ]]; then
+	read HW_IB_UMAD_ABI_VER < /sys/class/infiniband_mad/abi_version
+    else
+	HW_IB_UMAD_ABI_VER=0
+    fi
+    export HW_IB_UMAD_ABI_VER
+
     # Gather kernel modules
     if [[ -e /proc/modules ]]; then
         while read -a FIELD ; do
@@ -313,6 +321,11 @@ function check_hw_ib() {
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
         nhc_hw_gather_data
+    fi
+
+    if [[ $HW_IB_UMAD_ABI_VER -eq 0 ]]; then
+	die 1 "$FUNCNAME:  Version mismatch between kernel OFED drivers and userspace OFED libraries."
+	return 1
     fi
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do

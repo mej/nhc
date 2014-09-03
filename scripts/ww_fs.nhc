@@ -179,7 +179,8 @@ function check_fs_mount() {
 
     for FS in "${FS_LIST[@]}" "${AUTOFS_LIST[@]}" ; do
         FOUND=0
-        for ((i=0; i < ${#FS_DEV[*]}; i++)); do
+        # Traverse the mount list in *reverse order* because the last mount wins.
+        for ((i=${#FS_DEV[*]}; i>=0; i--)); do
             if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then
                 continue
             fi

@@ -1,4 +1,4 @@
-dnl# $Id: configure.in 1562 2014-02-11 00:58:01Z mej $
+dnl# $Id$
 
 AC_PREREQ(2.59)
 AC_INIT([warewulf-nhc], [1.4.1], [warewulf-devel@lbl.gov])

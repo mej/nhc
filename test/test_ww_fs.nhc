@@ -1,6 +1,6 @@
 # Tests for ww_fs.nhc
 #
-# $Id: test_ww_fs.nhc 1351 2013-04-03 22:10:17Z mej $
+# $Id$
 #
 
 function nhc_fs_mounts_gather_data() {

@@ -1,6 +1,6 @@
 # Tests for ww_ps.nhc
 #
-# $Id: test_ww_ps.nhc 1638 2014-04-09 16:39:03Z mej $
+# $Id$
 #
 
 function populate_ps_data() {

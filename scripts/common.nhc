@@ -446,17 +446,22 @@ function nhc_common_unparse_size() {
     local VAL=$1
     local VAR=$2
     local MULT=${3:-1024}
+    local ERRVAR=$4
     local -a SUFFIXES=( k M G T P E )
-    local i
+    local i RNDERR
 
     if [[ -n "$VAL" ]]; then
         for ((i=0; VAL >= ${MULT} && i < ${#SUFFIXES[*]}-1; i++)); do
+            ((RNDERR=VAL%$MULT))
             ((VAL/=${MULT}))
         done
         VAL="$VAL${SUFFIXES[$i]}B"
     fi
     if [[ -n "$VAR" ]]; then
         eval $VAR='"$VAL"'
+    fi
+    if [[ -n "$ERRVAR" ]]; then
+        eval $ERRVAR='"$RNDERR"'
     fi
 }
 
@@ -486,17 +491,22 @@ function nhc_common_unparse_count() {
     local VAL=$1
     local VAR=$2
     local MULT=${3:-1000}
+    local ERRVAR=$4
     local -a SUFFIXES=( [0]='' [1]=k M G T P E )
-    local i
+    local i RNDERR
 
     if [[ -n "$VAL" ]]; then
         for ((i=0; VAL >= ${MULT} && i < ${#SUFFIXES[*]}; i++)); do
+            ((RNDERR=VAL%$MULT))
             ((VAL/=${MULT}))
         done
         VAL="$VAL${SUFFIXES[$i]}"
     fi
     if [[ -n "$VAR" ]]; then
         eval $VAR='"$VAL"'
+    fi
+    if [[ -n "$ERRVAR" ]]; then
+        eval $ERRVAR='"$RNDERR"'
     fi
 }
 

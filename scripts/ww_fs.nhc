@@ -80,7 +80,7 @@ function nhc_fs_df_gather_data() {
         DF_SIZE[$DF_CNT]="${FIELD[2]}"
         DF_USED[$DF_CNT]="${FIELD[3]}"
         DF_FREE[$DF_CNT]="${FIELD[4]}"
-        DF_PCT[$DF_CNT]="${FIELD[5]}"
+        DF_PCT[$DF_CNT]="${FIELD[5]%%%}"
         DF_MNTPT[$DF_CNT]="${FIELD[6]}"
         if [[ "${DF_PCT[$DF_CNT]}" == "-" ]]; then
             DF_PCT[$DF_CNT]=0
@@ -114,7 +114,7 @@ function nhc_fs_dfi_gather_data() {
         DFI_INODES[$DFI_CNT]="${FIELD[2]}"
         DFI_IUSED[$DFI_CNT]="${FIELD[3]}"
         DFI_IFREE[$DFI_CNT]="${FIELD[4]}"
-        DFI_PCT[$DFI_CNT]="${FIELD[5]}"
+        DFI_PCT[$DFI_CNT]="${FIELD[5]%%%}"
         DFI_MNTPT[$DFI_CNT]="${FIELD[6]}"
         if [[ "${DFI_PCT[$DFI_CNT]}" == "-" ]]; then
             DFI_PCT[$DFI_CNT]=0
@@ -335,7 +335,7 @@ function check_fs_free() {
             return 0
         fi
         if [[ -n "$MIN_FREE" ]]; then
-            FREE_PCT=$((100-${DF_PCT[$i]/%%}))
+            FREE_PCT=$((100-${DF_PCT[$i]}))
             FS_FREE=${DF_FREE[$i]}
             if [[ "${MIN_FREE/%%}" != "$MIN_FREE" ]]; then
                 if [[ $FREE_PCT -lt "${MIN_FREE/%%}" ]]; then
@@ -380,9 +380,9 @@ function check_fs_used() {
         if [[ -n "$MAX_USED" ]]; then
             FS_USED=${DF_USED[$i]}
             if [[ "${MAX_USED/%%}" != "$MAX_USED" ]]; then
-                if [[ ${DF_PCT[$i]/%%} -ge "${MAX_USED/%%}" ]]; then
+                if [[ ${DF_PCT[$i]} -ge "${MAX_USED/%%}" ]]; then
                     nhc_common_unparse_size $FS_USED FS_USED
-                    die 1 "$FUNCNAME:  $FS is ${DF_PCT[$i]/%%}% full ($FS_USED), threshold is ${MAX_USED}%"
+                    die 1 "$FUNCNAME:  $FS is ${DF_PCT[$i]}% full ($FS_USED), threshold is $MAX_USED"
                     return 1
                 fi
             else
@@ -461,7 +461,7 @@ function check_fs_ifree() {
             return 0
         fi
         if [[ -n "$MIN_IFREE" ]]; then
-            IFREE_PCT=$((100-${DFI_PCT[$i]/%%}))
+            IFREE_PCT=$((100-${DFI_PCT[$i]}))
             FS_IFREE=${DFI_IFREE[$i]}
             if [[ "${MIN_IFREE/%%}" != "$MIN_IFREE" ]]; then
                 if [[ $IFREE_PCT -lt "${MIN_IFREE/%%}" ]]; then
@@ -504,8 +504,8 @@ function check_fs_iused() {
         if [[ -n "$MAX_IUSED" ]]; then
             FS_IUSED=${DFI_IUSED[$i]}
             if [[ "${MAX_IUSED/%%}" != "$MAX_IUSED" ]]; then
-                if [[ ${DFI_PCT[$i]/%%} -ge "${MAX_IUSED/%%}" ]]; then
-                    die 1 "$FUNCNAME:  $FS has ${DFI_PCT[$i]/%%}% of inodes used ($FS_IUSED), threshold is ${MAX_IUSED}%"
+                if [[ ${DFI_PCT[$i]} -ge "${MAX_IUSED/%%}" ]]; then
+                    die 1 "$FUNCNAME:  $FS has ${DFI_PCT[$i]}% of inodes used ($FS_IUSED), threshold is $MAX_IUSED"
                     return 1
                 fi
             else

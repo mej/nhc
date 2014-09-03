@@ -29,7 +29,7 @@ function die() {
     shift
 
     CHECK_DIED=1
-    log "Health check failed:  $*"
+    log "ERROR:  $NAME:  Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
     if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
@@ -43,8 +43,8 @@ function die() {
         echo "$HOSTNAME:diagnosis:NHC: $*"
         echo "end"
         return 77
-    else
-        oecho "ERROR Health check failed:  $*"
+    elif [[ -n "$LOGFILE" ]]; then
+        oecho "ERROR:  $NAME:  Health check failed:  $*"
     fi
     if [[ "$NHC_CHECK_ALL" == "1" ]]; then
         ((FAIL_CNT++))
@@ -91,7 +91,11 @@ function oecho() {
 
     if [[ "$SILENT" == "0" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&3
+        if [[ -n "$LOGFILE" ]]; then
+            echo "$PREFIX$@" >&3
+        else
+            echo "$PREFIX$@"
+        fi
     fi
 }
 
@@ -101,7 +105,11 @@ function eecho() {
 
     if [[ "$SILENT" == "0" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&4
+        if [[ -n "$LOGFILE" ]]; then
+            echo "$PREFIX$@" >&4
+        else
+            echo "$PREFIX$@"
+        fi
     fi
 }
 
@@ -111,7 +119,11 @@ function vecho() {
 
     if [[ "$VERBOSE" == "1" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&3
+        if [[ -n "$LOGFILE" ]]; then
+            echo "$PREFIX$@" >&3
+        else
+            echo "$PREFIX$@"
+        fi
     fi
 }
 
@@ -491,9 +503,9 @@ function nhcmain_run_checks() {
     if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
-        log "$FAIL_CNT health checks failed."
+        log "ERROR:  $NAME:  $FAIL_CNT health checks failed."
         syslog "$FAIL_CNT health checks failed."
-        oecho "ERROR $FAIL_CNT health checks failed."
+        [[ -n "$LOGFILE" ]] && oecho "ERROR:  $NAME:  $FAIL_CNT health checks failed."
         syslog_flush
         kill_watchdog
         exit $FAIL_CNT

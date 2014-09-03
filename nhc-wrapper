@@ -158,15 +158,32 @@ function nhcwrap_parse_cmdline() {
 }
 
 function nhcwrap_finalize_env() {
+    local TMPDIR
+
     NW_DATEFMT="${NW_DATEFMT:-(%F %T)}"
-    STATEDIR="${STATEDIR:-/tmp/$SUBPROG}"
+    STATEDIR="${STATEDIR:-/tmp/${SUBPROG}-${EUID}}"
     SUBJECT="${SUBJECT:-NHC Report for ${HOSTNAME_S}}"
     VERBOSE="${VERBOSE:-0}"
     OUTFILE="$STATEDIR/$SUBPROG.out"
     SAVEFILE="$STATEDIR/$SUBPROG.save"
     FUDGETIME="${FUDGETIME:-5}"
 
-    [[ -d "$STATEDIR" ]] || mkdir -p "$STATEDIR"
+    # We have to be very careful about how we create and manage the
+    # state directory since it lives in /tmp by default (in order to
+    # have a good chance of being on a tmpfs in RAM, and so that
+    # normal users can run the wrapper too).
+    if [[ ! -d "$STATEDIR" ]]; then
+        # Securely create state directory
+        TMPDIR=$(mktemp -d "${STATEDIR}.XXXXXXXXXXX")
+        mv "$TMPDIR" "$STATEDIR"
+    fi
+    chmod 0000 "$STATEDIR" 2>/dev/null
+    chown $EUID "$STATEDIR" 2>/dev/null
+    chmod 0700 "$STATEDIR" 2>/dev/null
+    if [[ -h "$STATEDIR" || ! -d "$STATEDIR" || ! -O "$STATEDIR" || ! -w "$STATEDIR" ]]; then
+        echo "ERROR:  State directory \"$STATEDIR\" create/chown/chmod failed for uid $EUID.  Aborting."
+        exit -1
+    fi
 
     if [[ "${SUBPROG#*/}" != "${SUBPROG}" ]]; then
         PATH="${SUBPROG%/*}:$PATH"

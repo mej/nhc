@@ -58,6 +58,11 @@ function nhc_hw_gather_data() {
         if [[ -n "$SIBLINGS" ]]; then
             HW_THREADS=$((HW_SOCKETS*SIBLINGS))
         fi
+    else
+        HW_SOCKETS=1
+        HW_CORES=1
+        HW_THREADS=1
+        MHZ=0
     fi
     dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
 
@@ -78,6 +83,11 @@ function nhc_hw_gather_data() {
                 HW_SWAP_FREE=${FIELD[1]}
             fi
         done < /proc/meminfo
+    else
+        HW_RAM_TOTAL=1024
+        HW_RAM_FREE=1
+        HW_SWAP_TOTAL=0
+        HW_SWAP_FREE=0
     fi
     dbg "Found $HW_RAM_TOTAL kB RAM ($HW_RAM_FREE kB free)"
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"

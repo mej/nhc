@@ -1,0 +1,419 @@
+#!/bin/bash
+#
+# Automated config file/check generator for NHC
+#
+# Michael Jennings <mej@lbl.gov>
+# 26 August 2014
+#
+# $Id$
+#
+
+# Generating configuration files for each node in your cluster can be
+# a time-consuming, arduous process.  A big portion of this process
+# involves determining the socket-/core-/thread-counts, memory/swap
+# sizes, etc. of your hardware; the sizes and types of your
+# filesystems; the processes/services which should be running; and so
+# forth.
+#
+# The purpose of this tool is to automate as much of that task as
+# possible to make it easier for system administrators to deploy NHC
+# onto new nodes/servers.
+
+trap 'echo "Terminated by signal SIGHUP." ; exit 129' 1
+trap 'echo "Terminated by signal SIGINT." ; exit 130' 2
+trap 'echo "Terminated by signal SIGTERM." ; exit 143' 15
+
+function eecho() {
+    echo "$@" >&2
+}
+
+function vecho() {
+    [[ "$VERBOSE" == "1" ]] && echo "$@" >&2
+}
+
+function dbg() {
+    [[ "$DEBUG" == "1" ]] && echo "DEBUG:  $*" >&2
+}
+
+function nhcgc_init_env() {
+    umask 0077
+    PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+    SYSCONFIGDIR="/etc/sysconfig"
+    LIBEXECDIR="/usr/libexec"
+    if [[ -r /proc/sys/kernel/hostname ]]; then
+        read HOSTNAME < /proc/sys/kernel/hostname
+    else
+        HOSTNAME=$(/bin/hostname)
+    fi
+    HOSTNAME_S=${HOSTNAME/%.*}
+    DMI_MATCH='/([Ss]peed|[Vv]ersion)/'
+    RET=0
+    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S DMI_MATCH RET
+
+    # Set name of wrapped script/program based on invocation.
+    NAME=${0/#*\/}
+    NAME=${NAME/%-genconf}
+
+    unset VERBOSE
+}
+
+function nhcgc_help() {
+    local PROGNAME=$0
+    local TITLE UNDERLINE
+
+    PROGNAME="${PROGNAME/#*\/}"
+    TITLE="$PROGNAME Usage"
+    UNDERLINE="${TITLE//?/-}"
+
+    cat <<EOF
+
+$TITLE
+$UNDERLINE
+
+  Syntax:  $PROGNAME [<options>] [<var>=<value> [...]]
+
+ OPTION            DESCRIPTION
+-------------------------------------------------------------------------------
+ -h                Show command line help (this info)
+ -H <hostmask>     Use <hostmask> for hostmask in config (default: $HOSTNAME)
+ -b <matchstr>     Prune BIOS/DMI section via <matchstr> (default: $DMI_MATCH)
+ -c <conffile>     Write config to <conffile> (default: ${CONFDIR:-/etc/nhc}/$NAME.conf.auto)
+ -d                Activate debugging output (i.e., DEBUG=1)
+ -n <name>         Use named context <name> (default: $NAME)
+ -v                Run verbosely (i.e., VERBOSE=1)
+
+
+EXAMPLES:
+---------
+ To generate configuration in /etc/nhc/nhc-cron.conf.auto:
+    # $PROGNAME -n nhc-cron
+  OR
+    # $PROGNAME -c /etc/nhc/nhc-cron.conf.auto
+
+EOF
+}
+
+function nhcgc_parse_cmdline() {
+    local OPTION
+
+    OPTIND=1
+    while getopts ":H:c:dhn:v" OPTION ; do
+        case "$OPTION" in
+            H) HOSTNAME="$OPTARG" ; dbg "\$HOSTNAME set to $HOSTNAME." ;;
+            c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
+            d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
+            n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
+            h) nhcgc_help ; exit 0 ;;
+            v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
+            -) break ;;
+            :) nhcgc_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; exit -1 ;;
+            \?) nhcgc_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; exit -1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    while [[ ! -z "$1" ]]; do
+        eval "$1"
+        shift
+    done
+    return 0
+}
+
+function nhcgc_finalize_env() {
+    CONFDIR="${CONFDIR:-/etc/nhc}"
+    CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf.auto}"
+    INCDIR="${INCDIR:-$CONFDIR/scripts}"
+    DEBUG=${DEBUG:-0}
+    VERBOSE="${VERBOSE:-0}"
+}
+
+function nhcgc_load_scripts() {
+    # Load all include scripts.
+    dbg "Loading scripts from $INCDIR..."
+    for SCRIPT in $INCDIR/* ; do
+	if [[ -e "$SCRIPT" ]]; then
+            dbg "Loading ${SCRIPT/#*\/}"
+            . $SCRIPT
+        else
+            dbg "No scripts found in $INCDIR"
+        fi
+    done
+}
+
+function nhcgc_scan_system() {
+    vecho -n "Scanning system..."
+
+    # DMI data
+    if [[ "$(type -t nhc_dmi_gather_data)" == "function" ]]; then
+        vecho -n "BIOS (DMI) information..."
+        nhc_dmi_gather_data
+    fi
+
+    # Filesystem mount points
+    if [[ "$(type -t nhc_fs_mounts_gather_data)" == "function" ]]; then
+        vecho -n "mount points..."
+        nhc_fs_mounts_gather_data
+    fi
+
+    # Filesystem sizes
+    if [[ "$(type -t nhc_fs_df_gather_data)" == "function" ]]; then
+        vecho -n "filesystems..."
+        nhc_fs_df_gather_data
+    fi
+
+    # Inodes...oath.
+    if [[ "$(type -t nhc_fs_dfi_gather_data)" == "function" ]]; then
+        vecho -n "inodes..."
+        nhc_fs_dfi_gather_data
+    fi
+
+    # Hardware
+    if [[ "$(type -t nhc_hw_gather_data)" == "function" ]]; then
+        vecho -n "hardware..."
+        nhc_hw_gather_data
+    fi
+
+    # nVidia GPUs
+    if [[ "$(type -t nhc_nv_gather_data)" == "function" ]]; then
+        vecho -n "nVidia GPUs..."
+        nhc_nv_gather_data
+    fi
+
+    # Running processes
+    if [[ "$(type -t nhc_ps_gather_data)" == "function" ]]; then
+        vecho -n "processes..."
+        nhc_ps_gather_data
+    fi
+
+    # Load average
+    if [[ "$(type -t nhc_loadavg_gather_data)" == "function" ]]; then
+        vecho -n "load..."
+        nhc_loadavg_gather_data
+    fi
+    vecho "done."
+}
+
+function nhcgc_gen_config() {
+    local i j HANDLE SVC THIS_PID TMP ERR
+    local -a LINES ARGS
+
+    echo "# NHC Configuration File"
+    echo "#"
+    echo "# Lines are in the form \"<hostmask>||<check>\""
+    echo "# Hostmask is a glob, /regexp/, or {noderange}"
+    echo "# Comments begin with '#'"
+    echo "#"
+    echo "# This file was automatically generated by nhc-genconf"
+    echo "#" `date`
+    echo "#"
+    echo
+    echo "#######################################################################"
+    echo "###"
+    echo "### NHC Configuration Variables"
+    echo "###"
+    echo "# $HOSTNAME || export MARK_OFFLINE=1 NHC_CHECK_ALL=0"
+
+    # DMI data
+    if [[ ${#DMI_HANDLES[*]} -gt 0 ]]; then
+        dbg "Generating DMI section with ${#DMI_HANDLES[*]} handles.  Matching against $DMI_MATCH only."
+        echo
+        echo
+        echo "#######################################################################"
+        echo "###"
+        echo "### DMI Checks"
+        echo "###"
+        for HANDLE in "${DMI_HANDLES[@]}" ; do
+            IFS=$'\n'
+            LINES=( ${DMI_DATA[$HANDLE]} )
+            IFS=$' \t\n'
+            for ((i=0; i<${#LINES[*]}; i++)); do
+                if mcheck "${LINES[$i]}" "$DMI_MATCH"; then
+                    echo "# $HOSTNAME || check_dmi_data_match -h $HANDLE ${DMI_TYPE_IDS[$HANDLE]:+-t ${DMI_TYPE_IDS[$HANDLE]}} \"${LINES[i]}\""
+                fi
+            done
+        done
+    fi
+
+    # Filesystems (mount points, sizes, inodes)
+    if [[ ${#FS_DEV[*]} -gt 0 || ${#DF_DEV[*]} -gt 0 || ${#DFI_DEV[*]} -gt 0 ]]; then
+        dbg "Generating Filesystem section with ${#FS_DEV[*]} mounts and ${#DF_DEV[*]} sizes."
+        echo
+        echo
+        echo "#######################################################################"
+        echo "###"
+        echo "### Filesystem checks"
+        echo "###"
+        if [[ ${#FS_DEV[*]} -gt 0 ]]; then
+            for ((i=0; i<${#FS_DEV[*]}; i++)); do
+                if mcheck "${FS_TYPE[$i]}" '/^(cgroup|autofs|rpc|nfsd|fuse.gvfs|binfmt)/' ; then
+                    continue
+                fi
+                if mcheck "${FS_OPTS[$i]}" '/(^|,)rw($|,)/' ; then
+                    echo " $HOSTNAME || check_fs_mount_rw -t \"${FS_TYPE[$i]}\" -s \"${FS_DEV[$i]}\" -f \"${FS_MNTPT[$i]}\""
+                elif mcheck "${FS_OPTS[$i]}" '/(^|,)ro($|,)/' ; then
+                    echo " $HOSTNAME || check_fs_mount_ro -t \"${FS_TYPE[$i]}\" -s \"${FS_DEV[$i]}\" -f \"${FS_MNTPT[$i]}\""
+                else
+                    echo " $HOSTNAME || check_fs_mount -t \"${FS_TYPE[$i]}\" -s \"${FS_DEV[$i]}\" -f \"${FS_MNTPT[$i]}\""
+                fi
+            done
+        fi
+        if [[ ${#DF_DEV[*]} -gt 0 ]]; then
+            for ((i=0; i<${#DF_DEV[*]}; i++)); do
+                if mcheck "${DF_TYPE[$i]}" '/^(tmpfs|proc)/' ; then
+                    continue
+                elif [[ "${DF_SIZE[$i]}" == "0" ]]; then
+                    continue
+                fi
+                if [[ "${DF_MNTPT[$i]}" == "/boot" ]]; then
+                    echo " $HOSTNAME || check_fs_free ${DF_MNTPT[$i]} 40MB"
+                elif [[ "${DF_SIZE[$i]}" -le $((1024*1024)) ]]; then
+                    # Filesystem size <= 1GB
+                    echo " $HOSTNAME || check_fs_used ${DF_MNTPT[$i]}" $((DF_PCT[i]>90?DF_PCT[i]:90))'%'
+                elif [[ "${DF_SIZE[$i]}" -le $((1024*1024*1024)) ]]; then
+                    # Filesystem size <= 1TB
+                    echo " $HOSTNAME || check_fs_used ${DF_MNTPT[$i]}" $((DF_PCT[i]>95?DF_PCT[i]:90))'%'
+                else
+                    # Filesystem size > 1TB
+                    echo " $HOSTNAME || check_fs_used ${DF_MNTPT[$i]}" $((DF_PCT[i]>99?DF_PCT[i]:90))'%'
+                fi
+            done
+        fi
+        if [[ ${#DFI_DEV[*]} -gt 0 ]]; then
+            for ((i=0; i<${#DFI_DEV[*]}; i++)); do
+                if mcheck "${DFI_TYPE[$i]}" '/^(tmpfs|proc)/' ; then
+                    continue
+                elif [[ "${DFI_INODES[$i]}" -lt 10000 ]]; then
+                    continue
+                fi
+                if [[ "${DFI_INODES[$i]}" -ge 50000000 ]]; then
+                    echo " $HOSTNAME || check_fs_iused ${DF_MNTPT[$i]} 98%"
+                elif [[ "${DFI_PCT[$i]}" -eq 100  ]]; then
+                    TMP=$((DFI_IUSED[i]+DFI_IFREE[i]/2))
+                    nhc_common_unparse_count $TMP TMP
+                    echo " $HOSTNAME || check_fs_iused ${DF_MNTPT[$i]} $TMP"
+                else
+                    echo " $HOSTNAME || check_fs_iused ${DF_MNTPT[$i]} 100%"
+                fi
+            done
+        fi
+    fi        
+
+    # Hardware
+    dbg "Generating hardware section."
+    echo
+    echo
+    echo "#######################################################################"
+    echo "###"
+    echo "### Hardware checks"
+    echo "###"
+    echo " $HOSTNAME || check_hw_cpuinfo $HW_SOCKETS $HW_CORES $HW_THREADS"
+    nhc_common_unparse_size $HW_RAM_TOTAL HW_RAM_TOTAL 1024 ERR
+    dbg "Found $HW_RAM_TOTAL RAM ($ERR rounding error)"
+    if [[ $ERR -ge 500 ]]; then
+        HW_RAM_TOTAL=$((${HW_RAM_TOTAL//[^0-9]}+1))${HW_RAM_TOTAL//[0-9]}
+    fi
+    echo " $HOSTNAME || check_hw_physmem $HW_RAM_TOTAL $HW_RAM_TOTAL 5%"
+    nhc_common_unparse_size $HW_SWAP_TOTAL HW_SWAP_TOTAL 1024 ERR
+    dbg "Found $HW_SWAP_TOTAL swap ($ERR rounding error)"
+    if [[ $ERR -ge 500 ]]; then
+        HW_SWAP_TOTAL=$((${HW_SWAP_TOTAL//[^0-9]}+1))${HW_SWAP_TOTAL//[0-9]}
+    fi
+    echo " $HOSTNAME || check_hw_swap $HW_SWAP_TOTAL $HW_SWAP_TOTAL 5%"
+    if [[ ${#HW_IB_DEV[*]} -gt 0 ]]; then
+        for ((i=0; i<${#HW_IB_DEV[*]}; i++)); do
+            echo " $HOSTNAME || check_hw_ib ${HW_IB_RATE[$i]} ${HW_IB_DEV[$i]}"
+        done
+    fi        
+    if [[ ${#HW_ETH_DEV[*]} -gt 0 ]]; then
+        for ((i=0; i<${#HW_ETH_DEV[*]}; i++)); do
+            echo " $HOSTNAME || check_hw_eth ${HW_ETH_DEV[$i]}"
+        done
+    fi        
+
+    # nVidia GPUs
+    if [[ $NV_HEALTHMON_RC -eq 0 ]]; then
+        dbg "Generating nVidia GPUs section."
+        echo
+        echo
+        echo "#######################################################################"
+        echo "###"
+        echo "### nVidia GPU checks"
+        echo "###"
+        echo " $HOSTNAME || check_nv_healthmon"
+    fi        
+
+    # Running processes and load average
+    if [[ ${#PS_PROCS[*]} -gt 0 ]]; then
+        dbg "Generating Process section with ${#PS_PROCS[*]} system processes and $HW_THREADS CPU threads."
+        echo
+        echo
+        echo "#######################################################################"
+        echo "###"
+        echo "### Process checks"
+        echo "###"
+        if [[ $HW_THREADS -gt 1 ]]; then
+            echo " $HOSTNAME || check_ps_loadavg $((HW_THREADS*2))"
+        fi
+        for ((i=0; i<${#PS_PROCS[*]}; i++)); do
+            THIS_PID=${PS_PROCS[$i]}
+            ARGS=( ${PS_ARGS[$THIS_PID]} )
+            dbg "Checking \"${PS_ARGS[$THIS_PID]}\" (process \"${ARGS[0]}\") with UID ${PS_UID[$THIS_PID]}"
+            if [[ ${PS_UID[$THIS_PID]} -eq 0 ]]; then
+                if mcheck "${ARGS[0]}" '/sshd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root sshd"
+                elif mcheck "${ARGS[0]}" '/crond$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root crond"
+                elif mcheck "${ARGS[0]}" '/atd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root atd"
+                elif mcheck "${ARGS[0]}" '/rsyslogd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -d rsyslogd -u root rsyslog"
+                elif mcheck "${ARGS[0]}" '/syslogd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -d syslogd -u root syslog"
+                elif mcheck "${ARGS[0]}" '/rpc.mountd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -d rpc.mountd -u root nfs"
+                elif mcheck "${ARGS[0]}" '/xinetd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root xinetd"
+                elif mcheck "${ARGS[0]}" '/httpd$/'; then
+                    echo " $HOSTNAME || check_ps_service -r -u root httpd"
+                elif mcheck "${ARGS[0]}" '/auditd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root auditd"
+                elif mcheck "${ARGS[0]}" '/libvirtd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -u root libvirtd"
+                elif mcheck "${ARGS[0]}" '/cupsd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -d cupsd -u root cups"
+                elif mcheck "${ARGS[0]}" '/automount$/'; then
+                    echo " $HOSTNAME || check_ps_service -S -d automount -u root autofs"
+                fi
+            else
+                if mcheck "${ARGS[0]}" '/mysqld$/'; then
+                    echo " $HOSTNAME || check_ps_service -c mysqld"
+                elif mcheck "${ARGS[0]}" '/rpc\.statd$/'; then
+                    echo " $HOSTNAME || check_ps_service -r -d rpc.statd nfslock"
+                elif mcheck "${ARGS[0]}" '/rpcbind$/'; then
+                    echo " $HOSTNAME || check_ps_service -r rpcbind"
+                elif mcheck "${ARGS[0]}" '/qmgr$/'; then
+                    echo " $HOSTNAME || check_ps_service -r -d qmgr postfix"
+                elif mcheck "${ARGS[0]}" '/ntpd$/'; then
+                    echo " $HOSTNAME || check_ps_service -S ntpd"
+                fi
+            fi
+        done
+    fi        
+
+}
+
+function nhcgc_write_conffile() {
+    if [[ "$CONFFILE" == "-" ]]; then
+        nhcgc_gen_config
+    else
+        vecho -n "Writing configuration file $CONFFILE..."
+        nhcgc_gen_config > "$CONFFILE"
+        vecho "done."
+    fi
+}
+
+nhcgc_init_env
+nhcgc_parse_cmdline "$@" || exit 99
+nhcgc_finalize_env
+nhcgc_load_scripts
+nhcgc_scan_system
+nhcgc_write_conffile

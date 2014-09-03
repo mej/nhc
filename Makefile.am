@@ -7,7 +7,7 @@ helperdir = $(libexecdir)/nhc
 confdir = $(sysconfdir)/nhc
 logrotatedir = $(sysconfdir)/logrotate.d
 
-dist_sbin_SCRIPTS = nhc nhc-wrapper
+dist_sbin_SCRIPTS = nhc nhc-genconf nhc-wrapper
 dist_conf_DATA = nhc.conf
 dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline
 

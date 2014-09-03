@@ -171,6 +171,7 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     HW_IB_PHYS_STATE=( "LinkUp" "Disabled" )
     HW_IB_RATE=( "56" "10" )
     HW_IB_DEV=( "ib0" "ib1" )
+    HW_IB_UMAD_ABI_VER=5
 
     # Check for EDR, FDR, QDR, DDR, and SDR 4X links
     check_hw_ib 100

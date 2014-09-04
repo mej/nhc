@@ -179,7 +179,7 @@ function nhcmain_init_env() {
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
     unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
-    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL
+    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -210,6 +210,7 @@ $UNDERLINE
  -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
+ -f                Run checks in forked subprocesses (i.e., NHC_CHECK_FORKED=1)
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
@@ -239,12 +240,13 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:dhl:n:qst:v" OPTION ; do
+    while getopts ":D:ac:dfhl:n:qst:v" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
+            f) NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
             h) nhcmain_help ; exit 0 ;;
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
@@ -294,6 +296,7 @@ function nhcmain_finalize_env() {
     TIMEOUT=${TIMEOUT:-10}
     MAX_SYS_UID=${MAX_SYS_UID:-99}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
+    NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
     FORCE_SETSID=${FORCE_SETSID:-0}
     export NHC_SID=0
 
@@ -515,9 +518,17 @@ function nhcmain_run_checks() {
         CHECK_DIED=0
 
         # Run the check.
-        vlog "Running check:  \"$CHECK\""
-        eval $CHECK
-        RET=$?
+        if [[ "$NHC_CHECK_FORKED" == 0 ]] || mcheck "$CHECK" '/( |^)(export )?[A-Za-z_][A-Za-z0-9_]*=[^ =]/'; then
+            vlog "Running check:  \"$CHECK\""
+            eval $CHECK
+            RET=$?
+        else
+            # Run the check in a separate forked process.
+            eval $CHECK &
+            vlog "Running check:  \"$CHECK\" (forked PID $!)"
+            wait $! >/dev/null 2>&1
+            RET=$?
+        fi
 
         # Check for failure.
         if [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then

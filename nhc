@@ -145,7 +145,7 @@ function syslog_flush() {
 
 function kill_watchdog() {
     dbg "$FUNCNAME:  Watchdog PID is $WATCHDOG_PID."
-    [[ $WATCHDOG_PID -gt 0 ]] && kill -TERM $WATCHDOG_PID >/dev/null 2>&1
+    [[ $WATCHDOG_PID -ne 0 ]] && kill -s INT -- -$WATCHDOG_PID $WATCHDOG_PID >/dev/null 2>&1
     return 0
 }
 
@@ -295,26 +295,24 @@ function nhcmain_finalize_env() {
     MAX_SYS_UID=${MAX_SYS_UID:-99}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     FORCE_SETSID=${FORCE_SETSID:-0}
+    export NHC_SID=0
 
-    if [[ -n "$NHC_FORCED_SESSION" && "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
-        dbg "Detected session leader NHC via environment variable."
-        kill -s 0 -- -$NHC_PID >/dev/null 2>&1
-        if [[ $? -eq 0 ]]; then
-            dbg "NHC successfully became session leader."
-        else
-            dbg "NHC failed to become session leader."
-        fi
+    # Check for session leader.
+    kill -s 0 -- -$NHC_PID >/dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+        # We're already a session leader, possibly after setsid, possibly not.
+        dbg "NHC process $NHC_PID is session leader."
+        NHC_SID=-$NHC_PID
+    elif [[ -n "$NHC_FORCED_SESSION" && "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
+        # We tried to become a session leader via setsid,  Apparently we failed.
+        # Don't try again since that would create an infinite loop.
+        dbg "NHC failed to become session leader."
     elif [[ "$FORCE_SETSID" == "1" ]]; then
-        kill -s 0 -- -$NHC_PID >/dev/null 2>&1
-        if [[ $? -eq 0 ]]; then
-            dbg "NHC process $NHC_PID is already session leader."
-        else
-            # If we can't signal our PID as a session leader, run via setsid.
-            dbg "NHC process $NHC_PID is not session leader."
-            dbg "Restarting via setsid:  setsid $0 ${NHC_ARGS_LIST[*]} FORCE_SETSID=0"
-            export NHC_FORCED_SESSION=$NHC_PID
-            exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
-        fi
+        # We are not yet a session leader, but we haven't tried setsid.  Try now.
+        dbg "NHC process $NHC_PID is not session leader."
+        dbg "Restarting via setsid:  setsid $0 ${NHC_ARGS_LIST[*]} FORCE_SETSID=0"
+        export NHC_FORCED_SESSION=$NHC_PID
+        exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
     fi
 
     if [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
@@ -440,7 +438,8 @@ function nhcmain_watchdog_timer() {
 
     sleep $TIMEOUT &
     SLEEP_PID=$!
-    trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE ALRM TERM USR1 USR2 CONT STOP TSTP TTIN TTOU
+    trap '' ALRM TERM
+    trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU
     wait
     kill -s ALRM -- $NHC_PID || return 0
     sleep 1
@@ -453,9 +452,12 @@ function nhcmain_watchdog_timer() {
 function nhcmain_set_watchdog() {
     # Set ALARM to timeout script.
     if [[ $TIMEOUT -gt 0 ]]; then
-        eval nhcmain_watchdog_timer $TIMEOUT $NHC_PID &
+        # Start watchdog timer process in its own session.
+        set -m
+        eval nhcmain_watchdog_timer $TIMEOUT $((NHC_SID==0?NHC_PID:NHC_SID)) &
         WATCHDOG_PID=$!
         export WATCHDOG_PID
+        set +m
         dbg "Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
     else
         dbg "No watchdog, NHC PID is $NHC_PID"
@@ -486,8 +488,10 @@ function nhcmain_detach() {
         MSG=""
     fi
 
-    # Launch detached process
+    # Launch detached process (hopefully in its own session)
+    set -m
     nhcmain_spawn_detached &
+    set +m
 
     syslog_flush
     if [[ "$RC" != "0" ]]; then

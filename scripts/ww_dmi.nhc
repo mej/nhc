@@ -21,7 +21,7 @@ function nhc_dmi_gather_data() {
     local -a TAG_STACK TMPDATA
 
     if [[ ${#DMI_RAW_DATA[*]} -eq 0 ]]; then
-        nhc_dmi_gather_raw_data
+        nhc_dmi_gather_raw_data || return 1
     fi
 
     # Skip to the first line that starts with Handle
@@ -92,6 +92,12 @@ function nhc_dmi_gather_data() {
 # Alternative format for dmidecode data.  This version just grabs the raw
 # output from the dmidecode command without any fancy parsing or manipulation.
 function nhc_dmi_gather_raw_data() {
+    # Check to make sure we can actually run the "dmidecode" command.
+    if ! type -t "dmidecode" >& /dev/null ; then
+        DMI_RAW_DATA[0]=""
+        return 1
+    fi
+
     # Create array $DMI_RAW_DATA[] by splitting "dmidecode" output on newlines.
     IFS=$'\n'
     DMI_RAW_DATA=( $(dmidecode) )

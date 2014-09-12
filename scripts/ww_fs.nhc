@@ -82,6 +82,15 @@ function nhc_fs_df_gather_data() {
         DF_FREE[$DF_CNT]="${FIELD[4]}"
         DF_PCT[$DF_CNT]="${FIELD[5]%%%}"
         DF_MNTPT[$DF_CNT]="${FIELD[6]}"
+        if [[ "${DF_SIZE[$DF_CNT]}" == "-" ]]; then
+            DF_SIZE[$DF_CNT]=0
+        fi
+        if [[ "${DF_USED[$DF_CNT]}" == "-" ]]; then
+            DF_USED[$DF_CNT]=0
+        fi
+        if [[ "${DF_FREE[$DF_CNT]}" == "-" ]]; then
+            DF_FREE[$DF_CNT]=0
+        fi
         if [[ "${DF_PCT[$DF_CNT]}" == "-" ]]; then
             DF_PCT[$DF_CNT]=0
         fi
@@ -116,6 +125,15 @@ function nhc_fs_dfi_gather_data() {
         DFI_IFREE[$DFI_CNT]="${FIELD[4]}"
         DFI_PCT[$DFI_CNT]="${FIELD[5]%%%}"
         DFI_MNTPT[$DFI_CNT]="${FIELD[6]}"
+        if [[ "${DFI_INODES[$DFI_CNT]}" == "-" ]]; then
+            DFI_INODES[$DFI_CNT]=0
+        fi
+        if [[ "${DFI_IUSED[$DFI_CNT]}" == "-" ]]; then
+            DFI_IUSED[$DFI_CNT]=0
+        fi
+        if [[ "${DFI_IFREE[$DFI_CNT]}" == "-" ]]; then
+            DFI_IFREE[$DFI_CNT]=0
+        fi
         if [[ "${DFI_PCT[$DFI_CNT]}" == "-" ]]; then
             DFI_PCT[$DFI_CNT]=0
         fi

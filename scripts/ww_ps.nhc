@@ -614,11 +614,13 @@ function check_ps_userproc_lineage() {
         if mcheck "${NHC_AUTH_USERS}" "/(^|[^A-Za-z0-9])$THIS_USER(\$|[^A-Za-z0-9])/" ; then
             continue
         fi
-        # Non-system process.  Check lineage.
-        if nhc_ps_pid_lineage $THIS_PID $RM_DAEMON_MATCH ; then
+        # Non-system process.  If it's not the RM daemon itself, check lineage.
+        if mcheck "$THIS_CMD" "$RM_DAEMON_MATCH" ; then
+            continue
+        elif nhc_ps_pid_lineage $THIS_PID $RM_DAEMON_MATCH ; then
             continue
         fi
-        # Not a child of pbs_mom.  Take action.
+        # Not a child of RM daemon.  Take action.
         UNAUTH_MSG="$FUNCNAME:  Rogue process $THIS_CMD ($THIS_PID) from user $THIS_USER ($THIS_UID) detected."
         for ACTION in $ACTIONS ; do
             case "$ACTION" in

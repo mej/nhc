@@ -136,7 +136,7 @@ function nhcwrap_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":A:D:L:M:P:S:VX:" OPTION ; do
+    while getopts ":A:D:L:M:P:S:VX:h-" OPTION ; do
         case "$OPTION" in
             A) ARGS="$OPTARG" ;;
             D) STATEDIR="$OPTARG" ;;

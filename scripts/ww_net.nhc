@@ -1,0 +1,152 @@
+# NHC - Warewulf Networking/Socket Checks
+#
+# Michael Jennings <mej@lbl.gov>
+# 12 September 2014
+#
+# $Id$
+#
+
+NETSTAT_CMD="${NETSTAT_CMD:-netstat}"
+NETSTAT_ARGS="${NETSTAT_ARGS:--Tanpee -A inet,inet6,unix}"
+SS_CMD="${SS_CMD:-ss}"
+SS_ARGS="${SS_ARGS:--anpee -A inet,unix}"
+
+NET_PROTO=( )
+NET_LOCADDR=( )
+NET_RMTADDR=( )
+NET_TYPE=( )
+NET_STATE=( )
+NET_USER=( )
+NET_UID=( )
+NET_PROCPID=( )
+NET_PROCNAME=( )
+
+function nhc_sockets_gather_data() {
+    local IFS NET_DATA THIS_PID i j CNT=0
+    local -a LINES LINE
+
+    # We need passwd data to resolve UIDs for users
+    if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
+        nhc_common_load_passwd
+    fi
+
+    # Make sure we have "netstat" available before we try to run it.
+    if type -t "$NETSTAT_CMD" >&/dev/null ; then
+        dbg "Gathering socket data using $NETSTAT_CMD $NETSTAT_ARGS..."
+        # Create array $LINES[] by splitting output on newlines.
+        IFS=$'\n'
+        LINES=( $(eval ${NETSTAT_CMD} ${NETSTAT_ARGS} 2>/dev/null) )
+        IFS=$' \t\n'
+
+        # Iterate through $LINES[] array to gather process data.
+        for ((i=0; i<${#LINES[*]}; i++)); do
+            # Split each line on whitespace to create $LINE[] array.
+            LINE=( ${LINES[$i]} )
+            if [[ "${LINE[0]}" == "Active" || "${LINE[0]}" == "Proto" ]]; then
+                continue
+            fi
+            NET_PROTO[$CNT]=${LINE[0]}
+            if [[ "${NET_PROTO[$CNT]}" == "udp" ]]; then
+                NET_LOCADDR[$CNT]=${LINE[3]}
+                NET_RMTADDR[$CNT]=${LINE[4]}
+                NET_UID[$CNT]=${LINE[5]}
+                NET_PROCNAME[$CNT]=${LINE[7]}
+            elif [[ "${NET_PROTO[$CNT]}" == "unix" ]]; then
+                for ((j=4; j<${#LINE[*]}; j++)); do
+                    if [[ "${LINE[$j]}" == "DGRAM" || "${LINE[$j]}" == "STREAM" || "${LINE[$j]}" == "RAW" || "${LINE[$j]}" == "RDM" || "${LINE[$j]}" == "SEQPACKET" || "${LINE[$j]}" == "PACKET" || "${LINE[$j]}" == "UNKNOWN" ]]; then
+                        NET_TYPE[$CNT]=${LINE[$((j++))]}
+                        if [[ -z "${LINE[$j]//[0-9]}" ]]; then
+                            # All-numeric; must be an inode number, which means no state.
+                            NET_PROCNAME[$CNT]=${LINE[$((++j))]}
+                            NET_LOCADDR[$CNT]=${LINE[$((++j))]}
+                        else
+                            NET_STATE[$CNT]=${LINE[$((j++))]}
+                            NET_PROCNAME[$CNT]=${LINE[$((++j))]}
+                            NET_LOCADDR[$CNT]=${LINE[$((++j))]}
+                        fi
+                    fi
+                done
+            else
+                # TCP or RAW
+                NET_LOCADDR[$CNT]=${LINE[3]}
+                NET_RMTADDR[$CNT]=${LINE[4]}
+                NET_STATE[$CNT]=${LINE[5]}
+                NET_UID[$CNT]=${LINE[6]}
+                NET_PROCNAME[$CNT]=${LINE[8]}
+            fi
+            if [[ -n "${NET_UID[$CNT]}" ]]; then
+                nhc_common_get_userid "${NET_UID[$CNT]}" "NET_USER[$CNT]"
+            fi
+            if [[ -n "${NET_PROCNAME[$CNT]}" && "${NET_PROCNAME[$CNT]//\/}" != "${NET_PROCNAME[$CNT]}" ]]; then
+                NET_PROCPID[$CNT]="${NET_PROCNAME[$CNT]%%/*}"
+                NET_PROCNAME[$CNT]="${NET_PROCNAME[$CNT]##*/}"
+            else
+                NET_PROCPID[$CNT]="0"
+                NET_PROCNAME[$CNT]="unknown"
+            fi
+            dbg "Got ${NET_PROTO[$CNT]}${NET_TYPE[$CNT]:+ ${NET_TYPE[$CNT]}} socket $CNT:  ${NET_USER[$CNT]:+${NET_USER[$CNT]}(${NET_UID[$CNT]}):  }${NET_PROCNAME[$CNT]}[${NET_PROCPID[$CNT]}] ${NET_LOCADDR[$CNT]}${NET_RMTADDR[$CNT]:+ -> ${NET_RMTADDR[$CNT]}}${NET_STATE[$CNT]:+ (${NET_STATE[$CNT]})}"
+            ((CNT++))
+        done
+    elif type -t "$SS_CMD" >&/dev/null ; then
+        dbg "Gathering socket data using $SS_CMD $SS_ARGS..."
+        # Create array $LINES[] by splitting output on newlines.
+        IFS=$'\n'
+        LINES=( $(eval ${SS_CMD} ${SS_ARGS} 2>/dev/null) )
+        IFS=$' \t\n'
+
+        # Iterate through $LINES[] array to gather process data.
+        for ((i=0; i<${#LINES[*]}; i++)); do
+            #dbg "Parsing line:  ${LINES[$i]}"
+            # Split each line on whitespace to create $LINE[] array.  The following
+            # temporary substitution is necessary to avoid bash expanding * to
+            # filenames from the current directory.  FIXME:  Anyone know a better way?
+            LINE=( ${LINES[$i]//\*/\\\*} )
+            LINE=( "${LINE[@]//\\}" )
+            if [[ "${LINE[0]}" == "Netid" ]]; then
+                continue
+            fi
+            NET_PROTO[$CNT]=${LINE[0]}
+            NET_STATE[$CNT]=${LINE[1]}
+            NET_LOCADDR[$CNT]="${LINE[4]}"
+            if [[ "${NET_PROTO[$CNT]}" == "u_str" ]]; then
+                NET_PROTO[$CNT]="unix"
+                NET_TYPE[$CNT]="STREAM"
+                NET_PROCNAME[$CNT]="${LINE[8]}"
+            elif [[ "${NET_PROTO[$CNT]}" == "u_dgr" ]]; then
+                NET_PROTO[$CNT]="unix"
+                NET_TYPE[$CNT]="DGRAM"
+                NET_PROCNAME[$CNT]="${LINE[8]}"
+            else
+                # TCP, UDP, RAW
+                NET_RMTADDR[$CNT]="${LINE[5]}"
+                for ((j=6; j<${#LINE[*]}; j++)); do
+                    if [[ "${LINE[$j]/#users:}" != "${LINE[$j]}" ]]; then
+                        NET_PROCNAME[$CNT]="${LINE[$j]}"
+                    elif [[ "${LINE[$j]/#uid[:=]}" != "${LINE[$j]}" ]]; then
+                        NET_UID[$CNT]="${LINE[$j]##uid[:=]}"
+                    fi
+                done
+            fi
+            if [[ "${NET_STATE[$CNT]}" == "ESTAB" ]]; then
+                NET_STATE[$CNT]="ESTABLISHED"
+            fi
+            if [[ -n "${NET_PROCNAME[$CNT]}" ]]; then
+                NET_PROCNAME[$CNT]="${NET_PROCNAME[$CNT]/#users:\(\(\"}"
+                NET_PROCPID[$CNT]="${NET_PROCNAME[$CNT]/#*\",}"
+                NET_PROCNAME[$CNT]="${NET_PROCNAME[$CNT]/%\",*}"
+                NET_PROCPID[$CNT]="${NET_PROCPID[$CNT]/%,*}"
+            else
+                NET_PROCPID[$CNT]="0"
+                NET_PROCNAME[$CNT]="unknown"
+            fi
+            if [[ -n "${NET_UID[$CNT]}" ]]; then
+                nhc_common_get_userid "${NET_UID[$CNT]}" "NET_USER[$CNT]"
+            fi
+            dbg "Got ${NET_PROTO[$CNT]}${NET_TYPE[$CNT]:+ ${NET_TYPE[$CNT]}} socket $CNT:  ${NET_USER[$CNT]:+${NET_USER[$CNT]}(${NET_UID[$CNT]}):  }${NET_PROCNAME[$CNT]}[${NET_PROCPID[$CNT]}] ${NET_LOCADDR[$CNT]}${NET_RMTADDR[$CNT]:+ -> ${NET_RMTADDR[$CNT]}}${NET_STATE[$CNT]:+ (${NET_STATE[$CNT]})}"
+            ((CNT++))
+        done
+    else
+        dbg "Neither $NETSTAT_CMD nor $SS_CMD found.  Unable to gather socket data."
+        return 1
+    fi
+}

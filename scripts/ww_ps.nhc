@@ -192,6 +192,7 @@ function nhc_ps_check_res() {
         nhc_common_get_userid $OWNER OWNER
     fi
 
+    dbg "Looking for processes matching \"$MATCH\"${OWNER:+ owned by ${OWNER}}"
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         if [[ $FULLMATCH == 1 ]]; then
@@ -220,6 +221,7 @@ function nhc_ps_check_res() {
             fi
         fi
         # We have a matching process with the correct owner.  Now check resource consumption.
+        dbg "Matching process found:  $THIS_PROG[$THIS_PID]:  ${PS_PCPU[$THIS_PID]}% CPU, ${PS_PMEM[$THIS_PID]}% (${PS_RSS[$THIS_PID]}kB) RAM, ${PS_VSZ[$THIS_PID]}kB mem, ${PS_TIME[$THIS_PID]} time"
         case $COL in
             1)  if [[ ${PS_PCPU[$THIS_PID]%%.*} -lt $THRESHOLD ]]; then continue ; fi
                 MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using ${PS_PCPU[$THIS_PID]}% CPU (limit $THRESHOLD%)"
@@ -233,7 +235,7 @@ function nhc_ps_check_res() {
                 MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM RAM (limit $LIM)"
                 ;;
             4)  if [[ ${PS_VSZ[$THIS_PID]} -lt $THRESHOLD ]]; then continue ; fi
-                nhc_common_unparse_size ${PS_RSS[$THIS_PID]} NUM
+                nhc_common_unparse_size ${PS_VSZ[$THIS_PID]} NUM
                 nhc_common_unparse_size $THRESHOLD LIM
                 MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM memory (RAM+swap) (limit $LIM)"
                 ;;
@@ -286,7 +288,8 @@ function nhc_ps_check_res() {
         die 1 "$MSG"
         return 1
     done
-    # -a (all) does not necessarily imply -0 (non-fatal)
+    # -a (all) does not necessarily imply -0 (non-fatal).  A value of 1 for $ALL
+    # means -a was passed in but no errors were found.  2 or above is an error.
     if [[ $ALL -gt 1 ]]; then
         # We had at least 1 flagged process.  Fail unless we're also non-fatal.
         if [[ $NONFATAL == 1 ]]; then
@@ -295,8 +298,9 @@ function nhc_ps_check_res() {
             fi
             return 0
         fi
-        die 1 "$MSG ($((ALL-1)) of $((ALL-1)))"
-        return $((--ALL))
+        ((ALL--))
+        die $ALL "$MSG (last of $ALL)"
+        return $ALL
     fi
     return 0
 }

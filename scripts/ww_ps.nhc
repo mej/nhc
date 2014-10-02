@@ -38,7 +38,12 @@ function nhc_ps_gather_data() {
     elif [[ "$NHC_RM" == "slurm" ]]; then
         RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
     elif [[ "$NHC_RM" == "sge" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_execd\b/}"
+        # If you limit this to execd, you lose when it's been restarted,
+        # and the shepherd is detached.  Even if execd is safe because of
+        # system uids, it can spawn mail commands as the job owner, at
+        # least.  (The shepherd process name is normally
+        # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
     else
         dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
     fi

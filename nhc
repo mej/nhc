@@ -38,10 +38,10 @@ function die() {
     if [[ -n "$NHC_DETACHED" ]]; then
         echo "$RET $*" > $RESULTFILE
     elif [[ "$NHC_RM" == "sge" ]]; then
-        echo "begin"
-        echo "$HOSTNAME:healthy:false"
-        echo "$HOSTNAME:diagnosis:NHC: $*"
-        echo "end"
+        echo "begin" >$NHC_FD_OUT
+        echo "$HOSTNAME:healthy:false" >$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:NHC: $*" >$NHC_FD_OUT
+        echo "end" >$NHC_FD_OUT
         return 77
     elif [[ -n "$LOGFILE" ]]; then
         oecho "ERROR:  $NAME:  Health check failed:  $*"
@@ -51,7 +51,7 @@ function die() {
         return 0
     fi
     kill_watchdog
-    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
+    [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
     exit $RET
 }
 
@@ -91,11 +91,7 @@ function oecho() {
 
     if [[ "$SILENT" == "0" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        if [[ -n "$LOGFILE" ]]; then
-            echo "$PREFIX$@" >&3
-        else
-            echo "$PREFIX$@"
-        fi
+        echo "$PREFIX$@" >&$NHC_FD_OUT
     fi
 }
 
@@ -105,11 +101,7 @@ function eecho() {
 
     if [[ "$SILENT" == "0" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        if [[ -n "$LOGFILE" ]]; then
-            echo "$PREFIX$@" >&4
-        else
-            echo "$PREFIX$@"
-        fi
+        echo "$PREFIX$@" >&$NHC_FD_ERR
     fi
 }
 
@@ -119,11 +111,7 @@ function vecho() {
 
     if [[ "$VERBOSE" == "1" ]]; then
         [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        if [[ -n "$LOGFILE" ]]; then
-            echo "$PREFIX$@" >&3
-        else
-            echo "$PREFIX$@"
-        fi
+        echo "$PREFIX$@" >&$NHC_FD_OUT
     fi
 }
 
@@ -171,8 +159,10 @@ function nhcmain_init_env() {
     WATCHDOG_PID=0
     FAIL_CNT=0
     FORCE_SETSID=0
+    NHC_FD_OUT=1
+    NHC_FD_ERR=2
     export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
-    export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID
+    export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
@@ -294,11 +284,14 @@ function nhcmain_finalize_env() {
     DETACHED_MODE=${DETACHED_MODE:-0}
     DETACHED_MODE_FAIL_NODATA=${DETACHED_MODE_FAIL_NODATA:-0}
     TIMEOUT=${TIMEOUT:-10}
-    MAX_SYS_UID=${MAX_SYS_UID:-99}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
     FORCE_SETSID=${FORCE_SETSID:-0}
     export NHC_SID=0
+
+    # Set from system defaults if present.
+    [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
+    MAX_SYS_UID=${MAX_SYS_UID:-99}
 
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
@@ -369,26 +362,27 @@ function nhcmain_find_rm() {
     if [[ -d /var/spool/torque ]]; then
         NHC_RM="pbs"
         return 0
+    elif [[ -n "$SGE_ROOT" && -x "$SGE_ROOT/util/arch" ]]; then
+        # SGE binaries typically won't be on the path defined above in the
+        # load sensor environment, but SGE_ROOT will be there.
+        NHC_RM="sge"
     fi
 
-    IFS=':'
-    DIRLIST=( $PATH )
-    IFS=$' \t\n'
-    for DIR in "${DIRLIST[@]}" ; do
-        if [[ -x "$DIR/pbsnodes" ]]; then
-            NHC_RM="pbs"
-            return 0
-        elif [[ -x "$DIR/scontrol" ]]; then
-            NHC_RM="slurm"
-            return 0
-        elif [[ -x "$DIR/badmin" ]]; then
-            NHC_RM="lsf"
-            return 0
-        elif [[ -x "$DIR/qselect" ]]; then
-            NHC_RM="sge"
-            return 0
-        fi
-    done
+    # Search PATH for commands
+    if type -a -p -f -P pbsnodes >&/dev/null ; then
+        NHC_RM="pbs"
+        return 0
+    elif type -a -p -f -P scontrol >&/dev/null ; then
+        NHC_RM="slurm"
+        return 0
+    elif type -a -p -f -P badmin >&/dev/null ; then
+        NHC_RM="lsf"
+        return 0
+    elif type -a -p -f -P qselect >&/dev/null ; then
+        NHC_RM="sge"
+        return 0
+    fi
+
     if [[ -z "$NHC_RM" ]]; then
         log "Unable to detect resource manager."
         return 1
@@ -407,6 +401,8 @@ function nhcmain_redirect_output() {
             exit 1
         else
             dbg "Output redirected per LOGFILE variable $LOGFILE"
+            NHC_FD_OUT=3
+            NHC_FD_ERR=4
         fi
     fi
 }
@@ -506,7 +502,7 @@ function nhcmain_detach() {
     nhcmain_redirect_output
     ELAPSED=$((SECONDS-NHC_START_TS))
     vlog "Node Health Check detached parent completed successfully (${ELAPSED}s)."
-    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
+    [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
     exit 0
 }
 
@@ -565,14 +561,14 @@ function nhcmain_finish() {
     ELAPSED=$((SECONDS-NHC_START_TS))
     vlog "Node Health Check completed successfully (${ELAPSED}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
-        echo "begin"
-        echo "$HOSTNAME:healthy:true"
-        echo "$HOSTNAME:diagnosis:HEALTHY"
-        echo "end"
+        echo "begin" >$NHC_FD_OUT
+        echo "$HOSTNAME:healthy:true" >$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:HEALTHY" >$NHC_FD_OUT
+        echo "end" >$NHC_FD_OUT
         return 0
     fi        
     kill_watchdog
-    [[ -n "$LOGFILE" ]] && exec 1>&3- 2>&4-
+    [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
     exit 0
 }
 

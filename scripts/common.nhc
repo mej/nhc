@@ -7,6 +7,7 @@
 #
 
 PASSWD_DATA_SRC="${PASSWD_DATA_SRC:-/etc/passwd}"
+LOGIN_DEFS_SRC="${LOGIN_DEFS_SRC:-/etc/login.defs}"
 
 RANGE_MATCH_REGEXP1='^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$'
 RANGE_MATCH_REGEXP2='^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$'
@@ -537,4 +538,18 @@ function nhc_cmd_with_timeout() {
     RET=$?
     #exec 2>&3 3>&-
     return $RET
+}
+
+# Find system definition for UID range
+function nhc_common_get_max_sys_uid() {
+    local LINE
+
+    if [[ -e "$LOGIN_DEFS_SRC" ]]; then
+        while read LINE ; do
+            if [[ "${LINE##UID_MIN}" != "$LINE" ]]; then
+                MAX_SYS_UID="${LINE//[^0-9]}"
+                break
+            fi
+        done < "$LOGIN_DEFS_SRC"
+    fi
 }

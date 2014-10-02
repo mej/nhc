@@ -32,6 +32,10 @@ function nhc_ps_gather_data() {
         nhc_common_load_passwd
     fi
 
+    # We need this for user authorization checks.  Try to read system defaults.
+    [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
+    MAX_SYS_UID=${MAX_SYS_UID:-99}
+
     # Set default for $RM_DAEMON_MATCH based on configured resource manager.
     if [[ "$NHC_RM" == "pbs" ]]; then
         RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"

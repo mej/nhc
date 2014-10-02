@@ -289,10 +289,6 @@ function nhcmain_finalize_env() {
     FORCE_SETSID=${FORCE_SETSID:-0}
     export NHC_SID=0
 
-    # Set from system defaults if present.
-    [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
-    MAX_SYS_UID=${MAX_SYS_UID:-99}
-
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
@@ -352,7 +348,7 @@ function nhcmain_finalize_env() {
         return
     fi
 
-    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG TS SILENT TIMEOUT MAX_SYS_UID NHC_RM
+    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG TS SILENT TIMEOUT NHC_RM
 }
 
 function nhcmain_find_rm() {

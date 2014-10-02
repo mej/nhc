@@ -127,9 +127,9 @@ function test_nhc_driver() {
         unlike $LOGFILE '/[<>|&]/' '$LOGFILE contains no redirection'
         is $DEBUG 0 'Debugging off by default'
         is $SILENT 0 'Silent mode off by default'
+        is $VERBOSE 0 'Verbose mode off by default'
         is $MARK_OFFLINE 1 'Nodes marked offline by default'
-        is $TIMEOUT 10 '10 second script timeout by default'
-        cmp_ok $MAX_SYS_UID "-lt" 1000 'Reasonable range for system UIDs'
+        cmp_ok ${TIMEOUT:-999999} "-le" 300 'Reasonable default script timeout'
     } ; unplan
 
     plan 1 "nhcmain_check_conffile" && {

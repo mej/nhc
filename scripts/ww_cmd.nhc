@@ -127,7 +127,7 @@ function check_cmd_output() {
 # a tar, or a compilation), suppressing output or redirecting it to
 # /dev/null is immensely faster than parsing it in bash.
 function check_cmd_status() {
-    local CMD_TIMEOUT=5 CMD_RETVAL PID TIMER RET CHECKNAME="$FUNCNAME"
+    local CMD_TIMEOUT=5 CMD_RETVAL PID TIMER RET CHECKNAME="$FUNCNAME" CMD_START_TS=$SECONDS
 
     OPTIND=1
     while getopts ":C:r:t:" OPTION ; do
@@ -153,7 +153,13 @@ function check_cmd_status() {
     RET=$?
 
     if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
-        die 1 "$CHECKNAME:  Command \"$@\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
+            # A return code of 143 (128+15) means that the process received SIGTERM,
+            # probably from our command watchdog timer.  Detect that and make it clearer.
+            die 1 "$CHECKNAME:  Command \"$*\" timed out after $CMD_TIMEOUT seconds and was terminated; returned $RET"
+            return 1
+        fi
+        die 1 "$CHECKNAME:  Command \"$*\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
         return 1
     fi
     return 0

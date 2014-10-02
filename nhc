@@ -283,7 +283,7 @@ function nhcmain_finalize_env() {
     MARK_OFFLINE=${MARK_OFFLINE:-1}
     DETACHED_MODE=${DETACHED_MODE:-0}
     DETACHED_MODE_FAIL_NODATA=${DETACHED_MODE_FAIL_NODATA:-0}
-    TIMEOUT=${TIMEOUT:-10}
+    TIMEOUT=${TIMEOUT:-30}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
     FORCE_SETSID=${FORCE_SETSID:-0}
@@ -300,7 +300,7 @@ function nhcmain_finalize_env() {
         dbg "NHC process $NHC_PID is session leader."
         NHC_SID=-$NHC_PID
     elif [[ -n "$NHC_FORCED_SESSION" && "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
-        # We tried to become a session leader via setsid,  Apparently we failed.
+        # We tried to become a session leader via setsid.  Apparently we failed.
         # Don't try again since that would create an infinite loop.
         dbg "NHC failed to become session leader."
     elif [[ "$FORCE_SETSID" == "1" ]]; then

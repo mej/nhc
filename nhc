@@ -38,10 +38,10 @@ function die() {
     if [[ -n "$NHC_DETACHED" ]]; then
         echo "$RET $*" > $RESULTFILE
     elif [[ "$NHC_RM" == "sge" ]]; then
-        echo "begin" >$NHC_FD_OUT
-        echo "$HOSTNAME:healthy:false" >$NHC_FD_OUT
-        echo "$HOSTNAME:diagnosis:NHC: $*" >$NHC_FD_OUT
-        echo "end" >$NHC_FD_OUT
+        echo "begin" >&$NHC_FD_OUT
+        echo "$HOSTNAME:healthy:false" >&$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:NHC: $*" >&$NHC_FD_OUT
+        echo "end" >&$NHC_FD_OUT
         return 77
     elif [[ -n "$LOGFILE" ]]; then
         oecho "ERROR:  $NAME:  Health check failed:  $*"
@@ -557,10 +557,10 @@ function nhcmain_finish() {
     ELAPSED=$((SECONDS-NHC_START_TS))
     vlog "Node Health Check completed successfully (${ELAPSED}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
-        echo "begin" >$NHC_FD_OUT
-        echo "$HOSTNAME:healthy:true" >$NHC_FD_OUT
-        echo "$HOSTNAME:diagnosis:HEALTHY" >$NHC_FD_OUT
-        echo "end" >$NHC_FD_OUT
+        echo "begin" >&$NHC_FD_OUT
+        echo "$HOSTNAME:healthy:true" >&$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:HEALTHY" >&$NHC_FD_OUT
+        echo "end" >&$NHC_FD_OUT
         return 0
     fi        
     kill_watchdog

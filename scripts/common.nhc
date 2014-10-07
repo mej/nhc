@@ -95,15 +95,27 @@ function array_split() {
 ### Example:  array_join ',' FIELDS RESULT
 function array_join() {
     local SEP="$1" ANAME="$2" OUTVAR="$3"
-    local SAVEIFS="$IFS"
+    local SAVEIFS="$IFS" i TMP CNT
 
-    IFS="$SEP"
-    if [[ -n "$OUTVAR" ]]; then
-        eval "$OUTVAR"'="${'"$ANAME"'[*]}"'
+    if [[ ${#SEP} -eq 1 ]]; then
+        IFS="$SEP"
+        if [[ -n "$OUTVAR" ]]; then
+            eval "$OUTVAR"'="${'"$ANAME"'[*]}"'
+        else
+            eval echo '"${'"$ANAME"'[*]}"'
+        fi
+        IFS="$SAVEIFS"
     else
-        eval echo '"${'"$ANAME"'[*]}"'
+        eval 'TMP="${'"$ANAME"'[0]}" CNT="${#'"$ANAME"'[*]}"'
+        for ((i=1; i < CNT; i++)); do
+            eval 'TMP="$TMP$SEP${'"$ANAME"'[$i]}"'
+        done
+        if [[ -n "$OUTVAR" ]]; then
+            eval "$OUTVAR"'="$TMP"'
+        else
+            echo "$TMP"
+        fi
     fi
-    IFS="$SAVEIFS"
 }
 ###########################################################
 

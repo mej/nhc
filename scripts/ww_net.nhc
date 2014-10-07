@@ -159,9 +159,12 @@ function nhc_sockets_gather_data() {
 #                   [-r <rmtaddr>[:<rmtport>]] [-t <type>] [-u <user>] [-d <daemon>] [-e <action>] [-E <found_action>]
 function check_net_socket() {
     local NONFATAL=0 ALL=0 NEGATE=0 EXACT=0 FLEXMATCH=0 DAEMON NAME LOCADDR PROTO RMTADDR STATE
-    local TYPE OWNER ACTION FOUND_ACTION
-    local i MATCH_CNT=0 MSG="" SEEK_STR="" MATCH_STR=""
+    local TYPE OWNER ACTION FOUND_ACTION MATCH FIELD DESC
+    local i j MATCH_CNT=0 CONT MSG="" SEEK_STR="" MATCH_STR="" FIELDS=""
     local -a MATCH_DESC
+    local -a FIELD_LIST=( "PROTO" "LOCADDR" "RMTADDR" "STATE" "TYPE" "USER" "PROCNAME" )
+    local -a VAR_LIST=( "PROTO" "LOCADDR" "RMTADDR" "STATE" "TYPE" "OWNER" "DAEMON" )
+    local -a DESC_LIST=( "protocol" "localaddr" "remoteaddr" "state" "type" "user" "daemon" )
 
     if [[ ${#NET_PROTO[*]} -eq 0 ]]; then
         nhc_sockets_gather_data
@@ -197,27 +200,13 @@ function check_net_socket() {
     fi
 
     # Build a user-readable string describing the matching criteria we're using for the socket search.
-    if [[ -n "$PROTO" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(protocol =~ \"$PROTO\")"
-    fi
-    if [[ -n "$LOCADDR" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(localaddr =~ \"$LOCADDR\")"
-    fi
-    if [[ -n "$RMTADDR" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(remoteaddr =~ \"$RMTADDR\")"
-    fi
-    if [[ -n "$STATE" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(state =~ \"$STATE\")"
-    fi
-    if [[ -n "$TYPE" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(type =~ \"$TYPE\")"
-    fi
-    if [[ -n "$OWNER" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(user =~ \"$OWNER\")"
-    fi
-    if [[ -n "$DAEMON" ]]; then
-        MATCH_DESC[${#MATCH_DESC[*]}]="(daemon =~ \"$DAEMON\")"
-    fi
+    for ((j=0; j < ${#VAR_LIST[*]}; j++)); do
+        # The below eval equates to:
+        #[[ -n "$<varname>" ]] && MATCH_DESC[${#MATCH_DESC[*]}]="(<descriptive_name> =~ \"$<varname>\")" || <varname>=""
+        eval '[[ -n "$'"${VAR_LIST[$j]}"'" ]] && FIELDS="$FIELDS $j" && MATCH_DESC[${#MATCH_DESC[*]}]="('"${DESC_LIST[$j]}"' =~ \"$'"${VAR_LIST[$j]}"'\")"'
+        # We unset the value of VAR_LIST[$j] if we weren't asked to match on that field
+        # because it allows us to short-circuit the loop below.
+    done
     if [[ ${#MATCH_DESC[*]} -eq 0 ]]; then
         die 1 "$FUNCNAME:  No match criteria supplied."
         return 1
@@ -229,131 +218,31 @@ function check_net_socket() {
     dbg "Looking for ${NAME:+$NAME }sockets:  $SEEK_STR"
     for ((i=0; i < ${#NET_PROTO[*]}; i++)); do
         unset MATCH_DESC
-        # Check socket protocol
-        if [[ -n "$PROTO" ]]; then
-            if [[ -z "${NET_PROTO[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_PROTO[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
+        CONT=0
+        for j in $FIELDS ; do
+            # Compare each field against the match expressions we've been given.
+            eval 'MATCH="$'"${VAR_LIST[$j]}"'" DESC="'"${DESC_LIST[$j]}"'" FIELD="${NET_'"${FIELD_LIST[$j]}"'[$i]}"'
+            if [[ -z "$FIELD" && $EXACT -eq 1 ]]; then
+                # With EXACT matching, missing information for a socket NEVER matches.
+                CONT=1
+                break
+            elif [[ -z "$FIELD" && $FLEXMATCH -eq 1 ]]; then
+                # With FLEXMATCH matching, missing information for a socket ALWAYS matches.
                 :
-            elif [[ "${PROTO/#\!}" != "$PROTO" ]]; then
+            elif [[ "${MATCH/#\!}" != "$MATCH" ]]; then
                 # Match string begins with !.  Negate the match.
-                if mcheck "${NET_PROTO[$i]}" "${PROTO/#\!}" ; then
-                    continue
+                if mcheck "$FIELD" "${MATCH/#\!}" ; then
+                    CONT=1
+                    break
                 fi
-            elif ! mcheck "${NET_PROTO[$i]}" "$PROTO" ; then
-                continue
+            elif ! mcheck "$FIELD" "$MATCH" ; then
+                CONT=1
+                break
             fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="protocol(${NET_PROTO[$i]})"
-        fi
-        # Check local address of socket
-        if [[ -n "$LOCADDR" ]]; then
-            if [[ -z "${NET_LOCADDR[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_LOCADDR[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${LOCADDR/#\!}" != "$LOCADDR" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_LOCADDR[$i]}" "${LOCADDR/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_LOCADDR[$i]}" "$LOCADDR" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="localaddr(${NET_LOCADDR[$i]})"
-        fi
-        # Check remote address of socket
-        if [[ -n "$RMTADDR" ]]; then
-            if [[ -z "${NET_RMTADDR[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_RMTADDR[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${RMTADDR/#\!}" != "$RMTADDR" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_RMTADDR[$i]}" "${RMTADDR/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_RMTADDR[$i]}" "$RMTADDR" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="remoteaddr(${NET_RMTADDR[$i]})"
-        fi
-        # Check socket state
-        if [[ -n "$STATE" ]]; then
-            if [[ -z "${NET_STATE[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_STATE[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${STATE/#\!}" != "$STATE" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_STATE[$i]}" "${STATE/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_STATE[$i]}" "$STATE" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="state(${NET_STATE[$i]})"
-        fi
-        # Check socket type
-        if [[ -n "$TYPE" ]]; then
-            if [[ -z "${NET_TYPE[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_TYPE[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${TYPE/#\!}" != "$TYPE" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_TYPE[$i]}" "${TYPE/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_TYPE[$i]}" "$TYPE" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="type(${NET_TYPE[$i]})"
-        fi
-        # Check socket owner (user)
-        if [[ -n "$OWNER" ]]; then
-            if [[ -z "${NET_USER[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_USER[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${OWNER/#\!}" != "$OWNER" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_USER[$i]}" "${OWNER/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_USER[$i]}" "$OWNER" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="user(${NET_USER[$i]})"
-        fi
-        # Check socket owner (process)
-        if [[ -n "$DAEMON" ]]; then
-            if [[ -z "${NET_PROCNAME[$i]}" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information is taken to always be non-matching.
-                continue
-            elif [[ -z "${NET_PROCNAME[$i]}" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information is taken to always be matching.
-                :
-            elif [[ "${DAEMON/#\!}" != "$DAEMON" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "${NET_PROCNAME[$i]}" "${DAEMON/#\!}" ; then
-                    continue
-                fi
-            elif ! mcheck "${NET_PROCNAME[$i]}" "$DAEMON" ; then
-                continue
-            fi
-            MATCH_DESC[${#MATCH_DESC[*]}]="daemon(${NET_PROCNAME[$i]})"
+            MATCH_DESC[${#MATCH_DESC[*]}]="$DESC($FIELD)"
+        done
+        if [[ $CONT -ne 0 ]]; then
+            continue
         fi
 
         ### If we get here, all pieces of information provided have matched successfully.

@@ -94,7 +94,7 @@ function populate_net_data() {
         [1]="0.0.0.0:*" 
         [2]="0.0.0.0:*" 
         [3]="0.0.0.0:*" 
-        [4]="128.3.7.60:22" 
+        [4]="1.2.3.3:22" 
         [5]="199.59.150.39:443" 
         [6]="74.125.25.109:993" 
         [7]=":::*" 
@@ -127,7 +127,7 @@ function populate_net_data() {
         [1]="tcp/rpcuser[29]/rpc.statd[1075]:  0.0.0.0:52789 -> 0.0.0.0:* (LISTEN)" 
         [2]="tcp/root[0]/sshd[23848]:  0.0.0.0:22 -> 0.0.0.0:* (LISTEN)" 
         [3]="tcp/mysql[27]/mysqld[5903]:  0.0.0.0:3306 -> 0.0.0.0:* (LISTEN)" 
-        [4]="tcp/someuser[500]/ssh[409]:  1.2.3.4:44283 -> 128.3.7.60:22 (ESTABLISHED)" 
+        [4]="tcp/someuser[500]/ssh[409]:  1.2.3.4:44283 -> 1.2.3.3:22 (ESTABLISHED)" 
         [5]="tcp/someuser[500]/chrome[32616]:  1.2.3.4:54590 -> 199.59.150.39:443 (ESTABLISHED)" 
         [6]="tcp/someuser[500]/mutt[12492]:  1.2.3.4:33126 -> 74.125.25.109:993 (CLOSE_WAIT)" 
         [7]="tcp/root[0]/rpcbind[2674]:  :::111 -> :::* (LISTEN)" 
@@ -182,11 +182,67 @@ function populate_net_data() {
     )
 }
 
-plan $((2)) "ww_net.nhc" && {
+plan $((2+27)) "ww_net.nhc" && {
     is "`type -t nhc_sockets_gather_data 2>&1`" 'function' 'nhc_sockets_gather_data() loaded properly'
     is "`type -t check_net_socket 2>&1`" 'function' 'check_net_socket() loaded properly'
 
     # Fake network data for testing
     populate_net_data
+
+    # Check for some sockets
+    check_net_socket -l '*'
+    is $? 0 "Obviously, '*' should match any socket."
+    check_net_socket -p icmp
+    is $? 1 "There's no such thing as an ICMP socket."
+    check_net_socket -n "listening" -s 'LISTEN*'
+    is $? 0 "There are several listening sockets."
+    check_net_socket -n "open" -s '/^(ESTABLISHED|CONNECTED)$/'
+    is $? 0 "Yep, got those too."
+    check_net_socket -n "SSH" -r '*:22'
+    is $? 0 "SSH session detected by remote port"
+    check_net_socket -n "SSH" -d ssh
+    is $? 0 "SSH session detected by program name"
+    check_net_socket -n "HTTP daemon" -p tcp -s LISTEN -l '*:80' -d httpd
+    is $? 0 "Any (IPv4 or IPv6) web server listening socket"
+    check_net_socket -n "HTTP daemon" -p tcp -s LISTEN -l '0.0.0.0:80' -d httpd
+    is $? 1 "IPv4 web server listening socket not present"
+    check_net_socket -p tcp -s LISTEN -l '0.0.0.0:22' -r '0.0.0.0:*' -u root -d sshd
+    is $? 0 "Exact match for root sshd IPv4 listener"
+    check_net_socket -p tcp -s LISTEN -l ':::22' -r ':::*' -u root -d sshd
+    is $? 0 "Exact match for root sshd IPv6 listener"
+    check_net_socket -p raw -s 7 -u root -l '/0.0.0.0/'
+    is $? 0 "Raw socket owned by root"
+    check_net_socket -p raw -s 7 -u root -d httpd
+    is $? 1 "Raw socket isn't from httpd"
+    check_net_socket -p unix -t STREAM -l '*/tmp/.X11-unix/X0' -d Xorg
+    is $? 0 "UNIX STREAM socket(s) owned by the X server"
+    check_net_socket -p unix -t DGRAM -l '*/tmp/.X11-unix/X0' -d Xorg
+    is $? 1 "UNIX DGRAM socket(s) owned by the X server not present"
+    check_net_socket -p unix -t STREAM -l '*/tmp/.X11-unix/X0' -d Xorg -s LISTENING
+    is $? 0 "UNIX STREAM socket(s) owned by the X server in the LISTENING state"
+    check_net_socket -p unix -t STREAM -l '*/tmp/.X11-unix/X0' -d Xorg -s CONNECTED
+    is $? 0 "UNIX STREAM socket(s) owned by the X server in the CONNECTED state"
+    check_net_socket -p unix -t SEQPACKET -d chrome
+    is $? 0 "We have UNIX SEQPACKET sockets owned by Google Chrome"
+    check_net_socket -p unix -t STREAM -d Eterm
+    is $? 0 "Eterm's UNIX socket (connection to X server)"
+    check_net_socket -p tcp -d Eterm
+    is $? 1 "Eterm better not have any TCP sockets open!"
+    check_net_socket -! -p tcp -d Eterm
+    is $? 0 "Ensure that Eterm has no TCP sockets open"
+    check_net_socket -! -n "Rogue outbound IRC" -p tcp -r '/:(6666|6667|6669|6670|6677)$/' -d '!/epic/'
+    is $? 0 "Ensure we have no outbound IRC sockets open except from our IRC client"
+    check_net_socket -! -n "Rogue httpd outbound sockets" -p tcp -d httpd -l '!/:(80|443)$/'
+    is $? 0 "Ensure we have no outbound connections from anything purporting to be httpd"
+    check_net_socket -0 -n "SSH" -p tcp -l '*:22'
+    is $? 0 "We have multiple SSH sockets, but that should be non-fatal"
+    check_net_socket -0 -! -n "SSH" -p tcp -l '*:22'
+    is $? 0 "Negating the same check should still be non-fatal"
+    check_net_socket -a -! -l '/\b0.0.0.0\b/'
+    is $? 6 "6 sockets are bound to all addresses"
+    check_net_socket -a -l '/\b0.0.0.0\b/'
+    is $? 0 "Match any of the 6 sockets bound to all addresses"
+    check_net_socket -a -! -0 -l '/\b0.0.0.0\b/'
+    is $? 0 "Non-fatal always means non-fatal"
 
 } ; unplan

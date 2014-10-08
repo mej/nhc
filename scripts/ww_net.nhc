@@ -158,9 +158,9 @@ function nhc_sockets_gather_data() {
 #  check_net_socket [-0] [-a] [-!] [-n <name>] [-p <proto>] [-s <state>] [-l <locaddr>[:<locport>]]
 #                   [-r <rmtaddr>[:<rmtport>]] [-t <type>] [-u <user>] [-d <daemon>] [-e <action>] [-E <found_action>]
 function check_net_socket() {
-    local NONFATAL=0 ALL=0 NEGATE=0 EXACT=0 FLEXMATCH=0 DAEMON NAME LOCADDR PROTO RMTADDR STATE
+    local NONFATAL=0 ALL=0 NEGATE=0 DAEMON NAME LOCADDR PROTO RMTADDR STATE
     local TYPE OWNER ACTION FOUND_ACTION MATCH FIELD DESC
-    local i j MATCH_CNT=0 CONT MSG="" SEEK_STR="" MATCH_STR="" FIELDS=""
+    local i j MATCH_CNT=0 MSG="" SEEK_STR="" MATCH_STR="" FIELDS=""
     local -a MATCH_DESC
     local -a FIELD_LIST=( "PROTO" "LOCADDR" "RMTADDR" "STATE" "TYPE" "USER" "PROCNAME" )
     local -a VAR_LIST=( "PROTO" "LOCADDR" "RMTADDR" "STATE" "TYPE" "OWNER" "DAEMON" )
@@ -171,13 +171,11 @@ function check_net_socket() {
     fi
 
     OPTIND=1
-    while getopts ":!0aXxd:l:p:r:s:u:e:E:" OPTION ; do
+    while getopts ":!0ad:l:n:p:r:s:t:u:e:E:" OPTION ; do
         case "$OPTION" in
+            !) NEGATE=1 ;;
             0) NONFATAL=1 ;;
             a) ALL=1 ;;
-            !) NEGATE=1 ;;
-            X) FLEXMATCH=1 ;;
-            x) EXACT=1 ;;
             d) DAEMON="$OPTARG" ;;
             l) LOCADDR="$OPTARG" ;;
             n) NAME="$OPTARG" ;;
@@ -213,37 +211,33 @@ function check_net_socket() {
     else
         array_join ' && ' MATCH_DESC SEEK_STR
     fi
+    if [[ $ALL -eq 1 ]]; then
+        SEEK_STR="$SEEK_STR (all)"
+    fi
+    if [[ $NONFATAL -eq 1 ]]; then
+        SEEK_STR="$SEEK_STR (non-fatal)"
+    fi
+    if [[ $NEGATE -eq 1 ]]; then
+        SEEK_STR="$SEEK_STR (NEGATED)"
+    fi
 
     # Look through all our sockets for the one we need.
     dbg "Looking for ${NAME:+$NAME }sockets:  $SEEK_STR"
     for ((i=0; i < ${#NET_PROTO[*]}; i++)); do
         unset MATCH_DESC
-        CONT=0
         for j in $FIELDS ; do
             # Compare each field against the match expressions we've been given.
             eval 'MATCH="$'"${VAR_LIST[$j]}"'" DESC="'"${DESC_LIST[$j]}"'" FIELD="${NET_'"${FIELD_LIST[$j]}"'[$i]}"'
-            if [[ -z "$FIELD" && $EXACT -eq 1 ]]; then
-                # With EXACT matching, missing information for a socket NEVER matches.
-                CONT=1
-                break
-            elif [[ -z "$FIELD" && $FLEXMATCH -eq 1 ]]; then
-                # With FLEXMATCH matching, missing information for a socket ALWAYS matches.
-                :
-            elif [[ "${MATCH/#\!}" != "$MATCH" ]]; then
+            if [[ "${MATCH/#\!}" != "$MATCH" ]]; then
                 # Match string begins with !.  Negate the match.
                 if mcheck "$FIELD" "${MATCH/#\!}" ; then
-                    CONT=1
-                    break
+                    continue 2
                 fi
             elif ! mcheck "$FIELD" "$MATCH" ; then
-                CONT=1
-                break
+                continue 2
             fi
             MATCH_DESC[${#MATCH_DESC[*]}]="$DESC($FIELD)"
         done
-        if [[ $CONT -ne 0 ]]; then
-            continue
-        fi
 
         ### If we get here, all pieces of information provided have matched successfully.
         ((MATCH_CNT++))
@@ -275,14 +269,14 @@ function check_net_socket() {
             die 1 "$MSG"
             return 1
         fi
-    elif [[ $NEGATE -eq 1 ]]; then
+    elif [[ $MATCH_CNT -gt 0 && $NEGATE -eq 1 ]]; then
         # -! means finding a match is bad.  Die now.
         MSG="$FUNCNAME:  $MATCH_CNT ${NAME:-matching} socket(s) found ($SEEK_STR)"
         if [[ $NONFATAL -eq 1 ]]; then
             log "$MSG (non-fatal)"
         else
-            die 1 "$MSG"
-            return 1
+            die $MATCH_CNT "$MSG"
+            return $MATCH_CNT
         fi
     else
         dbg "Found $MATCH_CNT matching sockets."

@@ -1,0 +1,192 @@
+# Tests for ww_net.nhc
+#
+# $Id$
+#
+
+function populate_net_data() {
+    # Sample network socket data
+    NET_LOCADDR=(
+        [0]="0.0.0.0:111" 
+        [1]="0.0.0.0:52789" 
+        [2]="0.0.0.0:22" 
+        [3]="0.0.0.0:3306" 
+        [4]="1.2.3.4:44283" 
+        [5]="1.2.3.4:54590" 
+        [6]="1.2.3.4:33126" 
+        [7]=":::111" 
+        [8]=":::80" 
+        [9]=":::22" 
+        [10]="0.0.0.0:111" 
+        [11]="0.0.0.0:1" 
+        [12]="@/var/run/hald/dbus-KWl9fr7MWD" 
+        [13]="/tmp/.X11-unix/X0" 
+        [14]="@/com/ubuntu/upstart" 
+        [15]="@/org/kernel/udev/udevd" 
+        [16]="@/tmp/.X11-unix/X0" 
+        [17]="" 
+        [18]="" 
+    )
+    NET_PROCNAME=(
+        [0]="rpcbind" 
+        [1]="rpc.statd" 
+        [2]="sshd" 
+        [3]="mysqld" 
+        [4]="ssh" 
+        [5]="chrome" 
+        [6]="mutt" 
+        [7]="rpcbind" 
+        [8]="httpd" 
+        [9]="sshd" 
+        [10]="rpcbind" 
+        [11]="dhcpd" 
+        [12]="hald" 
+        [13]="Xorg" 
+        [14]="init" 
+        [15]="udevd" 
+        [16]="Xorg" 
+        [17]="chrome" 
+        [18]="Eterm" 
+    )
+    NET_PROCPID=(
+        [0]="2674" 
+        [1]="1075" 
+        [2]="23848" 
+        [3]="5903" 
+        [4]="409" 
+        [5]="32616" 
+        [6]="12492" 
+        [7]="2674" 
+        [8]="8108" 
+        [9]="23848" 
+        [10]="2674" 
+        [11]="5930" 
+        [12]="5500" 
+        [13]="6340" 
+        [14]="1" 
+        [15]="1077" 
+        [16]="6340" 
+        [17]="32616" 
+        [18]="11190" 
+    )
+    NET_PROTO=(
+        [0]="tcp" 
+        [1]="tcp" 
+        [2]="tcp" 
+        [3]="tcp" 
+        [4]="tcp" 
+        [5]="tcp" 
+        [6]="tcp" 
+        [7]="tcp" 
+        [8]="tcp" 
+        [9]="tcp" 
+        [10]="udp" 
+        [11]="raw" 
+        [12]="unix" 
+        [13]="unix" 
+        [14]="unix" 
+        [15]="unix" 
+        [16]="unix" 
+        [17]="unix" 
+        [18]="unix" 
+    )
+    NET_RMTADDR=(
+        [0]="0.0.0.0:*" 
+        [1]="0.0.0.0:*" 
+        [2]="0.0.0.0:*" 
+        [3]="0.0.0.0:*" 
+        [4]="128.3.7.60:22" 
+        [5]="199.59.150.39:443" 
+        [6]="74.125.25.109:993" 
+        [7]=":::*" 
+        [8]=":::*" 
+        [9]=":::*" 
+        [10]="0.0.0.0:*" 
+        [11]="0.0.0.0:*"
+    )
+    NET_STATE=(
+        [0]="LISTEN" 
+        [1]="LISTEN" 
+        [2]="LISTEN" 
+        [3]="LISTEN" 
+        [4]="ESTABLISHED" 
+        [5]="ESTABLISHED" 
+        [6]="CLOSE_WAIT" 
+        [7]="LISTEN" 
+        [8]="LISTEN" 
+        [9]="LISTEN" 
+        [11]="7" 
+        [12]="LISTENING" 
+        [13]="LISTENING" 
+        [14]="LISTENING" 
+        [16]="CONNECTED" 
+        [17]="CONNECTED" 
+        [18]="CONNECTED" 
+    )
+    NET_STR=(
+        [0]="tcp/root[0]/rpcbind[2674]:  0.0.0.0:111 -> 0.0.0.0:* (LISTEN)" 
+        [1]="tcp/rpcuser[29]/rpc.statd[1075]:  0.0.0.0:52789 -> 0.0.0.0:* (LISTEN)" 
+        [2]="tcp/root[0]/sshd[23848]:  0.0.0.0:22 -> 0.0.0.0:* (LISTEN)" 
+        [3]="tcp/mysql[27]/mysqld[5903]:  0.0.0.0:3306 -> 0.0.0.0:* (LISTEN)" 
+        [4]="tcp/someuser[500]/ssh[409]:  1.2.3.4:44283 -> 128.3.7.60:22 (ESTABLISHED)" 
+        [5]="tcp/someuser[500]/chrome[32616]:  1.2.3.4:54590 -> 199.59.150.39:443 (ESTABLISHED)" 
+        [6]="tcp/someuser[500]/mutt[12492]:  1.2.3.4:33126 -> 74.125.25.109:993 (CLOSE_WAIT)" 
+        [7]="tcp/root[0]/rpcbind[2674]:  :::111 -> :::* (LISTEN)" 
+        [8]="tcp/root[0]/httpd[8108]:  :::80 -> :::* (LISTEN)" 
+        [9]="tcp/root[0]/sshd[23848]:  :::22 -> :::* (LISTEN)" 
+        [10]="udp/root[0]/rpcbind[2674]:  0.0.0.0:111 -> 0.0.0.0:*" 
+        [11]="raw/root[0]/dhcpd[5930]:  0.0.0.0:1 -> 0.0.0.0:* (7)" 
+        [12]="unix.STREAM/hald[5500]:  @/var/run/hald/dbus-KWl9fr7MWD (LISTENING)" 
+        [13]="unix.STREAM/Xorg[6340]:  /tmp/.X11-unix/X0 (LISTENING)" 
+        [14]="unix.STREAM/init[1]:  @/com/ubuntu/upstart (LISTENING)" 
+        [15]="unix.DGRAM/udevd[1077]:  @/org/kernel/udev/udevd" 
+        [16]="unix.STREAM/Xorg[6340]:  @/tmp/.X11-unix/X0 (CONNECTED)" 
+        [17]="unix.SEQPACKET/chrome[32616]:   (CONNECTED)" 
+        [18]="unix.STREAM/Eterm[11190]:   (CONNECTED)" 
+    )
+    NET_TYPE=(
+        [12]="STREAM" 
+        [13]="STREAM" 
+        [14]="STREAM" 
+        [15]="DGRAM" 
+        [16]="STREAM" 
+        [17]="SEQPACKET" 
+        [18]="STREAM" 
+    )
+    NET_UID=(
+        [0]="0" 
+        [1]="29" 
+        [2]="0" 
+        [3]="27" 
+        [4]="500" 
+        [5]="500" 
+        [6]="500" 
+        [7]="0" 
+        [8]="0" 
+        [9]="0" 
+        [10]="0" 
+        [11]="0"
+    )
+    NET_USER=(
+        [0]="root" 
+        [1]="rpcuser" 
+        [2]="root" 
+        [3]="mysql" 
+        [4]="someuser" 
+        [5]="someuser" 
+        [6]="someuser" 
+        [7]="root" 
+        [8]="root" 
+        [9]="root" 
+        [10]="root" 
+        [11]="root"
+    )
+}
+
+plan $((2)) "ww_net.nhc" && {
+    is "`type -t nhc_sockets_gather_data 2>&1`" 'function' 'nhc_sockets_gather_data() loaded properly'
+    is "`type -t check_net_socket 2>&1`" 'function' 'check_net_socket() loaded properly'
+
+    # Fake network data for testing
+    populate_net_data
+
+} ; unplan

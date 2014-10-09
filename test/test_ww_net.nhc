@@ -182,7 +182,7 @@ function populate_net_data() {
     )
 }
 
-plan $((2+27)) "ww_net.nhc" && {
+plan $((2+28)) "ww_net.nhc" && {
     is "`type -t nhc_sockets_gather_data 2>&1`" 'function' 'nhc_sockets_gather_data() loaded properly'
     is "`type -t check_net_socket 2>&1`" 'function' 'check_net_socket() loaded properly'
 
@@ -204,7 +204,7 @@ plan $((2+27)) "ww_net.nhc" && {
     is $? 0 "SSH session detected by program name"
     check_net_socket -n "HTTP daemon" -p tcp -s LISTEN -l '*:80' -d httpd
     is $? 0 "Any (IPv4 or IPv6) web server listening socket"
-    check_net_socket -n "HTTP daemon" -p tcp -s LISTEN -l '0.0.0.0:80' -d httpd
+    SHELL=: check_net_socket -n "HTTP daemon" -p tcp -s LISTEN -l '0.0.0.0:80' -d httpd -e 'service httpd start'
     is $? 1 "IPv4 web server listening socket not present"
     check_net_socket -p tcp -s LISTEN -l '0.0.0.0:22' -r '0.0.0.0:*' -u root -d sshd
     is $? 0 "Exact match for root sshd IPv4 listener"
@@ -234,6 +234,8 @@ plan $((2+27)) "ww_net.nhc" && {
     is $? 0 "Ensure we have no outbound IRC sockets open except from our IRC client"
     check_net_socket -! -n "Rogue httpd outbound sockets" -p tcp -d httpd -l '!/:(80|443)$/'
     is $? 0 "Ensure we have no outbound connections from anything purporting to be httpd"
+    SHELL=: check_net_socket -! -n "prohibited public MySQL server" -p tcp -s LISTEN -l '*:3306' -E 'service mysqld stop'
+    is $? 1 "Prohibited public MySQL server is running"
     check_net_socket -0 -n "SSH" -p tcp -l '*:22'
     is $? 0 "We have multiple SSH sockets, but that should be non-fatal"
     check_net_socket -0 -! -n "SSH" -p tcp -l '*:22'

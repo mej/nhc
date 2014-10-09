@@ -15,7 +15,8 @@ nobase_dist_conf_DATA = scripts/ww_cmd.nhc scripts/common.nhc	\
                         scripts/ww_dmi.nhc scripts/ww_file.nhc	\
                         scripts/ww_fs.nhc scripts/ww_hw.nhc	\
                         scripts/ww_job.nhc scripts/ww_moab.nhc	\
-                        scripts/ww_nv.nhc scripts/ww_ps.nhc
+                        scripts/ww_net.nhc scripts/ww_nv.nhc	\
+                        scripts/ww_ps.nhc
 
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 

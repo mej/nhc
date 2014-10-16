@@ -7,6 +7,14 @@ AC_CONFIG_SRCDIR([.])
 AC_PROG_INSTALL
 AM_INIT_AUTOMAKE([foreign])
 
+m4_ifdef([AC_PROG_MKDIR_P], [
+  AC_PROG_MKDIR_P
+], [
+  AM_PROG_MKDIR_P
+  MKDIR_P=${mkdir_p}
+  AC_SUBST([MKDIR_P])
+])#m4_ifdef
+
 dnl# Try to get SVN revision
 SVNVERSION=`svnversion -c | sed 's/^.*://g' 2>/dev/null || echo 0000`
 if test "$SVNVERSION" = "0000" ; then

@@ -30,7 +30,7 @@ install-data-local:
 
 uninstall-local:
 	-( cd '$(DESTDIR)$(logrotatedir)' && rm -f nhc )
-	-rm -f '$(DESTDIR)$(localstatedir)/lib/nhc'
+	-rm -f '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
 
 test:
 	$(MAKE) -C test test

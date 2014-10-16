@@ -52,6 +52,7 @@ function die() {
     fi
     kill_watchdog
     [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
+    [[ "$NHC_CHECK_FORKED" == "1" ]] && ((RET+=100))
     exit $RET
 }
 
@@ -524,7 +525,10 @@ function nhcmain_run_checks() {
 
         # Check for failure.
         if [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
-            if [[ "$CHECK_DIED" == "0" ]]; then
+            if [[ "$NHC_CHECK_FORKED" == "1" && "$RET" -gt 100 ]]; then
+                # The forked check did successfully call die(), so we don't have to.
+                exit $((RET-100))
+            elif [[ "$CHECK_DIED" == "0" ]]; then
                 # If the check failed but didn't call die(), use this fallback.
                 log "Node Health Check failed.  Check $CHECK returned $RET"
                 die $RET "Check $CHECK returned $RET"

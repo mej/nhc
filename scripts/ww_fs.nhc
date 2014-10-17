@@ -153,7 +153,7 @@ function check_fs_mount() {
     local FS="$1" SRC="$2" TYPE="$3" OPTIONS="$4"
     local REMOUNT=0 NONFATAL=0 MOUNT_OPTS="" ACTION="" FOUND_ACTION=""
     local -a AUTOFS_LIST FS_LIST SRC_LIST TYPE_LIST OPTIONS_LIST
-    local i FOUND
+    local i FOUND MSG
 
     if [[ "${FS##/}" != "$FS" ]]; then
         # First parameter starts with a '/'.  Use the old syntax.
@@ -197,6 +197,7 @@ function check_fs_mount() {
 
     for FS in "${FS_LIST[@]}" "${AUTOFS_LIST[@]}" ; do
         FOUND=0
+        MSG=""
         # Traverse the mount list in *reverse order* because the last mount wins.
         for ((i=${#FS_DEV[*]}; i>=0; i--)); do
             if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then
@@ -207,12 +208,12 @@ function check_fs_mount() {
                     if [[ "${SRC/#\!}" != "$SRC" ]]; then
                         # Source begins with !.  Negate the check.
                         if mcheck "${FS_DEV[$i]}" "${SRC/#\!}" ; then
-                            die 1 "$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (matches \"${SRC/#\!}\") but shouldn't be"
-                            return 1
+                            MSG="$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (matches \"${SRC/#\!}\") but shouldn't be"
+                            break 2
                         fi
                     elif ! mcheck "${FS_DEV[$i]}" "$SRC" ; then
-                        die 1 "$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (should be $SRC)"
-                        return 1
+                        MSG="$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (should be $SRC)"
+                        break 2
                     fi
                 done
             fi
@@ -221,12 +222,12 @@ function check_fs_mount() {
                     if [[ "${TYPE/#\!}" != "$TYPE" ]]; then
                         # Type begins with !.  Negate the check.
                         if mcheck "${FS_TYPE[$i]}" "${TYPE/#\!}" ; then
-                            die 1 "$FUNCNAME:  $FS has type ${FS_TYPE[$i]} (matches \"${TYPE/#\!}\") but shouldn't"
-                            return 1
+                            MSG="$FUNCNAME:  $FS has type ${FS_TYPE[$i]} (matches \"${TYPE/#\!}\") but shouldn't"
+                            break 2
                         fi
                     elif ! mcheck "${FS_TYPE[$i]}" "$TYPE" ; then
-                        die 1 "$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]} (should be $TYPE)"
-                        return 1
+                        MSG="$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]} (should be $TYPE)"
+                        break 2
                     fi
                 done
             fi
@@ -235,12 +236,12 @@ function check_fs_mount() {
                     if [[ "${OPTIONS/#\!}" != "$OPTIONS" ]]; then
                         # Options begin with !.  Negate the check.
                         if mcheck "${FS_OPTS[$i]}" "${OPTIONS/#\!}" ; then
-                            die 1 "$FUNCNAME:  $FS mount options incorrect (match \"${OPTIONS/#\!}\" but shouldn't)"
-                            return 1
+                            MSG="$FUNCNAME:  $FS mount options incorrect (match \"${OPTIONS/#\!}\" but shouldn't)"
+                            break 2
                         fi
                     elif ! mcheck "${FS_OPTS[$i]}" "$OPTIONS" ; then
-                        die 1 "$FUNCNAME:  $FS mount options incorrect (don't match \"$OPTIONS\")"
-                        return 1
+                        MSG="$FUNCNAME:  $FS mount options incorrect (don't match \"$OPTIONS\")"
+                        break 2
                     fi
                 done
             fi
@@ -255,17 +256,28 @@ function check_fs_mount() {
             fi
             continue
         fi
-        # The filesystem is not mounted.
+
+        # If we get here, the filesystem is either missing (empty $MSG) or mounted incorrectly (with $MSG).
         if [[ "$REMOUNT" == "1" ]]; then
-            ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" &
+            if [[ -n "$MSG" ]]; then
+                # FIXME:  This won't work if the source or type is what triggered the failure.  Do we care?
+                ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o 'remount,$MOUNT_OPTS'} '$FS'" &
+            else
+                ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" &
+            fi
         fi
         if [[ -n "$ACTION" ]]; then
             ${SHELL:-/bin/bash} -c "$ACTION" &
         fi
+
+        if [[ -z "$MSG" ]]; then
+            # The filesystem is not mounted at all.
+            MSG="$FUNCNAME:  $FS not mounted"
+        fi
         if [[ "$NONFATAL" == 1 ]]; then
-            log "$FUNCNAME:  $FS not mounted (non-fatal)"
+            log "$MSG (non-fatal)"
         else
-            die 1 "$FUNCNAME:  $FS not mounted"
+            die 1 "$MSG"
             return 1
         fi
     done

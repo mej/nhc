@@ -240,11 +240,11 @@ plan $((2+28)) "ww_net.nhc" && {
     is $? 0 "We have multiple SSH sockets, but that should be non-fatal"
     check_net_socket -0 -! -n "SSH" -p tcp -l '*:22'
     is $? 0 "Negating the same check should still be non-fatal"
-    check_net_socket -a -! -l '/\b0.0.0.0\b/'
+    check_net_socket -a -! -l '/0.0.0.0/'
     is $? 6 "6 sockets are bound to all addresses"
-    check_net_socket -a -l '/\b0.0.0.0\b/'
+    check_net_socket -a -l '/0.0.0.0/'
     is $? 0 "Match any of the 6 sockets bound to all addresses"
-    check_net_socket -a -! -0 -l '/\b0.0.0.0\b/'
+    check_net_socket -a -! -0 -l '/0.0.0.0/'
     is $? 0 "Non-fatal always means non-fatal"
 
 } ; unplan

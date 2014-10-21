@@ -384,7 +384,7 @@ function check_ps_blacklist() {
             fi
         fi
         # We have a matching process with the specified owner.
-        die 1 "$FUNCNAME:  Process $DAEMON ${OWNER:+owned by $OWNER } running"
+        die 1 "$FUNCNAME:  Process $DAEMON ${OWNER:+owned by $OWNER }running"
         return 1
     done
 

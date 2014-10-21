@@ -11,7 +11,7 @@ NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local IFS JOBFILE JOBUSER LINE
+    local IFS JOBFILE JOBUSER LINE PBS_XML=0
     local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
@@ -30,15 +30,26 @@ function nhc_job_find_users() {
                 continue
             fi
             while read LINE ; do
-                JOBUSER=${LINE##PBS_O_LOGNAME=}
-                if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
-                    continue
+                if [[ $PBS_XML -eq 1 ]]; then
+                    JOBUSER="${LINE%%</euser>}"
+                    if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
+                        continue
+                    fi
+                    JOBUSER="${JOBUSER##*<euser*>}"
+                elif [[ "${LINE##<\?xml}" != "$LINE" ]]; then
+                    PBS_XML=1
+                else
+                    JOBUSER=${LINE##PBS_O_LOGNAME=}
+                    if [[ ${#JOBUSER} -eq ${#LINE} ]]; then
+                        continue
+                    fi
                 fi
                 if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
                     JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"
                 fi
                 break
             done < "$JOBFILE"
+            ### Remove the redirection from the next line if needed for debugging the parsing loop above.
         done 2>/dev/null || :
     elif [[ "$NHC_RM" == "slurm" ]]; then
         SLURM_SERVER_HOME="${SLURM_SERVER_HOME:-/var/spool/slurmd}"

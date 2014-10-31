@@ -11,7 +11,7 @@ NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local IFS JOBFILE JOBUSER LINE PBS_XML=0
+    local IFS JOBFILE JOBUSER LINE PBS_XML
     local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
@@ -26,6 +26,7 @@ function nhc_job_find_users() {
             dbg "Found ${#JOBLIST[*]} job files in $PWD/jobs"
         fi
         for JOBFILE in "${JOBLIST[@]}" ; do
+            PBS_XML=0
             if [[ ! -f "$JOBFILE" ]]; then
                 continue
             fi
@@ -38,6 +39,7 @@ function nhc_job_find_users() {
                     JOBUSER="${JOBUSER##*<euser*>}"
                 elif [[ "${LINE##<\?xml}" != "$LINE" ]]; then
                     PBS_XML=1
+                    continue
                 else
                     JOBUSER=${LINE##PBS_O_LOGNAME=}
                     if [[ ${#JOBUSER} -eq ${#LINE} ]]; then

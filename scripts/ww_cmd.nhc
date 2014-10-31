@@ -9,7 +9,7 @@
 # Check the output of a command for one or more matching strings.  A
 # required return code may also be supplied.
 function check_cmd_output() {
-    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME" OUTPUT_VAR
+    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME" OUTPUT_VAR CMD_START_TS=$SECONDS
     local IFS PID TIMER RET CMD
     local LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
     local -a CMD_LIST LINES MATCHES MATCHED
@@ -97,6 +97,12 @@ function check_cmd_output() {
     ((MATCH_CNT += NEG_MATCH_CNT))
 
     if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
+        if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
+            # A return code of 143 (128+15) means that the process received SIGTERM,
+            # probably from our command watchdog timer.  Detect that and make it clearer.
+            die 1 "$CHECKNAME:  Command \"$CMD\" timed out after $CMD_TIMEOUT seconds and was terminated"
+            return 1
+        fi
         die 1 "$CHECKNAME:  Command \"$CMD\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
         return 1
     elif [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
@@ -156,7 +162,7 @@ function check_cmd_status() {
         if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
             # A return code of 143 (128+15) means that the process received SIGTERM,
             # probably from our command watchdog timer.  Detect that and make it clearer.
-            die 1 "$CHECKNAME:  Command \"$*\" timed out after $CMD_TIMEOUT seconds and was terminated; returned $RET"
+            die 1 "$CHECKNAME:  Command \"$*\" timed out after $CMD_TIMEOUT seconds and was terminated"
             return 1
         fi
         die 1 "$CHECKNAME:  Command \"$*\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"

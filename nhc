@@ -50,7 +50,10 @@ function die() {
         ((FAIL_CNT++))
         return 0
     fi
-    kill_watchdog
+    if [[ $RET -ne 142 && $RET -ne 143 ]]; then
+        # Don't kill the watchdog if we're in die() because it is terminating us.
+        kill_watchdog
+    fi
     [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
     [[ "$NHC_CHECK_FORKED" == "1" ]] && ((RET+=100))
     exit $RET
@@ -582,7 +585,7 @@ fi
 trap 'die 129 "Terminated by signal SIGHUP." ; exit 129' 1
 trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
-trap 'die 127 "Script timed out." ; exit 127' 14
+trap 'die 142 "Script timed out." ; exit 142' 14
 
 nhcmain_init_env
 nhcmain_parse_cmdline "$@" || exit 10

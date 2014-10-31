@@ -586,7 +586,7 @@ fi
 trap 'die 129 "Terminated by signal SIGHUP." ; exit 129' 1
 trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
-trap 'die 142 "Script timed out." ; exit 142' 14
+trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 142' 14
 
 nhcmain_init_env
 nhcmain_parse_cmdline "$@" || exit 10

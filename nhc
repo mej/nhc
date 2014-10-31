@@ -569,9 +569,10 @@ function nhcmain_finish() {
         echo "$HOSTNAME:diagnosis:HEALTHY" >&$NHC_FD_OUT
         echo "end" >&$NHC_FD_OUT
         return 0
-    fi        
+    fi
     kill_watchdog
     [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
+    [[ $DEBUG -eq 1 ]] && times >&2
     exit 0
 }
 

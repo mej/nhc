@@ -350,7 +350,7 @@ function check_hw_ib() {
         DEV=" $DEV"
     fi
     if [[ -n "$RATE" ]]; then
-        RATE=", $RATE Gb/sec"
+        RATE=" $RATE Gb/sec"
     fi
 
     die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE)."

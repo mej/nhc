@@ -421,7 +421,7 @@ function nhcmain_load_scripts() {
 
     # Load all include scripts.
     dbg "Loading scripts from $INCDIR..."
-    for SCRIPT in $INCDIR/* ; do
+    for SCRIPT in $INCDIR/*.nhc ; do
 	if [[ -e "$SCRIPT" ]]; then
             dbg "Loading ${SCRIPT/#*\/}"
             . $SCRIPT

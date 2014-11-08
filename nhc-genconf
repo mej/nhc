@@ -97,9 +97,10 @@ function nhcgc_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":H:c:dhn:v" OPTION ; do
+    while getopts ":H:b:c:dhn:v" OPTION ; do
         case "$OPTION" in
             H) HOSTNAME="$OPTARG" ; dbg "\$HOSTNAME set to $HOSTNAME." ;;
+            b) DMI_MATCH="$OPTARG" ; dbg "\$DMI_MATCH set to $DMI_MATCH." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;

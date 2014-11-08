@@ -162,7 +162,7 @@ function nhcmain_init_env() {
     NHC_START_TS=0
     WATCHDOG_PID=0
     FAIL_CNT=0
-    FORCE_SETSID=0
+    FORCE_SETSID=1
     NHC_FD_OUT=1
     NHC_FD_ERR=2
     export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
@@ -290,7 +290,6 @@ function nhcmain_finalize_env() {
     TIMEOUT=${TIMEOUT:-30}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
-    FORCE_SETSID=${FORCE_SETSID:-0}
     export NHC_SID=0
 
     # Check for session leader.

@@ -224,7 +224,6 @@ $UNDERLINE
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
- -s                Force $PROGNAME to run in its own session via setsid
  -t <timeout>      Use timeout of <timeout> seconds (default: 10)
  -v                Run verbosely (i.e., VERBOSE=1)
 
@@ -250,7 +249,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:dfhl:n:qst:v" OPTION ; do
+    while getopts ":D:ac:dfhl:n:qt:v" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
@@ -261,7 +260,6 @@ function nhcmain_parse_cmdline() {
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
-            s) FORCE_SETSID=1 ; dbg "Forcing new session via setsid." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
             v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
             :) nhcmain_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;

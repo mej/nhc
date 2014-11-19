@@ -316,7 +316,7 @@ function nhcmain_finalize_env() {
         # We tried to become a session leader via setsid.  Apparently we failed.
         # Don't try again since that would create an infinite loop.
         dbg "NHC failed to become session leader."
-    elif [[ "$FORCE_SETSID" == "1" ]]; then
+    elif [[ "$FORCE_SETSID" == "1" && -z "$NHC_LOAD_ONLY" ]]; then
         # We are not yet a session leader, but we haven't tried setsid.  Try now.
         dbg "NHC process $NHC_PID is not session leader."
         dbg "Restarting via setsid:  setsid $0 ${NHC_ARGS_LIST[*]} FORCE_SETSID=0"

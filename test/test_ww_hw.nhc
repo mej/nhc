@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((11+7+13+13+13+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
+plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "ww_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
@@ -227,8 +227,24 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+2)) "ww_hw.nhc" && {
     is $? 0 "Ethernet interface virbr0 is present."
 
     # Fake MCE log data
-    MCELOG="echo"
+    MCELOG="echo -e"
+    MCELOG_MAX_CORRECTED_RATE="10"
+    MCELOG_MAX_UNCORRECTED_RATE="1"
+    MCELOG_ARGS="corrected memory errors:\n   975 total\n   9 in 24h\nuncorrected memory errors:\n   0 total\n   0 in 24h"
+    check_hw_mcelog
+    is $? 0 "9 corrected errors, threshold 10"
+    MCELOG_ARGS="corrected memory errors:\n   975 total\n   12 in 24h\nuncorrected memory errors:\n   0 total\n   0 in 24h"
+    check_hw_mcelog
+    is $? 1 "12 corrected errors, threshold 10"
+    MCELOG_ARGS="corrected memory errors:\n   975 total\n   9 in 24h\nuncorrected memory errors:\n   0 total\n   0 in 24h"
+    check_hw_mcelog
+    is $? 0 "0 uncorrected errors, threshold 1"
+    MCELOG_ARGS="corrected memory errors:\n   975 total\n   9 in 24h\nuncorrected memory errors:\n   1 total\n   1 in 24h"
+    check_hw_mcelog
+    is $? 1 "1 uncorrected errors, threshold 1"
     MCELOG_ARGS="This is a fake error."
+    MCELOG_MAX_CORRECTED_RATE=""
+    MCELOG_MAX_UNCORRECTED_RATE=""
     check_hw_mcelog
     is $? 1 "Any results are bad."
     MCELOG_ARGS=""

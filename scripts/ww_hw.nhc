@@ -21,6 +21,8 @@ HW_MODULES=( )
 HW_ETH_DEV=( )
 MCELOG="${MCELOG:-mcelog}"
 MCELOG_ARGS="${MCELOG_ARGS:---client}"
+MCELOG_MAX_CORRECTED_RATE="${MCELOG_MAX_CORRECTED_RATE:-10}"
+MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-1}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
@@ -407,17 +409,66 @@ function check_hw_eth() {
 
 # Check for MCE errors
 function check_hw_mcelog() {
-    local HW_MCELOG_ERRS
+    local HW_MCELOG_ERRS MSG=""
+    local -a ERROR_LINES ERROR_LINE
+    local i
 
     HW_MCELOG_ERRS=$($MCELOG $MCELOG_ARGS 2>&1)
     if [[ -z "$HW_MCELOG_ERRS" ]]; then
         return 0
     elif mcheck_glob "$HW_MCELOG_ERRS" "*Connection refused*" ; then
-        log "check_hw_mcelog():  No mcelog daemon running on $HOSTNAME"
-        syslog "check_hw_mcelog():  No mcelog daemon running on $HOSTNAME"
+        log "$FUNCNAME:  No mcelog daemon running on $HOSTNAME"
+        syslog "$FUNCNAME:  No mcelog daemon running on $HOSTNAME"
         return 0
+    elif [[ -n "$MCELOG_MAX_CORRECTED_RATE" && -n "$MCELOG_MAX_UNCORRECTED_RATE" ]]; then
+        IFS=$'\n'
+        ERROR_LINES=( $HW_MCELOG_ERRS )
+        IFS=$' \t\n'
+
+        dbg "$FUNCNAME:  Checking for MCEs on each DIMM (with 24-hour thresholds of $MCELOG_MAX_CORRECTED_RATE corrected or $MCELOG_MAX_UNCORRECTED_RATE uncorrected errors)"
+
+        # Determine if any DIMMs have experienced dangerous error rates within
+        # the last 24 hours. Corrected errors are OK in small quantities. The
+        # expected mcelog output format for each DIMM will be:
+        #
+        # corrected memory errors:
+        #         325 total
+        #         9 in 24h
+        # uncorrected memory errors:
+        #         0 total
+        #         0 in 24h
+        #
+        for ((i=0; i<${#ERROR_LINES[*]}; i++)); do
+            if [[ "${ERROR_LINES[$i]}" == "corrected memory errors:" ]] ; then
+                ERROR_LINE=( ${ERROR_LINES[$(($i+2))]} )
+                dbg "$FUNCNAME:  This DIMM detected ${ERROR_LINE[0]} corrected errors within the last 24 hours"
+
+                if [[ ${ERROR_LINE[0]} -ge $MCELOG_MAX_CORRECTED_RATE ]]; then
+                    MSG="$FUNCNAME:  MCEs detected - ${ERROR_LINE[0]} corrected memory errors detected (limit of $MCELOG_MAX_CORRECTED_RATE/day)."
+                    break
+                fi
+            elif [[ "${ERROR_LINES[$i]}" == "uncorrected memory errors:" ]] ; then
+                ERROR_LINE=( ${ERROR_LINES[$(($i+2))]} )
+                dbg "$FUNCNAME:  This DIMM detected ${ERROR_LINE[0]} UNcorrected errors within the last 24 hours"
+
+                if [[ ${ERROR_LINE[0]} -ge $MCELOG_MAX_UNCORRECTED_RATE ]]; then
+                    MSG="$FUNCNAME:  MCEs detected - ${ERROR_LINE[0]} UNcorrected memory errors detected (limit of $MCELOG_MAX_UNCORRECTED_RATE/day)."
+                    break
+                fi
+            fi
+        done
+        if [[ -n "$MSG" ]]; then
+            log "$MSG"
+            die 1 "$MSG"
+            return 1
+        fi
+        
+        # If none of the above thresholds was met, return success.
+        return 0
+    else
+        dbg "$FUNCNAME:  mcelog output was not empty; thresholds have not been set, so we must assume the MCEs are fatal"
+        log "$FUNCNAME:  MCEs detected:  $HW_MCELOG_ERRS"
+        die 1 "$FUNCNAME:  MCEs detected in log."
+        return 1
     fi
-    log "check_hw_mcelog():  MCEs detected:  $HW_MCELOG_ERRS"
-    die 1 "$FUNCNAME:  MCEs detected in log."
-    return 1
 }

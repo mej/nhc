@@ -65,7 +65,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
-        alloc*|comp*|drain*|drng*|fail*|idle*|mixed*|resume*|undrain*)
+        alloc*|comp*|drain*|drng*|fail*|idle*|mix*|resume*|undrain*)
             case "$STATUS" in
                 drain*|drng*|fail*)
                     # If the node is already offline, and there is no old note, and

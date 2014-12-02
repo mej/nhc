@@ -47,6 +47,15 @@ function nhc_fs_mounts_gather_data() {
 
     ((FS_CNT=0))
     while read -a FIELD ; do
+        for ((i=0; i<$FS_CNT; i++)); do
+            if [[ "${FS_MNTPT[$i]}" == "${FIELD[1]}" ]]; then
+                FS_DEV[$i]="${FIELD[0]}"
+                FS_TYPE[$i]="${FIELD[2]}"
+                FS_OPTS[$i]="${FIELD[3]}"
+                dbg "Overwrote filesystem at position $i with ${FS_DEV[$i]} ${FS_MNTPT[$i]} ${FS_TYPE[$i]} ${FS_OPTS[$i]}"
+                continue 2
+            fi
+        done
         FS_DEV[$FS_CNT]="${FIELD[0]}"
         FS_MNTPT[$FS_CNT]="${FIELD[1]}"
         FS_TYPE[$FS_CNT]="${FIELD[2]}"
@@ -198,8 +207,8 @@ function check_fs_mount() {
     for FS in "${FS_LIST[@]}" "${AUTOFS_LIST[@]}" ; do
         FOUND=0
         MSG=""
-        # Traverse the mount list in *reverse order* because the last mount wins.
-        for ((i=${#FS_DEV[*]}; i>=0; i--)); do
+        # Traverse the mount list.
+        for ((i=0 ; i<${#FS_DEV[*]}; i++)); do
             if [[ "${FS_MNTPT[$i]}" != "$FS" ]]; then
                 continue
             fi

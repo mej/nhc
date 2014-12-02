@@ -446,27 +446,44 @@ function nhcmain_load_scripts() {
 
 function nhcmain_watchdog_timer() {
     local TIMEOUT="$1" NHC_PID="$2"
-    local SLEEP_PID
+    local SLEEP_PID MAIN_NHC_HUNG=0
 
+    # Start sleep process in background first so we can obtain its PID and set traps to handle signals.
     sleep $TIMEOUT &
     SLEEP_PID=$!
     trap '' ALRM TERM
     trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
+    # Now we wait for the sleep to finish or for our process to be killed by the main NHC process.
     wait
+
+    # If we get here, the watchdog timer has expired, and we need to kill the NHC process (group).  Start gently.
     log "NHC watchdog timer ${BASHPID:-$$} ($TIMEOUT secs) has expired.  Signaling NHC:  kill -s ALRM -- $NHC_PID"
     kill -s ALRM -- $NHC_PID || return 0
     sleep 1
+
+    # Send a stronger signal this time.  If there's nothing left to receive our signal, we're done.
     log "NHC watchdog timer ${BASHPID:-$$} terminating NHC:  kill -s TERM -- $NHC_PID"
     kill -s TERM -- $NHC_PID 2>/dev/null || return 0
     sleep 3
+
+    # If we still had things to kill, check one last time and kill by force.
     log "NHC watchdog timer ${BASHPID:-$$} terminating NHC with extreme prejudice:  kill -s KILL -- $NHC_PID"
+    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
+        # Setting this to true means it's the main NHC that's still around, not merely a hung child process.  That
+        # means the main NHC process hasn't been able to terminate gracefully and write the appropriate message to
+        # stdout or the status file.  Thus the watchdog has to be the one to call die().  If it's just a hung child,
+        # we don't want to call die() again and overwrite the status message.
+        MAIN_NHC_HUNG=1
+    fi
     kill -s KILL -- $NHC_PID 2>/dev/null
     sleep 1
-    if kill -0 $NHC_PID 2>/dev/null ; then
-        log "NHC process $NHC_PID is defunct.  Considering it terminated."
-    else
+    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
+        # If the main NHC survived a "kill -9" it must be defunct.  Assume it called die() and exited cleanly.
+        log "NHC process ${NHC_PID#-} is defunct.  Considering it terminated."
+    elif [[ $MAIN_NHC_HUNG -eq 1 ]]; then
+        # If the main NHC process survived SIGTERM but not SIGKILL, it likely didn't exit cleanly.  Call die().
         WATCHDOG_PID=0
-        die 142 "Watchdog timer unable to terminate hung NHC process $NHC_PID."
+        die 142 "Watchdog timer unable to terminate hung NHC process ${NHC_PID#-}."
     fi
     return 0
 }

@@ -21,8 +21,8 @@ HW_MODULES=( )
 HW_ETH_DEV=( )
 MCELOG="${MCELOG:-mcelog}"
 MCELOG_ARGS="${MCELOG_ARGS:---client}"
-MCELOG_MAX_CORRECTED_RATE="${MCELOG_MAX_CORRECTED_RATE:-10}"
-MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-1}"
+MCELOG_MAX_CORRECTED_RATE="${MCELOG_MAX_CORRECTED_RATE:-9}"
+MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-0}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
@@ -443,7 +443,7 @@ function check_hw_mcelog() {
                 ERROR_LINE=( ${ERROR_LINES[$(($i+2))]} )
                 dbg "$FUNCNAME:  This DIMM detected ${ERROR_LINE[0]} corrected errors within the last 24 hours"
 
-                if [[ ${ERROR_LINE[0]} -ge $MCELOG_MAX_CORRECTED_RATE ]]; then
+                if [[ ${ERROR_LINE[0]} -gt $MCELOG_MAX_CORRECTED_RATE ]]; then
                     MSG="$FUNCNAME:  MCEs detected - ${ERROR_LINE[0]} corrected memory errors detected (limit of $MCELOG_MAX_CORRECTED_RATE/day)."
                     break
                 fi
@@ -451,7 +451,7 @@ function check_hw_mcelog() {
                 ERROR_LINE=( ${ERROR_LINES[$(($i+2))]} )
                 dbg "$FUNCNAME:  This DIMM detected ${ERROR_LINE[0]} UNcorrected errors within the last 24 hours"
 
-                if [[ ${ERROR_LINE[0]} -ge $MCELOG_MAX_UNCORRECTED_RATE ]]; then
+                if [[ ${ERROR_LINE[0]} -gt $MCELOG_MAX_UNCORRECTED_RATE ]]; then
                     MSG="$FUNCNAME:  MCEs detected - ${ERROR_LINE[0]} UNcorrected memory errors detected (limit of $MCELOG_MAX_UNCORRECTED_RATE/day)."
                     break
                 fi

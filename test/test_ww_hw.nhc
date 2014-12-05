@@ -228,8 +228,8 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "ww_hw.nhc" && {
 
     # Fake MCE log data
     MCELOG="echo -e"
-    MCELOG_MAX_CORRECTED_RATE="10"
-    MCELOG_MAX_UNCORRECTED_RATE="1"
+    MCELOG_MAX_CORRECTED_RATE="9"
+    MCELOG_MAX_UNCORRECTED_RATE="0"
     MCELOG_ARGS="corrected memory errors:\n   975 total\n   9 in 24h\nuncorrected memory errors:\n   0 total\n   0 in 24h"
     check_hw_mcelog
     is $? 0 "9 corrected errors, threshold 10"

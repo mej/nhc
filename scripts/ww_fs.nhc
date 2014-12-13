@@ -267,7 +267,13 @@ function check_fs_mount() {
         fi
 
         # If we get here, the filesystem is either missing (empty $MSG) or mounted incorrectly (with $MSG).
-        if [[ "$REMOUNT" == "1" ]]; then
+        if [[ -z "$MSG" && ! -d "$FS" ]]; then
+            [[ "$SHELL" != ":" ]] && mkdir -p -m 0755 "$FS"
+            MSG="$FUNCNAME:  $FS not mounted; directory $FS missing (auto-fixed)"
+            if [[ "$REMOUNT" == "1" ]]; then
+                ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" &
+            fi
+        elif [[ "$REMOUNT" == "1" ]]; then
             if [[ -n "$MSG" ]]; then
                 # FIXME:  This won't work if the source or type is what triggered the failure.  Do we care?
                 ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o 'remount,$MOUNT_OPTS'} '$FS'" &

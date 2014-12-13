@@ -161,6 +161,9 @@ plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is "`type -t check_fs_ifree 2>&1`" 'function' 'check_fs_ifree() loaded properly'
     is "`type -t check_fs_iused 2>&1`" 'function' 'check_fs_iused() loaded properly'
 
+    local OLD_SHELL="$SHELL"
+    SHELL=:
+
     ### Check old syntax first.  These are the original tests.
     check_fs_mount /
     is $? 0 "check_fs_mount() for / (OLD)"
@@ -209,7 +212,7 @@ plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     is $? 1 "check_fs_mount() for bogus filesystem"
     check_fs_mount -0 -f /FAKE/filesystem/NAME
     is $? 0 "check_fs_mount() for bogus filesystem in non-fatal mode"
-    SHELL=: check_fs_mount -r -f /FAKE/filesystem/NAME
+    check_fs_mount -r -f /FAKE/filesystem/NAME
     is $? 1 "check_fs_mount() for bogus filesystem with remount request"
 
     check_fs_mount -t proc -f /proc
@@ -223,11 +226,11 @@ plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
 
     check_fs_mount -s '/bluearc[0-9]/' -t 'nfs*' -f /home -f /global/software
     is $? 0 "check_fs_mount() for 2 filesystems with regexps and globs"
-    SHELL=: check_fs_mount -o "*,vers=3*" -e true -f /home
+    check_fs_mount -o "*,vers=3*" -e true -f /home
     is $? 0 "check_fs_mount() for NFS version (glob) with action"
-    SHELL=: check_fs_mount -o "/(^|,)vers=3(,|\$)/" -E true -f /global/software
+    check_fs_mount -o "/(^|,)vers=3(,|\$)/" -E true -f /global/software
     is $? 0 "check_fs_mount() for NFS version (regex) with found action"
-    SHELL=: check_fs_mount -r -O ro -f /boot
+    check_fs_mount -r -O ro -f /boot
     is $? 0 "check_fs_mount() with remount directive and mount options"
 
     check_fs_mount -F /home
@@ -361,4 +364,5 @@ plan $((9+5+3+5+5+4+4+4+2+5+5+10+7+7+10+7+7)) "ww_fs.nhc" && {
     check_fs_iused /proc 999
     is $? 0 "check_fs_iused() on pseudofilesystem passes (with warning)"
 
+    SHELL="$OLD_SHELL"
 } ; unplan

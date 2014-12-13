@@ -148,7 +148,7 @@ function kill_watchdog() {
             kill -s PWR -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
             sleep 1
         done
-        log "Killing hung watchdog timer process/group $WATCHDOG_PID"
+        vlog "Killing hung watchdog timer process/group $WATCHDOG_PID"
         kill -s KILL -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null
     fi
     return 0

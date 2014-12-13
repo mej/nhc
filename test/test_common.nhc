@@ -3,9 +3,10 @@
 # $Id$
 #
 
-plan $((11+5+8+5+4+6+8+7+9+7)) "common.nhc" && {
+plan $((12+5+8+4+5+4+6+8+7+9+7)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_regexp() loaded properly'
+    is "`type -t mcheck_external 2>&1`" 'function' 'mcheck_external() loaded properly'
     is "`type -t mcheck_glob 2>&1`" 'function' 'mcheck_glob() loaded properly'
     is "`type -t mcheck 2>&1`" 'function' 'mcheck() loaded properly'
     is "`type -t nhc_load_conf 2>&1`" 'function' 'nhc_load_conf() loaded properly'
@@ -43,6 +44,19 @@ plan $((11+5+8+5+4+6+8+7+9+7)) "common.nhc" && {
     is $? 0 "Range check via mcheck(), multiple comma-delimited ranges"
     mcheck "idplx-r4-n04" '{idplx-r0-n[0-42],idplx-r1-n[0-42],idplx-r2-n[0-42],idplx-r3-n[0-42]}'
     is $? 1 "Failed range check via mcheck(), multiple comma-delimited ranges"
+
+    NHC_MCHECK_DELIM[0]='%'
+    NHC_MCHECK_COMMAND[0]='true'
+    mcheck "Anything can go here" '%Anything at all%'
+    is $? 0 "Simple external match check test with /bin/true"
+    NHC_MCHECK_COMMAND[0]='false'
+    mcheck "Anything can go here" '%Anything at all%'
+    is $? 1 "Simple external match check test with /bin/false"
+    NHC_MCHECK_COMMAND='echo -e "host1\nhost2\nhost3" | fgrep -xqm1 %h'
+    mcheck "host2" '%doesnotmatter%'
+    is $? 0 "External match check with echo and fgrep, positive match"
+    mcheck "host4" '%doesnotmatter%'
+    is $? 1 "External match check with echo and fgrep, negative match"
 
     mcheck "n0000.testbed" 'n*.*'
     is $? 0 "Basic glob match via mcheck()"

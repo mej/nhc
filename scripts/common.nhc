@@ -266,36 +266,64 @@ function mcheck_glob() {
     esac
 }
 
+# Check to see if an external node match expression ($2) contains a node ($1)
+function mcheck_external() {
+    local STRING="$2"
+    local MATCH="$3"
+    local MCHECK_CMD="${NHC_MCHECK_COMMAND[$1]}"
 
-# Detect regexp match (/.../), range match ({...}), or glob match (no
-# slashes or braces), and call the appropriate mcheck_*() function
-# above.
+    MCHECK_CMD="${MCHECK_CMD//%h/\"$STRING\"}"
+    MCHECK_CMD="${MCHECK_CMD//%m/\"$MATCH\"}"
+    eval $MCHECK_CMD &
+    wait $!
+    if [[ $? -eq 0 ]]; then
+        dbg "External match check:  $STRING matches %$MATCH%"
+        return 0
+    elif [[ $? -eq 127 ]]; then
+        die "External match check command \"$NHC_MCHECK_COMMAND\" not found or invalid"
+        # FIXME:  Force exit here?
+        return 127
+    else
+        dbg "External match check:  $STRING does not match %$MATCH%"
+        return 1
+    fi
+}
+
+# Detect regexp match (/.../), range match ({...}), external match
+# (%...%), or glob match (no delimiters), and call the appropriate
+# mcheck_*() function above.
 function mcheck() {
     local STRING="$1"
     local MATCH="$2"
+    local i
 
     # Check to see if the current host matches the check we just read.
-    if [[ "${MATCH#/}" != "$MATCH" && "${MATCH%/}" != "$MATCH" ]]; then
-        # Regexp match syntax.  Strip slashes, then match.
-        MATCH="${MATCH#/}"
-        MATCH="${MATCH%/}"
-        if mcheck_regexp "$STRING" "$MATCH" ; then
-            return 0
-        fi
-    elif [[ "${MATCH#\{}" != "$MATCH" && "${MATCH%\}}" != "$MATCH" ]]; then
-        # pdsh-style node range syntax.  Strip braces, then match.
-        MATCH="${MATCH#\{}"
-        MATCH="${MATCH%\}}"
-        if mcheck_range "$STRING" "$MATCH" ; then
-            return 0
-        fi
-    else
-        # Glob match syntax
-        if mcheck_glob "$STRING" "$MATCH" ; then
-            return 0
-        fi
+
+    # Regexp match syntax.  Strip slashes, then match.
+    if [[ "${MATCH:0:1}" == "/" && "${MATCH: -1:1}" == "/" ]]; then
+        MATCH="${MATCH:1:${#MATCH}-2}"
+        mcheck_regexp "$STRING" "$MATCH"
+        return $?
     fi
-    return 1
+
+    # pdsh-style node range syntax.  Strip braces, then match.
+    if [[ "${MATCH:0:1}" == '{' && "${MATCH: -1:1}" == '}' ]]; then
+        MATCH="${MATCH:1:${#MATCH}-2}"
+        mcheck_range "$STRING" "$MATCH"
+        return $?
+    fi
+
+    # External match check.  Uses subprogram to determine match.  Delimiters are dynamic.
+    for ((i=0; i < ${#NHC_MCHECK_DELIM[*]}; i++)); do
+        if [[ "${MATCH:0:1}" == "${NHC_MCHECK_DELIM[$i]:0:1}" && "${MATCH: -1:1}" == "${NHC_MCHECK_DELIM[$i]: -1:1}" ]]; then
+            MATCH="${MATCH:1:${#MATCH}-2}"
+            mcheck_external $i "$STRING" "$MATCH"
+            return $?
+        fi
+    done
+    # Glob match syntax (the default/fallback)
+    mcheck_glob "$STRING" "$MATCH"
+    return $?
 }
 
 # Load configuration file from ($1)

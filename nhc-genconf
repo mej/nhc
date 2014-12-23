@@ -309,16 +309,12 @@ function nhcgc_gen_config() {
     echo " $HOSTNAME || check_hw_cpuinfo $HW_SOCKETS $HW_CORES $HW_THREADS"
     nhc_common_unparse_size $HW_RAM_TOTAL HW_RAM_TOTAL 1024 ERR
     dbg "Found $HW_RAM_TOTAL RAM ($ERR rounding error)"
-    if [[ $ERR -ge 500 ]]; then
-        HW_RAM_TOTAL=$((${HW_RAM_TOTAL//[^0-9]}+1))${HW_RAM_TOTAL//[0-9]}
-    fi
-    echo " $HOSTNAME || check_hw_physmem $HW_RAM_TOTAL $HW_RAM_TOTAL 5%"
+    ERR=$((ERR*100/1024+3))
+    echo " $HOSTNAME || check_hw_physmem $HW_RAM_TOTAL $HW_RAM_TOTAL ${ERR}%"
     nhc_common_unparse_size $HW_SWAP_TOTAL HW_SWAP_TOTAL 1024 ERR
     dbg "Found $HW_SWAP_TOTAL swap ($ERR rounding error)"
-    if [[ $ERR -ge 500 ]]; then
-        HW_SWAP_TOTAL=$((${HW_SWAP_TOTAL//[^0-9]}+1))${HW_SWAP_TOTAL//[0-9]}
-    fi
-    echo " $HOSTNAME || check_hw_swap $HW_SWAP_TOTAL $HW_SWAP_TOTAL 5%"
+    ERR=$((ERR*100/1024+3))
+    echo " $HOSTNAME || check_hw_swap $HW_SWAP_TOTAL $HW_SWAP_TOTAL ${ERR}%"
     if [[ ${#HW_IB_DEV[*]} -gt 0 ]]; then
         for ((i=0; i<${#HW_IB_DEV[*]}; i++)); do
             echo " $HOSTNAME || check_hw_ib ${HW_IB_RATE[$i]} ${HW_IB_DEV[$i]}"

@@ -154,7 +154,10 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
                 SUFFIX=${BASH_REMATCH[4]}
                 WIDTH=${#RSTART}
 
-                if [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
+                if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
+                    dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
+                    continue
+                elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
                     dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
                     WIDTH=${#REND}
                 fi
@@ -165,18 +168,13 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
                     RSTART=$REND
                     REND=$j
                 fi
-
-                for ((i=10#$RSTART; i <= 10#$REND; i++)); do
-                    NODE="$i"
-                    while [[ ${#NODE} -lt $WIDTH ]]; do
-                        NODE="0$NODE"
-                    done
-                    NODE="$PREFIX$NODE$SUFFIX"
-                    if [[ $TARGET == $NODE ]]; then
-                        dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                        return 0
-                    fi
-                done
+                NODE="${TARGET#${PREFIX}}"
+                NODE="${NODE%${SUFFIX}}"
+                dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
+                if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && $WIDTH == ${#NODE} ]]; then
+                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                    return 0
+                fi
             else
                 # Bad syntax
                 log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
@@ -223,7 +221,10 @@ else
                     # Check a node range
                     WIDTH=${#RSTART}
 
-                    if [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
+                    if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
+                        dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
+                        continue
+                    elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
                         dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
                         WIDTH=${#REND}
                     fi
@@ -234,18 +235,13 @@ else
                         RSTART=$REND
                         REND=$j
                     fi
-
-                    for ((i=10#$RSTART; i <= 10#$REND; i++)); do
-                        NODE="$i"
-                        while [[ ${#NODE} -lt $WIDTH ]]; do
-                            NODE="0$NODE"
-                        done
-                        NODE="$PREFIX$NODE$SUFFIX"
-                        if [[ $TARGET == $NODE ]]; then
-                            dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                            return 0
-                        fi
-                    done
+                    NODE="${TARGET#${PREFIX}}"
+                    NODE="${NODE%${SUFFIX}}"
+                    dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
+                    if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && $WIDTH == ${#NODE} ]]; then
+                        dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                        return 0
+                    fi
                 else
                     # Bad syntax
                     log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"

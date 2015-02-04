@@ -154,12 +154,12 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
                 SUFFIX=${BASH_REMATCH[4]}
                 WIDTH=${#RSTART}
 
-                if [[ 10#${#RSTART} < 10#${#REND} ]]; then
+                if [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
                     dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
                     WIDTH=${#REND}
                 fi
 
-                if [[ 10#$RSTART > 10#$REND ]]; then
+                if [[ 10#$RSTART -gt 10#$REND ]]; then
                     dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
                     j=$RSTART
                     RSTART=$REND
@@ -168,7 +168,7 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
 
                 for ((i=10#$RSTART; i <= 10#$REND; i++)); do
                     NODE="$i"
-                    while [[ ${#NODE} < $WIDTH ]]; do
+                    while [[ ${#NODE} -lt $WIDTH ]]; do
                         NODE="0$NODE"
                     done
                     NODE="$PREFIX$NODE$SUFFIX"
@@ -223,12 +223,12 @@ else
                     # Check a node range
                     WIDTH=${#RSTART}
 
-                    if [[ 10#${#RSTART} < 10#${#REND} ]]; then
+                    if [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
                         dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
                         WIDTH=${#REND}
                     fi
 
-                    if [[ 10#$RSTART > 10#$REND ]]; then
+                    if [[ 10#$RSTART -gt 10#$REND ]]; then
                         dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
                         j=$RSTART
                         RSTART=$REND
@@ -237,7 +237,7 @@ else
 
                     for ((i=10#$RSTART; i <= 10#$REND; i++)); do
                         NODE="$i"
-                        while [[ ${#NODE} < $WIDTH ]]; do
+                        while [[ ${#NODE} -lt $WIDTH ]]; do
                             NODE="0$NODE"
                         done
                         NODE="$PREFIX$NODE$SUFFIX"

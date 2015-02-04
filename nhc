@@ -36,7 +36,13 @@ function die() {
         eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
-        echo "$RET $*" > $RESULTFILE
+        if [[ -w "$RESULTFILE" ]]; then
+            echo "$RET $*" > $RESULTFILE
+        else
+            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
+            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
+            syslog_flush
+        fi
     elif [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:false" >&$NHC_FD_OUT
@@ -504,7 +510,6 @@ function nhcmain_set_watchdog() {
 }
 
 function nhcmain_spawn_detached() {
-    rm -f "$RESULTFILE" >/dev/null 2>&1
     export NHC_DETACHED=${BASHPID:-$$}
     exec -a ${NAME}-detached $0 </dev/null >/dev/null 2>&1
 }
@@ -527,10 +532,15 @@ function nhcmain_detach() {
         MSG=""
     fi
 
-    # Launch detached process (hopefully in its own session)
-    set -m
-    nhcmain_spawn_detached &
-    set +m
+    rm -f "$RESULTFILE" >/dev/null 2>&1
+    if [[ -e "$RESULTFILE" ]]; then
+        die 1 "Unable to overwrite/remove results file \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
+    else
+        # Launch detached process (hopefully in its own session)
+        set -m
+        nhcmain_spawn_detached &
+        set +m
+    fi
 
     syslog_flush
     if [[ "$RC" != "0" ]]; then

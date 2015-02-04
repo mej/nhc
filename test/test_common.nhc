@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((12+5+8+4+5+4+6+18+7+19+7)) "common.nhc" && {
+plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_external 2>&1`" 'function' 'mcheck_external() loaded properly'
@@ -28,8 +28,18 @@ plan $((12+5+8+4+5+4+6+18+7+19+7)) "common.nhc" && {
     mcheck "1 2 3 4 5" '/(^| )1/'
     is $? 0 "Boundary case regexp match via mcheck()"
 
+    mcheck "n0000.testbed" '{n00[00-59].testbed}'
+    is $? 0 "Basic range match via mcheck(), lower bound"
     mcheck "n0021.testbed" '{n00[00-59].testbed}'
-    is $? 0 "Basic range match via mcheck()"
+    is $? 0 "Basic range match via mcheck(), mid-range"
+    mcheck "n0059.testbed" '{n00[00-59].testbed}'
+    is $? 0 "Basic range match via mcheck(), upper bound"
+    mcheck "n0000.testbed" '{n0[000-059].testbed}'
+    is $? 0 "Basic range match via mcheck() with leading zeroes, lower bound"
+    mcheck "n0034.testbed" '{n0[000-059].testbed}'
+    is $? 0 "Basic range match via mcheck() with leading zeroes, mid-range"
+    mcheck "n0059.testbed" '{n0[000-059].testbed}'
+    is $? 0 "Basic range match via mcheck() with leading zeroes, upper bound"
     mcheck "n0000.cluster" '{n0000.cluster}'
     is $? 0 "Range check via mcheck(), simple exact name match"
     mcheck "n0100.cluster" '{n00[00-99].cluster}'

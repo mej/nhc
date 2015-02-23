@@ -235,25 +235,25 @@ function nhc_ps_check_res() {
         dbg "Matching process found:  $THIS_PROG[$THIS_PID]:  ${PS_PCPU[$THIS_PID]}% CPU, ${PS_PMEM[$THIS_PID]}% (${PS_RSS[$THIS_PID]}kB) RAM, ${PS_VSZ[$THIS_PID]}kB mem, ${PS_TIME[$THIS_PID]} time"
         case $COL in
             1)  if [[ ${PS_PCPU[$THIS_PID]%%.*} -lt $THRESHOLD ]]; then continue ; fi
-                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using ${PS_PCPU[$THIS_PID]}% CPU (limit $THRESHOLD%)"
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) of ${PS_USER[$THIS_PID]} using ${PS_PCPU[$THIS_PID]}% CPU (limit $THRESHOLD%)"
                 ;;
             2)  if [[ ${PS_PMEM[$THIS_PID]%%.*} -lt $THRESHOLD ]]; then continue ; fi
-                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using ${PS_PMEM[$THIS_PID]}% RAM (limit $THRESHOLD%)"
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) of ${PS_USER[$THIS_PID]} using ${PS_PMEM[$THIS_PID]}% RAM (limit $THRESHOLD%)"
                 ;;
             3)  if [[ ${PS_RSS[$THIS_PID]} -lt $THRESHOLD ]]; then continue ; fi
                 nhc_common_unparse_size ${PS_RSS[$THIS_PID]} NUM
                 nhc_common_unparse_size $THRESHOLD LIM
-                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM RAM (limit $LIM)"
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) of ${PS_USER[$THIS_PID]} using $NUM RAM (limit $LIM)"
                 ;;
             4)  if [[ ${PS_VSZ[$THIS_PID]} -lt $THRESHOLD ]]; then continue ; fi
                 nhc_common_unparse_size ${PS_VSZ[$THIS_PID]} NUM
                 nhc_common_unparse_size $THRESHOLD LIM
-                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) using $NUM memory (RAM+swap) (limit $LIM)"
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) of ${PS_USER[$THIS_PID]} using $NUM memory (RAM+swap) (limit $LIM)"
                 ;;
             5)  T_MIN=${PS_TIME[$THIS_PID]/:*}
                 T_SEC=${PS_TIME[$THIS_PID]/*:}
                 if [[ $((T_MIN*60+T_SEC)) -lt $THRESHOLD ]]; then continue ; fi
-                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) has consumed ${PS_TIME[$THIS_PID]} of CPU time (limit ${T_MIN}m${T_SEC}s)"
+                MSG="$CHECK:  Process \"$THIS_PROG\" ($THIS_PID) of ${PS_USER[$THIS_PID]} has consumed ${PS_TIME[$THIS_PID]} of CPU time (limit ${T_MIN}m${T_SEC}s)"
                 ;;
         esac
         # We have a winner.  Or loser, as the case may be.

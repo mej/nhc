@@ -152,14 +152,14 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
                 RSTART=${BASH_REMATCH[2]}
                 REND=${BASH_REMATCH[3]}
                 SUFFIX=${BASH_REMATCH[4]}
-                WIDTH=10#${#RSTART}
+                WIDTH=${#RSTART}
 
                 if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
                     dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
                     continue
                 elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
                     dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
-                    WIDTH=10#${#REND}
+                    WIDTH=${#REND}
                 fi
 
                 if [[ 10#$RSTART -gt 10#$REND ]]; then
@@ -171,7 +171,7 @@ if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
                 NODE="${TARGET#${PREFIX}}"
                 NODE="${NODE%${SUFFIX}}"
                 dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
-                if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && $WIDTH == ${#NODE} ]]; then
+                if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && 10#$WIDTH -eq 10#${#NODE} ]]; then
                     dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
                     return 0
                 fi

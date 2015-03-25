@@ -451,7 +451,7 @@ function nhc_common_get_userid() {
         eval $THIS_VAR=$THIS_USERID
     else
         # Fall back to getent invocation if passwd data is insufficient.
-        nhc_common_parse_passwd_entry "$(getent passwd \"$THIS_USERID\")" THIS_UID
+        nhc_common_parse_passwd_entry "$(getent passwd \"$THIS_UID\")" THIS_UID
         eval $THIS_VAR=${PWUID_USER[$THIS_UID]}
     fi
 }

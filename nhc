@@ -150,13 +150,9 @@ function kill_watchdog() {
     if [[ $WATCHDOG_PID -ne 0 ]]; then
         for i in 1 2 3 4 ; do
             dbg "Killing watchdog timer $WATCHDOG_PID -- Attempt #$i"
-            kill -s USR2 -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
-            kill -s USR1 -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
             kill -s INT -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
-            kill -s PWR -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
-            sleep 1
+            sleep 0.01 || sleep 1
         done
-        vlog "Killing hung watchdog timer process/group $WATCHDOG_PID"
         kill -s KILL -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null
     fi
     return 0

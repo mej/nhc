@@ -256,10 +256,13 @@ fi
 
 # Check to see if parameter ($1) matches glob ($2)
 function mcheck_glob() {
-    case "$1" in
-        $2) dbg "Glob match check:  $1 matches $2" ; return 0 ;;
-        *)  dbg "Glob match check:  $1 does not match $2" ; return 1 ;;
-    esac
+    if [[ "$1" == $2 ]]; then
+        dbg "Glob match check:  $1 matches $2"
+        return 0
+    else
+        dbg "Glob match check:  $1 does not match $2"
+        return 1
+    fi
 }
 
 # Check to see if an external node match expression ($2) contains a node ($1)

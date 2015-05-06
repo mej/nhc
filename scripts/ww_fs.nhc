@@ -214,42 +214,39 @@ function check_fs_mount() {
             fi
             if [[ ${#SRC_LIST[*]} > 0 ]]; then
                 for SRC in "${SRC_LIST[@]}" ; do
-                    if [[ "${SRC/#\!}" != "$SRC" ]]; then
-                        # Source begins with !.  Negate the check.
-                        if mcheck "${FS_DEV[$i]}" "${SRC/#\!}" ; then
-                            MSG="$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (matches \"${SRC/#\!}\") but shouldn't be"
-                            break 2
+                    if ! mcheck "${FS_DEV[$i]}" "$SRC" ; then
+                        MSG="$FUNCNAME:  $FS mounted from ${FS_DEV[$i]}"
+                        if [[ "${SRC:0:1}" == '!' ]]; then
+                            MSG="$MSG (should NOT match ${SRC:1})"
+                        else
+                            MSG="$MSG (should match $SRC)"
                         fi
-                    elif ! mcheck "${FS_DEV[$i]}" "$SRC" ; then
-                        MSG="$FUNCNAME:  $FS mounted from ${FS_DEV[$i]} (should be $SRC)"
                         break 2
                     fi
                 done
             fi
             if [[ ${#TYPE_LIST[*]} > 0 ]]; then
                 for TYPE in "${TYPE_LIST[@]}" ; do
-                    if [[ "${TYPE/#\!}" != "$TYPE" ]]; then
-                        # Type begins with !.  Negate the check.
-                        if mcheck "${FS_TYPE[$i]}" "${TYPE/#\!}" ; then
-                            MSG="$FUNCNAME:  $FS has type ${FS_TYPE[$i]} (matches \"${TYPE/#\!}\") but shouldn't"
-                            break 2
+                    if ! mcheck "${FS_TYPE[$i]}" "$TYPE" ; then
+                        MSG="$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]}"
+                        if [[ "${TYPE:0:1}" == '!' ]]; then
+                            MSG="$MSG (should NOT match ${TYPE:1})"
+                        else
+                            MSG="$MSG (should match $TYPE)"
                         fi
-                    elif ! mcheck "${FS_TYPE[$i]}" "$TYPE" ; then
-                        MSG="$FUNCNAME:  $FS has incorrect type ${FS_TYPE[$i]} (should be $TYPE)"
                         break 2
                     fi
                 done
             fi
             if [[ ${#OPTIONS_LIST[*]} > 0 ]]; then
                 for OPTIONS in "${OPTIONS_LIST[@]}" ; do
-                    if [[ "${OPTIONS/#\!}" != "$OPTIONS" ]]; then
-                        # Options begin with !.  Negate the check.
-                        if mcheck "${FS_OPTS[$i]}" "${OPTIONS/#\!}" ; then
-                            MSG="$FUNCNAME:  $FS mount options incorrect (match \"${OPTIONS/#\!}\" but shouldn't)"
-                            break 2
+                    if ! mcheck "${FS_OPTS[$i]}" "$OPTIONS" ; then
+                        MSG="$FUNCNAME:  $FS mount options incorrect"
+                        if [[ "${OPTIONS:0:1}" == '!' ]]; then
+                            MSG="$MSG (should NOT match ${OPTIONS:1})"
+                        else
+                            MSG="$MSG (should match $OPTIONS)"
                         fi
-                    elif ! mcheck "${FS_OPTS[$i]}" "$OPTIONS" ; then
-                        MSG="$FUNCNAME:  $FS mount options incorrect (don't match \"$OPTIONS\")"
                         break 2
                     fi
                 done

@@ -3,7 +3,7 @@
 # $Id$
 #
 
-plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
+plan $((12+7+15+6+7+4+6+18+7+19+7)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_external 2>&1`" 'function' 'mcheck_external() loaded properly'
@@ -27,6 +27,10 @@ plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
     is $? 0 "Extended regexp match via mcheck()"
     mcheck "1 2 3 4 5" '/(^| )1/'
     is $? 0 "Boundary case regexp match via mcheck()"
+    mcheck "somenode" '!/node/'
+    is $? 1 "Negated regexp match via mcheck(), matching node"
+    mcheck "bigmem01" '!/gpu/'
+    is $? 0 "Negated regexp match via mcheck(), non-matching node"
 
     mcheck "n0000.testbed" '{n00[00-59].testbed}'
     is $? 0 "Basic range match via mcheck(), lower bound"
@@ -54,6 +58,10 @@ plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
     is $? 0 "Range check via mcheck(), multiple comma-delimited ranges"
     mcheck "idplx-r4-n04" '{idplx-r0-n[0-42],idplx-r1-n[0-42],idplx-r2-n[0-42],idplx-r3-n[0-42]}'
     is $? 1 "Failed range check via mcheck(), multiple comma-delimited ranges"
+    mcheck "n2345.gpu" '!{n[0000-9999].gpu}'
+    is $? 1 "Negated range check, matching node"
+    mcheck "n1123.phi" '!{n0[100-199].phi}'
+    is $? 0 "Negated range check, non-matching node"
 
     NHC_MCHECK_DELIM[0]='%'
     NHC_MCHECK_COMMAND[0]='true'
@@ -67,6 +75,10 @@ plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
     is $? 0 "External match check with echo and fgrep, positive match"
     mcheck "host4" '%doesnotmatter%'
     is $? 1 "External match check with echo and fgrep, negative match"
+    mcheck "host1" '!%doesnotmatter%'
+    is $? 1 "Negated external match check with echo and fgrep, matching string"
+    mcheck "randomcrap" '!%doesnotmatter%'
+    is $? 0 "Negated external match check with echo and fgrep, non-matching string"
 
     mcheck "n0000.testbed" 'n*.*'
     is $? 0 "Basic glob match via mcheck()"
@@ -78,6 +90,10 @@ plan $((12+5+13+4+5+4+6+18+7+19+7)) "common.nhc" && {
     is $? 0 "Bracket glob match via mcheck()"
     mcheck "1 2 3 4 5" '*1*'
     is $? 0 "Boundary case glob match via mcheck()"
+    mcheck "n0001" '!n00*'
+    is $? 1 "Negated glob match via mcheck(), matching node"
+    mcheck "n0001" '!n11*'
+    is $? 0 "Negated glob match via mcheck(), non-matching node"
 
     mcheck_regexp 'Testing' '/^Testing$/'
     is $? 1 "Direct usage of mcheck_regexp() with slashes (wrong)"

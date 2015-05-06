@@ -291,22 +291,26 @@ function mcheck_external() {
 function mcheck() {
     local STRING="$1"
     local MATCH="$2"
-    local i
+    local i NEG=0
 
-    # Check to see if the current host matches the check we just read.
+    # If the match expression starts with !, negate the match.
+    if [[ "${MATCH:0:1}" == '!' ]]; then
+        NEG=1
+        MATCH="${MATCH:1}"
+    fi
 
     # Regexp match syntax.  Strip slashes, then match.
     if [[ "${MATCH:0:1}" == "/" && "${MATCH: -1:1}" == "/" ]]; then
         MATCH="${MATCH:1:${#MATCH}-2}"
         mcheck_regexp "$STRING" "$MATCH"
-        return $?
+        return $(((NEG>0) ? ($?^1) : ($?)))
     fi
 
     # pdsh-style node range syntax.  Strip braces, then match.
     if [[ "${MATCH:0:1}" == '{' && "${MATCH: -1:1}" == '}' ]]; then
         MATCH="${MATCH:1:${#MATCH}-2}"
         mcheck_range "$STRING" "$MATCH"
-        return $?
+        return $(((NEG>0) ? ($?^1) : ($?)))
     fi
 
     # External match check.  Uses subprogram to determine match.  Delimiters are dynamic.
@@ -314,12 +318,12 @@ function mcheck() {
         if [[ "${MATCH:0:1}" == "${NHC_MCHECK_DELIM[$i]:0:1}" && "${MATCH: -1:1}" == "${NHC_MCHECK_DELIM[$i]: -1:1}" ]]; then
             MATCH="${MATCH:1:${#MATCH}-2}"
             mcheck_external $i "$STRING" "$MATCH"
-            return $?
+            return $(((NEG>0) ? ($?^1) : ($?)))
         fi
     done
     # Glob match syntax (the default/fallback)
     mcheck_glob "$STRING" "$MATCH"
-    return $?
+    return $(((NEG>0) ? ($?^1) : ($?)))
 }
 
 # Load configuration file from ($1)

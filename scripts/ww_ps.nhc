@@ -213,21 +213,12 @@ function nhc_ps_check_res() {
             THIS_PROG="${ARGS[0]}"
         fi
         dbg "Checking $THIS_PID:  \"$MATCH\" vs. \"$THIS_PROG\""
-        if [[ "${MATCH/#\!}" != "$MATCH" ]]; then
-            if mcheck "$THIS_PROG" "${MATCH/#\!}" ; then
-                continue
-            fi
-        elif ! mcheck "$THIS_PROG" "$MATCH" ; then
+        if ! mcheck "$THIS_PROG" "$MATCH" ; then
             continue
         fi
         dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" ]]; then
-            if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
-                # Owner begins with !.  Negate the check.
-                if [[ "${PS_USER[$THIS_PID]}" == "${OWNER/#\!}" ]]; then
-                    continue
-                fi
-            elif [[ "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+            if ! mcheck "${PS_USER[$THIS_PID]}" "$OWNER" ; then
                 continue
             fi
         fi
@@ -376,12 +367,7 @@ function check_ps_blacklist() {
         fi
         dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" ]]; then
-            if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
-                # Owner begins with !.  Negate the check.
-                if [[ "${PS_USER[$THIS_PID]}" == "${OWNER/#\!}" ]]; then
-                    continue
-                fi
-            elif [[ "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+            if ! mcheck "${PS_USER[$THIS_PID]}" "$OWNER" ; then
                 continue
             fi
         fi
@@ -455,12 +441,7 @@ function check_ps_service() {
         fi
         dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" ]]; then
-            if [[ "${OWNER/#\!}" != "$OWNER" ]]; then
-                # Owner begins with !.  Negate the check.
-                if [[ "${PS_USER[$THIS_PID]}" == "${OWNER/#\!}" ]]; then
-                    continue
-                fi
-            elif [[ "${PS_USER[$THIS_PID]}" != "$OWNER" ]]; then
+            if ! mcheck "${PS_USER[$THIS_PID]}" "$OWNER" ; then
                 continue
             fi
         fi

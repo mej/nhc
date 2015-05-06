@@ -228,12 +228,7 @@ function check_net_socket() {
         for j in $FIELDS ; do
             # Compare each field against the match expressions we've been given.
             eval 'MATCH="$'"${VAR_LIST[$j]}"'" DESC="'"${DESC_LIST[$j]}"'" FIELD="${NET_'"${FIELD_LIST[$j]}"'[$i]}"'
-            if [[ "${MATCH/#\!}" != "$MATCH" ]]; then
-                # Match string begins with !.  Negate the match.
-                if mcheck "$FIELD" "${MATCH/#\!}" ; then
-                    continue 2
-                fi
-            elif ! mcheck "$FIELD" "$MATCH" ; then
+            if ! mcheck "$FIELD" "$MATCH" ; then
                 continue 2
             fi
             MATCH_DESC[${#MATCH_DESC[*]}]="$DESC($FIELD)"

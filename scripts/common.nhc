@@ -271,8 +271,8 @@ function mcheck_external() {
     local MATCH="$3"
     local MCHECK_CMD="${NHC_MCHECK_COMMAND[$1]}"
 
-    MCHECK_CMD="${MCHECK_CMD//%h/\"$STRING\"}"
-    MCHECK_CMD="${MCHECK_CMD//%m/\"$MATCH\"}"
+    MCHECK_CMD="${MCHECK_CMD//\%h/\"$STRING\"}"
+    MCHECK_CMD="${MCHECK_CMD//\%m/\"$MATCH\"}"
     eval $MCHECK_CMD &
     wait $!
     if [[ $? -eq 0 ]]; then

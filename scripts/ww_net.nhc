@@ -22,7 +22,7 @@ NET_PROCPID=( )
 NET_PROCNAME=( )
 
 function nhc_sockets_gather_data() {
-    local IFS NET_DATA THIS_PID i j CNT=0
+    local IFS NET_OUT NET_DATA THIS_PID i j CNT=0
     local -a LINES LINE
 
     # We need passwd data to resolve UIDs for users
@@ -34,8 +34,9 @@ function nhc_sockets_gather_data() {
     if type -t "$NETSTAT_CMD" >&/dev/null ; then
         dbg "Gathering socket data using $NETSTAT_CMD $NETSTAT_ARGS..."
         # Create array $LINES[] by splitting output on newlines.
+        NET_OUT=$(${NETSTAT_CMD} ${NETSTAT_ARGS} 2>/dev/null)
         IFS=$'\n'
-        LINES=( $(eval ${NETSTAT_CMD} ${NETSTAT_ARGS} 2>/dev/null) )
+        LINES=( $NET_OUT )
         IFS=$' \t\n'
 
         # Iterate through $LINES[] array to gather process data.
@@ -91,8 +92,9 @@ function nhc_sockets_gather_data() {
     elif type -t "$SS_CMD" >&/dev/null ; then
         dbg "Gathering socket data using $SS_CMD $SS_ARGS..."
         # Create array $LINES[] by splitting output on newlines.
+        NET_OUT=$(${SS_CMD} ${SS_ARGS} 2>/dev/null)
         IFS=$'\n'
-        LINES=( $(eval ${SS_CMD} ${SS_ARGS} 2>/dev/null) )
+        LINES=( $NET_OUT )
         IFS=$' \t\n'
 
         # Iterate through $LINES[] array to gather process data.

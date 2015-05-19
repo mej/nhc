@@ -67,11 +67,12 @@ function nhc_fs_mounts_gather_data() {
 }
 
 function nhc_fs_df_gather_data() {
-    local IFS DF_CNT i
+    local IFS DF_OUT DF_CNT i
     local -a LINES FIELD
 
+    DF_OUT=$($DF_CMD $DF_FLAGS)
     IFS=$'\n'
-    LINES=( $($DF_CMD $DF_FLAGS) )
+    LINES=( $DF_OUT )
     IFS=$' \t\n'
 
     ((DF_CNT=0))
@@ -110,11 +111,12 @@ function nhc_fs_df_gather_data() {
 }
 
 function nhc_fs_dfi_gather_data() {
-    local IFS DFI_CNT i
+    local IFS DFI_OUT DFI_CNT i
     local -a LINES FIELD
 
+    DFI_OUT=$($DFI_CMD $DFI_FLAGS)
     IFS=$'\n'
-    LINES=( $($DFI_CMD $DFI_FLAGS) )
+    LINES=( $DFI_OUT )
     IFS=$' \t\n'
 
     ((DFI_CNT=0))

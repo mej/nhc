@@ -11,7 +11,7 @@ NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local IFS JOBFILE JOBUSER LINE PBS_XML
+    local IFS JOBFILE JOBUSER STAT_OUT LINE PBS_XML
     local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
@@ -56,8 +56,9 @@ function nhc_job_find_users() {
     elif [[ "$NHC_RM" == "slurm" ]]; then
         SLURM_SERVER_HOME="${SLURM_SERVER_HOME:-/var/spool/slurmd}"
         JOBFILE_PATH="${JOBFILE_PATH:-$SLURM_SERVER_HOME}"
+        STAT_OUT=$(${STAT_CMD:-/usr/bin/stat} ${STAT_FMT_ARGS:--c} %U $JOBFILE_PATH/job*/slurm_script)
         IFS=$'\n'
-        USERLIST=( $(${STAT_CMD:-/usr/bin/stat} ${STAT_FMT_ARGS:--c} %U $JOBFILE_PATH/job*/slurm_script) )
+        USERLIST=( $STAT_OUT )
         IFS=$' \t\n'
         dbg "Found ${#USERLIST[*]} job files in $JOBFILE_PATH"
         for JOBUSER in "${USERLIST[@]}" ; do

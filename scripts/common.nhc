@@ -332,6 +332,7 @@ function mcheck() {
 # Load configuration file from ($1)
 function nhc_load_conf() {
     local CONFFILE="$1"
+    local WS=$' \t'
     local LINE TARGET CHECK
 
     # Load configuration file and match lines to current hostname.
@@ -341,13 +342,13 @@ function nhc_load_conf() {
         CHECK="${LINE#*||}"
 
         # Trim whitespace.
-        while [[ "${TARGET## }" != "${TARGET%% }" ]]; do
-            TARGET="${TARGET## }"
-            TARGET="${TARGET%% }"
+        while [[ "${TARGET##[$WS]}" != "${TARGET%%[$WS]}" ]]; do
+            TARGET="${TARGET##[$WS]}"
+            TARGET="${TARGET%%[$WS]}"
         done
-        while [[ "${CHECK## }" != "${CHECK%% }" ]]; do
-            CHECK="${CHECK## }"
-            CHECK="${CHECK%% }"
+        while [[ "${CHECK##[$WS]}" != "${CHECK%%[$WS]}" ]]; do
+            CHECK="${CHECK##[$WS]}"
+            CHECK="${CHECK%%[$WS]}"
         done
 
         # Skip comments.

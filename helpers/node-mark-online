@@ -62,7 +62,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     # SLURM does not run the HealthCheckProgram on nodes in the DOWN state,
     # but if someone runs NHC by hand, we want to be able to do the right thing.
     case "$STATUS" in
-        down*|drain*|drng*|fail*|mixed*|maint*)
+        down*|drain*|drng*|fail*|maint*)
             # If there is no old note, and we've not been told to ignore that, do not online the node.
             if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
                 echo "$0:  Not onlining $HOSTNAME:  No note set."
@@ -76,7 +76,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
             exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$HOSTNAME
             ;;
-        undrain*|resume*|alloc*|idle*)
+        alloc*|comp*|idle*|mix*|resume*|undrain*)
             # Node is already online.
             echo "$0:  Node $HOSTNAME is already online."
             ;;

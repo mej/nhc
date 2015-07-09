@@ -304,12 +304,13 @@ function check_net_ping() {
     shift $((OPTIND-1))
 
     if [[ -z "$*" ]]; then
-        # We at least need 1 hostname to be supplied...
+        # We at least need 1 hostname to be supplied....
         die 1 "$FUNCNAME:  No target(s) given for ping."
         return 1
     fi
     for TARGET in "$@" ; do
-        if ! ping -q -n ${INTERFACE:+-I $INTERFACE} ${INTERVAL:+-i $INTERVAL} ${PKTSIZE:+-s $PKTSIZE} ${TTL:+-t $TTL} ${COUNT:+-c $COUNT} ${DEADLINE:+-w $DEADLINE} ${TIMEOUT:+-W $TIMEOUT} "$TARGET" >/dev/null 2>&1 ; then
+        if ! ping -q -n ${INTERFACE:+-I $INTERFACE} ${INTERVAL:+-i $INTERVAL} ${PKTSIZE:+-s $PKTSIZE} ${TTL:+-t $TTL} \
+             ${COUNT:+-c $COUNT} ${DEADLINE:+-w $DEADLINE} ${TIMEOUT:+-W $TIMEOUT} "$TARGET" >/dev/null 2>&1 ; then
             die 1 "$FUNCNAME:  No response received from $TARGET"
             return 1
         fi

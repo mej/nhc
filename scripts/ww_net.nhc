@@ -280,3 +280,42 @@ function check_net_socket() {
     fi
     return 0
 }
+
+
+# Check if we can ping a given target.  Syntax:
+#  check_net_ping [ -I INTERFACE ] [ -i INTERVAL ] [ -s SIZE ] [ -t TTL ] [ -c COUNT ] [ -w DEADLINE ] [ -W TIMEOUT ] TARGET(s)
+function check_net_ping() {
+    local COUNT=1 TTL=2 DEADLINE=1 INTERVAL INTERFACE PKTSIZE TIMEOUT TARGET
+
+    OPTIND=1
+    while getopts ":I:W:c:i:s:t:w:" OPTION ; do
+        case "$OPTION" in
+            I) INTERFACE="$OPTARG" ;;
+            W) TIMEOUT="$OPTARG" ;;
+            c) COUNT="$OPTARG" ;;
+            i) INTERVAL="$OPTARG" ;;
+            s) PKTSIZE="$OPTARG" ;;
+            t) TTL="$OPTARG" ;;
+            w) DEADLINE="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [[ -z "$*" ]]; then
+        # We at least need 1 hostname to be supplied...
+        die 1 "$FUNCNAME:  No target(s) given for ping."
+        return 1
+    fi
+    for TARGET in "$@" ; do
+        if ! ping -q -n ${INTERFACE:+-I $INTERFACE} ${INTERVAL:+-i $INTERVAL} ${PKTSIZE:+-s $PKTSIZE} ${TTL:+-t $TTL} ${COUNT:+-c $COUNT} ${DEADLINE:+-w $DEADLINE} ${TIMEOUT:+-W $TIMEOUT} "$TARGET" >/dev/null 2>&1 ; then
+            die 1 "$FUNCNAME:  No response received from $TARGET"
+            return 1
+        fi
+    done
+    return 0
+}
+
+
+

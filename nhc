@@ -230,6 +230,7 @@ $UNDERLINE
  -q                Run quietly (i.e., SILENT=1)
  -t <timeout>      Use timeout of <timeout> seconds (default: 10)
  -v                Run verbosely (i.e., VERBOSE=1)
+ -x                Run in eXtreme debug/trace mode (same as "bash -x")
 
  All other command line parameters, if any, must be environment variable
  settings in the form VARNAME=value.
@@ -253,7 +254,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:dfhl:n:qt:v" OPTION ; do
+    while getopts ":D:ac:dfhl:n:qt:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
@@ -266,6 +267,7 @@ function nhcmain_parse_cmdline() {
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
             v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
+            x) set -x ; dbg "BASH tracing active." ;;
             :) nhcmain_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
             \?) nhcmain_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
         esac

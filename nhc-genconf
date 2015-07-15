@@ -81,6 +81,7 @@ $UNDERLINE
  -d                Activate debugging output (i.e., DEBUG=1)
  -n <name>         Use named context <name> (default: $NAME)
  -v                Run verbosely (i.e., VERBOSE=1)
+ -x                Run in eXtreme debug/trace mode (same as "bash -x")
 
 
 EXAMPLES:
@@ -97,7 +98,7 @@ function nhcgc_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":H:b:c:dhn:v" OPTION ; do
+    while getopts ":H:b:c:dhn:vx" OPTION ; do
         case "$OPTION" in
             H) HOSTNAME="$OPTARG" ; dbg "\$HOSTNAME set to $HOSTNAME." ;;
             b) DMI_MATCH="$OPTARG" ; dbg "\$DMI_MATCH set to $DMI_MATCH." ;;
@@ -106,6 +107,7 @@ function nhcgc_parse_cmdline() {
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             h) nhcgc_help ; exit 0 ;;
             v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
+            x) set -x ; dbg "BASH tracing active." ;;
             -) break ;;
             :) nhcgc_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; exit -1 ;;
             \?) nhcgc_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; exit -1 ;;

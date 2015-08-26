@@ -16,6 +16,7 @@ Source: https://github.com/mej/nhc/archive/%{name}-%{version}.tar.gz
 Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@lbl.gov>}
 Vendor: %{?_vendorinfo}%{!?_vendorinfo:LBNL NHC Project (https://github.com/mej/nhc/)}
 Requires: bash
+Obsoletes: warewulf-nhc <= 1.4.2-1
 BuildArch: noarch
 BuildRoot: %{?_tmppath}%{!?_tmppath:/var/tmp}/%{name}-%{version}-%{release}-root
 

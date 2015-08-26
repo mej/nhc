@@ -1,7 +1,4 @@
 # Tests for lbnl_file.nhc
-#
-# $Id$
-#
 
 plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
     is "`type -t check_file_contents 2>&1`" 'function' 'check_file_contents() loaded properly'

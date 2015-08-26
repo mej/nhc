@@ -1,5 +1,3 @@
-# $Id$
-
 AUTOMAKE_OPTIONS = foreign
 
 MAINTAINERCLEANFILES = Makefile.in

@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 15 December 2010
 #
-# $Id$
-#
 
 PS_PROCS=( )
 PS_USER=( )

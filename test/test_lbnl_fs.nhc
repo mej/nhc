@@ -1,7 +1,4 @@
 # Tests for lbnl_fs.nhc
-#
-# $Id$
-#
 
 function nhc_fs_mounts_gather_data() {
     DF_DEV=(

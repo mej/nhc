@@ -1,7 +1,4 @@
 # Tests for lbnl_dmi.nhc
-#
-# $Id$
-#
 
 function populate_dmi_data() {
     # A snippit real DMI data from a cluster node

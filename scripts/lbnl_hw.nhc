@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 15 December 2010
 #
-# $Id$
-#
 
 HW_SOCKETS=0
 HW_CORES=0

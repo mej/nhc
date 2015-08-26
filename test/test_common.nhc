@@ -1,7 +1,4 @@
 # Tests for common.nhc
-#
-# $Id$
-#
 
 plan $((12+7+15+6+7+4+6+18+7+19+7)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'

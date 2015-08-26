@@ -1,7 +1,4 @@
 # Tests for lbnl_hw.nhc
-#
-# $Id$
-#
 
 plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'

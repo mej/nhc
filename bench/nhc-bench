@@ -5,8 +5,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 13 December 2010
 #
-# $Id$
-#
 
 # This script is used to perform benchmarking on the NHC driver script
 # and its built-in checks.  It should only be used by developers

@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 20 April 2011
 #
-# $Id$
-#
 
 JOBUSERS=( )
 NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"

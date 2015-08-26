@@ -1,7 +1,4 @@
 # Tests for lbnl_net.nhc
-#
-# $Id$
-#
 
 function populate_net_data() {
     # Sample network socket data

@@ -1,7 +1,4 @@
 # Tests for lbnl_cmd.nhc
-#
-# $Id$
-#
 
 plan $((2+9+2)) "lbnl_cmd.nhc" && {
     is "`type -t check_cmd_output 2>&1`" 'function' 'check_cmd_output() loaded properly'

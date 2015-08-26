@@ -1,7 +1,4 @@
 # Tests for lbnl_moab.nhc
-#
-# $Id$
-#
 
 plan $((3+0+0+0)) "lbnl_moab.nhc" && {
     is "`type -t check_moab_sched 2>&1`" 'function' 'check_moab_sched() loaded properly'

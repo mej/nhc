@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 27 August 2012
 #
-# $Id$
-#
 
 NVIDIA_HEALTHMON="${NVIDIA_HEALTHMON:-nvidia-healthmon}"
 NVIDIA_HEALTHMON_ARGS="${NVIDIA_HEALTHMON_ARGS:--e -v}"

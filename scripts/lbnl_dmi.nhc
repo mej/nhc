@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 08 March 2013
 #
-# $Id$
-#
 
 DMI_HANDLES=( )
 DMI_HANDLE_LOOKUP=( )

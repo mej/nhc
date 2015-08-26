@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 15 December 2010
 #
-# $Id$
-#
 
 PASSWD_DATA_SRC="${PASSWD_DATA_SRC:-/etc/passwd}"
 LOGIN_DEFS_SRC="${LOGIN_DEFS_SRC:-/etc/login.defs}"

@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 15 December 2010
 #
-# $Id$
-#
 
 MOUNT_CMD="${MOUNT_CMD:-mount}"
 DF_CMD="${DF_CMD:-df}"

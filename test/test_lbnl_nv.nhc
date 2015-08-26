@@ -1,7 +1,4 @@
 # Tests for lbnl_nv.nhc
-#
-# $Id$
-#
 
 function populate_nv_data_good() {
     NV_HEALTHMON_LINES=(

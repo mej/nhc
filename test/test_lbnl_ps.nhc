@@ -1,7 +1,4 @@
 # Tests for lbnl_ps.nhc
-#
-# $Id$
-#
 
 function populate_ps_data() {
     # Sample process data taken from an actual compute node running an

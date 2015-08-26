@@ -1,5 +1,3 @@
-dnl# $Id$
-
 AC_PREREQ(2.59)
 AC_INIT([lbnl-nhc], [1.4.2], [nhc-devel@lbl.gov])
 AC_CONFIG_SRCDIR([.])

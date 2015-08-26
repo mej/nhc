@@ -3,8 +3,6 @@
 # Michael Jennings <mej@lbl.gov>
 # 29 June 2012
 #
-# $Id$
-#
 
 # This is a simple unit test framework for BASH shell scripts.  The
 # interface is based on Perl's Test::More.  SHUT stands for "SHell

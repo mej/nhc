@@ -1,7 +1,4 @@
 # Tests for lbnl_job.nhc
-#
-# $Id$
-#
 
 plan 2 "lbnl_job.nhc" && {
     is "`type -t nhc_job_find_users 2>&1`" 'function' 'nhc_job_find_users() loaded properly'

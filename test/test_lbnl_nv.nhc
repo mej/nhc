@@ -1,4 +1,4 @@
-# Tests for ww_nv.nhc
+# Tests for lbnl_nv.nhc
 #
 # $Id$
 #
@@ -92,7 +92,7 @@ function populate_nv_data_bad() {
     NV_HEALTHMON_RC=1
 }
 
-plan $((2+2)) "ww_nv.nhc" && {
+plan $((2+2)) "lbnl_nv.nhc" && {
     is "`type -t nhc_nv_gather_data 2>&1`" 'function' 'nhc_ps_gather_data() loaded properly'
     is "`type -t check_nv_healthmon 2>&1`" 'function' 'check_ps_daemon() loaded properly'
 

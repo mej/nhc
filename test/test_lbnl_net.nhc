@@ -1,4 +1,4 @@
-# Tests for ww_net.nhc
+# Tests for lbnl_net.nhc
 #
 # $Id$
 #
@@ -182,7 +182,7 @@ function populate_net_data() {
     )
 }
 
-plan $((2+28)) "ww_net.nhc" && {
+plan $((2+28)) "lbnl_net.nhc" && {
     is "`type -t nhc_sockets_gather_data 2>&1`" 'function' 'nhc_sockets_gather_data() loaded properly'
     is "`type -t check_net_socket 2>&1`" 'function' 'check_net_socket() loaded properly'
 

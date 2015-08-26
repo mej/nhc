@@ -11,12 +11,12 @@ dist_sbin_SCRIPTS = nhc nhc-genconf nhc-wrapper
 dist_conf_DATA = nhc.conf
 dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline
 
-nobase_dist_conf_DATA = scripts/ww_cmd.nhc scripts/common.nhc	\
-                        scripts/ww_dmi.nhc scripts/ww_file.nhc	\
-                        scripts/ww_fs.nhc scripts/ww_hw.nhc	\
-                        scripts/ww_job.nhc scripts/ww_moab.nhc	\
-                        scripts/ww_net.nhc scripts/ww_nv.nhc	\
-                        scripts/ww_ps.nhc
+nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc	\
+                        scripts/lbnl_dmi.nhc scripts/lbnl_file.nhc	\
+                        scripts/lbnl_fs.nhc scripts/lbnl_hw.nhc	\
+                        scripts/lbnl_job.nhc scripts/lbnl_moab.nhc	\
+                        scripts/lbnl_net.nhc scripts/lbnl_nv.nhc	\
+                        scripts/lbnl_ps.nhc
 
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 

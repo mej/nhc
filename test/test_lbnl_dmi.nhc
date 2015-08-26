@@ -1,4 +1,4 @@
-# Tests for ww_dmi.nhc
+# Tests for lbnl_dmi.nhc
 #
 # $Id$
 #
@@ -193,7 +193,7 @@ function populate_dmi_data() {
     nhc_dmi_gather_data
 }
 
-plan $((4+8+8+4+7+5+9)) "ww_dmi.nhc" && {
+plan $((4+8+8+4+7+5+9)) "lbnl_dmi.nhc" && {
     is "`type -t nhc_dmi_gather_data 2>&1`" 'function' 'nhc_dmi_gather_data() loaded properly'
     is "`type -t nhc_dmi_gather_raw_data 2>&1`" 'function' 'nhc_dmi_gather_raw_data() loaded properly'
     is "`type -t check_dmi_data_match 2>&1`" 'function' 'check_dmi_data_match() loaded properly'

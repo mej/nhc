@@ -22,7 +22,7 @@ MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 
 CLEANFILES = 
 EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate	\
-             nhc-test.conf warewulf-nhc.spec contrib/nhc.cron
+             nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
 install-data-local:
 	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Warewulf Node Health Check -- Node Onlining Helper
+# LBNL Node Health Check -- Node Onlining Helper
 #
 # Michael Jennings <mej@lbl.gov>
 # 16 September 2011

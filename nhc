@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Warewulf Node Health Check Script
+# LBNL Node Health Check Script
 #
 # Michael Jennings <mej@lbl.gov>
 # 13 December 2010

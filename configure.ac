@@ -1,7 +1,7 @@
 dnl# $Id$
 
 AC_PREREQ(2.59)
-AC_INIT([warewulf-nhc], [1.4.2], [warewulf-devel@lbl.gov])
+AC_INIT([lbnl-nhc], [1.4.2], [nhc-devel@lbl.gov])
 AC_CONFIG_SRCDIR([.])
 
 AC_PROG_INSTALL
@@ -42,5 +42,5 @@ AC_OUTPUT([
    Makefile
    bench/Makefile
    test/Makefile
-   warewulf-nhc.spec
+   lbnl-nhc.spec
 ])

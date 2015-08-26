@@ -4,24 +4,23 @@
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}
 %{!?nhc_helper_dir:%global nhc_helper_dir %{_libexecdir}/%{sname}}
 
-Summary: Warewulf Node Health Check System
+Summary: LBNL Node Health Check
 Name: @PACKAGE@
 Version: @VERSION@
 Release: %{_rel}%{?dist}
 #Release: 1%{?dist}
 License: US Dept. of Energy (BSD-like)
 Group: Applications/System
-URL: http://warewulf.lbl.gov/
-Source: http://warewulf.lbl.gov/downloads/releases/warewulf-nhc/%{name}-%{version}.tar.gz
+URL: https://github.com/mej/nhc/
+Source: https://github.com/mej/nhc/archive/%{name}-%{version}.tar.gz
 Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@lbl.gov>}
-Vendor: %{?_vendorinfo}%{!?_vendorinfo:Warewulf Project (http://warewulf.lbl.gov/)}
-Distribution: %{?_distribution:%{_distribution}}%{!?_distribution:%{_vendor}}
+Vendor: %{?_vendorinfo}%{!?_vendorinfo:LBNL NHC Project (https://github.com/mej/nhc/)}
 Requires: bash
 BuildArch: noarch
 BuildRoot: %{?_tmppath}%{!?_tmppath:/var/tmp}/%{name}-%{version}-%{release}-root
 
 %description
-This package contains the Warewulf Node Health Check system.
+This package contains the LBNL Node Health Check system.
 
 TORQUE (and other resource managers) allow for the execution of a
 script to determine if a node is "healthy" or "unhealthy" and

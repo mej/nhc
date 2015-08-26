@@ -9,7 +9,7 @@
 #
 
 # This script is intended to provide a convenient wrapper for
-# executing the Warewulf Node Health Check (NHC) driver program in an
+# executing the LBNL Node Health Check (NHC) driver program in an
 # out-of-band (i.e., outside a scheduler/resource manager) context.
 # It provides facilities for passing parameters to NHC, launching
 # specific NHC contexts, and sending notification e-mails when issues

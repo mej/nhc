@@ -9,9 +9,9 @@ dist_sbin_SCRIPTS = nhc nhc-genconf nhc-wrapper
 dist_conf_DATA = nhc.conf
 dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline
 
-nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc	\
+nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc		\
                         scripts/lbnl_dmi.nhc scripts/lbnl_file.nhc	\
-                        scripts/lbnl_fs.nhc scripts/lbnl_hw.nhc	\
+                        scripts/lbnl_fs.nhc  scripts/lbnl_hw.nhc	\
                         scripts/lbnl_job.nhc scripts/lbnl_moab.nhc	\
                         scripts/lbnl_net.nhc scripts/lbnl_nv.nhc	\
                         scripts/lbnl_ps.nhc
@@ -19,7 +19,7 @@ nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc	\
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 
 CLEANFILES = 
-EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate	\
+EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate		\
              nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
 install-data-local:

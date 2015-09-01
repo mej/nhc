@@ -1,4 +1,4 @@
-%{!?_rel:%{expand:%%global _rel 0.%(git describe | sed 's/^[^-]*-//;s/-/./g' || echo 0000)}}
+%{!?_rel:%{expand:%%global _rel 0.@GITVERSION@}}
 
 %{!?sname:%global sname nhc}
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}

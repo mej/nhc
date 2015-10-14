@@ -10,3 +10,6 @@ aclocal.m4
 install-sh
 missing
 *.spec
+*.tar.gz
+*.tar.xz
+*.tar.bz2

@@ -103,13 +103,13 @@ function check_file_contents() {
     while read LINE ; do
         ((LINENO++))
         for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-            if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
-                # Match expression is negated.  Fail if the line matches this expression.
-                if mcheck "$LINE" "${MATCHES[$i]:1}" ; then
+            if [[ ${MATCHED[$i]} -eq 1 ]]; then
+                if [[ "${MATCHES[$i]:0:1}" = '!' ]] && mcheck "$LINE" "${MATCHES[$i]:1}" ; then
+                    # Match expression is negated.  Fail if the line matches this expression.
                     die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENO matches \"${MATCHES[$i]:1}\"."
                     return 1
                 fi
-            elif [ ${MATCHED[$i]} -eq 0 ] && mcheck "$LINE" "${MATCHES[$i]}" ; then
+            elif mcheck "$LINE" "${MATCHES[$i]}" ; then
                 MATCHED[$i]=1
                 ((MATCH_CNT++))
                 if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then

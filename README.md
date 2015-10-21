@@ -88,9 +88,9 @@ The scan also includes BIOS information obtained via the `dmidecode` command.  T
 It can be incredibly tedious, especially for large, well-established heterogeneous or multi-generational clusters to gather up all the different types of hardware that exist in your system and write the appropriate NHC config file rules, match expressions, etc.  The following commands might come in handy for aggregating the results of `nhc-genconf` across a large group of nodes:
 
 ```
-# wwsh ssh 'n*' /usr/sbin/nhc-genconf -H '*' -c - | dshbak -c
+# wwsh ssh 'n*' "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
  OR
-# pdsh -a /usr/sbin/nhc-genconf -H '*' -c - | dshbak -c
+# pdsh -a "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
 ```
 
 

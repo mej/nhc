@@ -76,7 +76,7 @@ function check_cmd_output() {
             if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
                 # Match expression is negated.  Fail if the line matches this expression.
                 if mcheck "${LINES[$LINENO]}" "${MATCHES[$i]:1}" ; then
-                    die 1 "$CHECKNAME:  Command \"$CMD\" output line $((LINENO+1)) matches \"${MATCHES[$i]:1}\"."
+                    die 1 "$CHECKNAME:  \"${MATCHES[$i]:1}\" matched at line $((LINENO+1)) output from \"$CMD\"."
                     return 1
                 fi
             elif [ ${MATCHED[$i]} -eq 0 ] && mcheck "${LINES[$LINENO]}" "${MATCHES[$i]}" ; then
@@ -98,10 +98,10 @@ function check_cmd_output() {
         if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
             # A return code of 143 (128+15) means that the process received SIGTERM,
             # probably from our command watchdog timer.  Detect that and make it clearer.
-            die 1 "$CHECKNAME:  Command \"$CMD\" timed out after $CMD_TIMEOUT seconds and was terminated"
+            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"$CMD\"; subprocess terminated."
             return 1
         fi
-        die 1 "$CHECKNAME:  Command \"$CMD\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        die 1 "$CHECKNAME:  $RET${CMD_RETVAL:+ (expected $CMD_RETVAL)} returned by \"$CMD\"."
         return 1
     elif [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
         # All matches (some positive, some negative) were successful.  Return.
@@ -111,13 +111,13 @@ function check_cmd_output() {
     # At least one expression failed to match.  Locate the first such expression.
     if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
         # Special case for cleaner output.
-        die 1 "$CHECKNAME:  Command \"$CMD\" output failed to match \"${MATCHES[0]}\"."
+        die 1 "$CHECKNAME:  \"${MATCHES[0]}\" failed to match \"$CMD\" output."
         return 1
     fi
 
     for ((i = 0; i < ${#MATCHES[*]}; i++)); do
         if [[ ${MATCHED[$i]} == 0 ]]; then
-            die 1 "$CHECKNAME:  Command \"$CMD\" output matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
+            die 1 "$CHECKNAME:  \"${MATCHES[$i]}\" failed to match \"$CMD\" output ($((${#MATCHES[*]}-MATCH_CNT))/${#MATCHES[*]} patterns failed)."
             return 1
         fi
     done
@@ -160,10 +160,10 @@ function check_cmd_status() {
         if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
             # A return code of 143 (128+15) means that the process received SIGTERM,
             # probably from our command watchdog timer.  Detect that and make it clearer.
-            die 1 "$CHECKNAME:  Command \"$*\" timed out after $CMD_TIMEOUT seconds and was terminated"
+            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"$*\"; subprocess terminated."
             return 1
         fi
-        die 1 "$CHECKNAME:  Command \"$*\" returned $RET${CMD_RETVAL:+ (expecting $CMD_RETVAL)}"
+        die 1 "$CHECKNAME:  $RET${CMD_RETVAL:+ (expected $CMD_RETVAL)} returned by \"$*\"."
         return 1
     fi
     return 0

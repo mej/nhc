@@ -14,7 +14,7 @@ function check_cmd_output() {
 
     MATCHES=( )
     OPTIND=1
-    while getopts ":C:O:e:m:r:t:" OPTION ; do
+    while getopts ":C:M:O:e:m:r:t:" OPTION ; do
         case "$OPTION" in
             C) CHECKNAME="$OPTARG" ;;  # Used for writing wrapper checks
             O) OUTPUT_VAR="$OPTARG" ;;  # Used for writing wrapper checks
@@ -78,7 +78,7 @@ function check_cmd_output() {
                 if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
                     # Match expression is negated.  Fail if the line matches this expression.
                     if mcheck "${LINES[$LINENO]}" "${MATCHES[$i]:1}" ; then
-                        MSG=${MSGS[$i]:-\"%m\" matched at line %l output by \"%c\"}
+                        MSG=${MSGS[$i]:-\"%m\" matched at line %l of \"%c\"}
                         MSG=${MSG//\%m/${MATCHES[$i]:1}}
                         MSG=${MSG//\%l/$((LINENO+1))}
                         MSG=${MSG//\%c/$CMD}
@@ -127,10 +127,11 @@ function check_cmd_output() {
 
     for ((i = 0; i < ${#MATCHES[*]}; i++)); do
         if [[ ${MATCHED[$i]} == 0 ]]; then
-            MSG=${MSGS[$i]:-\"%m\" failed to match \"%c\" output}
+            MSG=${MSGS[$i]:-\"%m\" failed to match \"%c\" output (%f patterns failed)}
             MSG=${MSG//\%m/${MATCHES[0]}}
             MSG=${MSG//\%c/$CMD}
-            die 1 "$CHECKNAME:  $MSG ($((${#MATCHES[*]}-MATCH_CNT))/${#MATCHES[*]} patterns failed)."
+            MSG=${MSG//\%f/$((${#MATCHES[*]}-MATCH_CNT))/${#MATCHES[*]}}
+            die 1 "$CHECKNAME:  $MSG."
             return 1
         fi
     done

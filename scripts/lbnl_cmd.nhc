@@ -12,7 +12,6 @@ function check_cmd_output() {
     local LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
     local -a CMD_LIST LINES MATCHES MATCHED MSGS
 
-    MATCHES=( )
     OPTIND=1
     while getopts ":C:M:O:e:m:r:t:" OPTION ; do
         case "$OPTION" in
@@ -81,6 +80,7 @@ function check_cmd_output() {
                         MSG=${MSGS[$i]:-\"%m\" matched at line %l of \"%c\"}
                         MSG=${MSG//\%m/${MATCHES[$i]:1}}
                         MSG=${MSG//\%l/$((LINENO+1))}
+                        MSG=${MSG//\%L/${LINES[$LINENO]//[\"\`\$]}}
                         MSG=${MSG//\%c/$CMD}
                         die 1 "$CHECKNAME:  $MSG."
                         return 1
@@ -181,4 +181,26 @@ function check_cmd_status() {
         return 1
     fi
     return 0
+}
+
+# Check dmesg output for matching lines.  Fairly simple wrapper for check_cmd_output() (above).
+function check_cmd_dmesg() {
+    local CMD_TIMEOUT CMD_RETVAL CMD="dmesg"
+    local -a MATCHES MSGS
+
+    OPTIND=1
+    while getopts ":M:e:m:r:t:" OPTION ; do
+        case "$OPTION" in
+            M) MSGS[${#MSGS[*]}]=-M ; MSGS[${#MSGS[*]}]="$OPTARG" ;;
+            e) CMD="$OPTARG" ;;
+            m) MATCHES[${#MATCHES[*]}]=-m ; MATCHES[${#MATCHES[*]}]="$OPTARG" ;;
+            r) CMD_RETVAL="$OPTARG" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    check_cmd_output -C $FUNCNAME ${CMD_RETVAL:+-r $CMD_RETVAL} ${CMD_TIMEOUT:+-t $CMD_TIMEOUT} -e "$CMD" "${MSGS[@]}" "${MATCHES[@]}"
 }

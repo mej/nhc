@@ -50,7 +50,7 @@ function die() {
     log "ERROR:  $NAME:  Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
-    if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
+    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -419,7 +419,7 @@ function nhcmain_find_rm() {
     fi
 
     if [[ -z "$NHC_RM" ]]; then
-        log "Unable to detect resource manager."
+        dbg "Unable to detect resource manager."
         return 1
     fi
 }
@@ -618,7 +618,7 @@ function nhcmain_run_checks() {
 }
 
 function nhcmain_mark_online() {
-    if [[ "$MARK_OFFLINE" = "1" ]]; then
+    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 ]]; then
         eval $ONLINE_NODE "'$HOSTNAME'"
     fi
 }

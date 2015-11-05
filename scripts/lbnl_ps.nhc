@@ -25,6 +25,8 @@ function nhc_ps_gather_data() {
     local IFS PS_DATA THIS_PID i
     local -a LINES LINE
 
+    PS_PROCS=( ) PS_USER=( ) PS_PPID=( ) PS_PCPU=( ) PS_PMEM=( ) PS_RSS=( ) PS_VSZ=( ) PS_TIME=( ) PS_ARGS=( )
+
     # We need passwd data to resolve UIDs for users with lengthy userids
     if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
@@ -379,10 +381,10 @@ function check_ps_blacklist() {
 }
 
 # Check to make sure a service is (or isn't) running.  Syntax:
-#  check_ps_service [-0] [-f] [-S|-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
+#  check_ps_service [-0] [-f] [-v|-V] [-S|-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
 function check_ps_service() {
-    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 ACTION FOUND_ACTION
-    local THIS_PID THIS_SVC i MSG
+    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 VERIFY_SYNC=0 VERIFY_CHECK=0
+    local ACTION FOUND_ACTION THIS_PID THIS_SVC i MSG RET CMD
     local -a ARGS
 
     if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
@@ -390,20 +392,22 @@ function check_ps_service() {
     fi
 
     OPTIND=1
-    while getopts ":0Sfrcsku:d:m:e:E:" OPTION ; do
+    while getopts ":0E:SVcd:e:fkm:rsu:v" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
-            S) START=1 ;;
-            f) FULLMATCH=1 ;;
-            r) RESTART=1 ;;
-            c) CYCLE=1 ;;
-            s) STOP=1 ;;
-            k) KILL=1 ;;
-            u) OWNER="$OPTARG" ;;
-            d) DAEMON="$OPTARG" ;;
-            m) MATCH="$OPTARG" ;;
-            e) ACTION="$OPTARG" ;;
             E) FOUND_ACTION="$OPTARG" ;;
+            S) START=1 ;;
+            V) VERIFY_CHECK=1 ;;
+            c) CYCLE=1 ;;
+            d) DAEMON="$OPTARG" ;;
+            e) ACTION="$OPTARG" ;;
+            f) FULLMATCH=1 ;;
+            k) KILL=1 ;;
+            m) MATCH="$OPTARG" ;;
+            r) RESTART=1 ;;
+            s) STOP=1 ;;
+            u) OWNER="$OPTARG" ;;
+            v) VERIFY_SYNC=1 ;;
             :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
             \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
@@ -444,21 +448,94 @@ function check_ps_service() {
             fi
         fi
         # We have a matching process with the correct owner.
-        if [[ "$FOUND_ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
-        fi
-        if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+        if [[ $STOP -eq 1 || $KILL -eq 1 || -n "$FOUND_ACTION" ]]; then
             # Logic is inverted; we DON'T want this process running, so finding it is a failure.
             MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }running"
-            if [[ "$KILL" == "1" ]]; then
-                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
-                MSG="$MSG; killed process ID $THIS_PID"
-            else
-                # $STOP must be 1
+            if [[ $KILL -eq 1 ]]; then
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; killed process ID $THIS_PID (test mode)"
+                else
+                    kill -9 $THIS_PID
+                    RET=$?
+                    if [[ $VERIFY_SYNC -eq 1 ]]; then
+                        # VERIFY_SYNC here only means we check the return value of the kill built-in.
+                        if [[ $RET -eq 0 ]]; then
+                            log "$MSG; process ID $THIS_PID killed successfully."
+                            continue
+                        else
+                            MSG="$MSG; \"kill -9 $THIS_PID\" failed (exit code $RET)."
+                        fi
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK here means we kill the PID again and make sure it's gone.
+                        # Sleep very briefly to yield CPU, hopefully ensuring signal delivery.
+                        sleep 0.01
+                        if [[ $RET -ne 0 ]]; then
+                            MSG="$MSG; \"kill -9 $THIS_PID\" failed (exit code $RET)."
+                        elif kill -0 $THIS_PID ; then
+                            MSG="$MSG; \"kill -9 $THIS_PID\" succeeded but failed to terminate process."
+                        else
+                            log "$MSG; process ID $THIS_PID terminated successfully."
+                            return 0
+                        fi
+                    else
+                        MSG="$MSG; killed process ID $THIS_PID (SIGKILL)"
+                    fi
+                fi
+            elif [[ $STOP -eq 1 ]]; then
                 ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" &
-                MSG="$MSG; termination in progress"
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; termination in progress"
+                elif [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+                    # In VERIFY mode, we must "foreground" the service action to check its return value.
+                    wait $!
+                    RET=$?
+                    if [[ $RET -ne 0 ]]; then
+                        # If the "stop" fails, both VERIFY modes do the same thing.
+                        MSG="$MSG; \"/sbin/service $SERVICE stop\" failed (exit code $RET)."
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK mode requires that we also make sure the PID is really gone now.
+                        if kill -0 $THIS_PID ; then
+                            MSG="$MSG; \"/sbin/service $SERVICE stop\" succeeded but failed to stop process $THIS_PID."
+                        else
+                            log "$MSG; service $SERVICE stopped and process $THIS_PID terminated successfully."
+                            return 0
+                        fi
+                    else
+                        log "$MSG; service $SERVICE stopped successfully."
+                        return 0
+                    fi
+                else
+                    MSG="$MSG; service termination in progress"
+                fi
+            else
+                # We must have a $FOUND_ACTION to run.
+                ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; \"$FOUND_ACTION\" in progress."
+                elif [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+                    # In VERIFY mode, we must "foreground" the action to check its return value.
+                    wait $!
+                    RET=$?
+                    if [[ $RET -ne 0 ]]; then
+                        # If the action fails, both VERIFY modes do the same thing.
+                        MSG="$MSG failed (exit code $RET)."
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK mode requires that we also make sure the PID is really gone now.
+                        if kill -0 $THIS_PID ; then
+                            MSG="$MSG succeeded but failed to terminate process $THIS_PID."
+                        else
+                            log "$MSG successfully terminated service $SERVICE (process $THIS_PID)."
+                            return 0
+                        fi
+                    else
+                        log "$MSG succeeded."
+                        return 0
+                    fi
+                else
+                    MSG="$MSG; \"$FOUND_ACTION\" in progress."
+                fi
             fi
-            if [[ $NONFATAL == 1 ]]; then
+            if [[ $NONFATAL -eq 1 ]]; then
                 if [[ -n "$MSG" ]]; then
                     log "$MSG (non-fatal)"
                 fi
@@ -472,26 +549,51 @@ function check_ps_service() {
     done
 
     # No matching process found.
-    if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+    if [[ $STOP -eq 1 || $KILL -eq 1 || -n "$FOUND_ACTION" ]]; then
         # Logic is inverted; we DON'T want this process running, so not finding it is a success.
         return 0
     fi
 
     MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
-    if [[ $START == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" &
-        MSG="$MSG; start in progress"
-    elif [[ $RESTART == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
-        MSG="$MSG; restart in progress"
-    elif [[ $CYCLE == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" &
-        MSG="$MSG; cycle in progress"
-    elif [[ "$ACTION" != "" ]]; then
-        ${SHELL:-/bin/bash} -c "$ACTION" &
-        MSG="$MSG; executed \"$ACTION\""
+    if [[ $START -eq 1 || $RESTART -eq 1 || $CYCLE -eq 1 || "$ACTION" != "" ]]; then
+        if [[ $START -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE start"
+            MSG="$MSG; start"
+        elif [[ $RESTART -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE restart"
+            MSG="$MSG; restart"
+        elif [[ $CYCLE -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start"
+            MSG="$MSG; cycle"
+        elif [[ "$ACTION" != "" ]]; then
+            CMD="$ACTION"
+            MSG="$MSG; \"$ACTION\""
+        fi
+        ${SHELL:-/bin/bash} -c "$CMD" &
+        if [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+            wait $!
+            RET=$?
+            if [[ $RET -ne 0 ]]; then
+                # If the command fails, both VERIFY modes do the same thing.
+                MSG="$MSG failed (exit code $RET)."
+            elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                # VERIFY_CHECK mode requires that we also make sure the process/service is now running.
+                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE status" >&/dev/null
+                if [[ $? -ne 0 ]]; then
+                    MSG="$MSG succeeded but failed to start service $SERVICE."
+                else
+                    log "$MSG succeeded; service $SERVICE now running."
+                    return 0
+                fi
+            else
+                log "$MSG; service $SERVICE stopped successfully."
+                return 0
+            fi
+        else
+            MSG="$MSG in progress"
+        fi
     fi
-    if [[ $NONFATAL == 1 ]]; then
+    if [[ $NONFATAL -eq 1 ]]; then
         if [[ -n "$MSG" ]]; then
             log "$MSG (non-fatal)"
         fi

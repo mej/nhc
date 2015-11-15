@@ -1,5 +1,5 @@
 AC_PREREQ(2.59)
-AC_INIT([lbnl-nhc], [1.4.2], [nhc-devel@lbl.gov])
+AC_INIT([lbnl-nhc], [1.4.3], [nhc-devel@lbl.gov])
 AC_CONFIG_SRCDIR([.])
 
 AC_PROG_INSTALL
@@ -18,7 +18,7 @@ dnl# "autoconf" time, when we're sure to have a Git repo, rather than configure
 dnl# time.  We have to change the m4 quote characters due to the regex we use.
 AC_MSG_CHECKING([for Git version description])
 changequote(<<, >>)dnl
-GITVERSION=m4_esyscmd(<<git describe --dirty | tr -d '\012' | sed -e 's/^[^-]*-//;s/-/./g;s/dirty/1/'>>)
+GITVERSION=m4_esyscmd(<<git describe --long --dirty | tr -d '\012' | sed -e 's/^[^-]*-//;s/-/./g;s/dirty/1/'>>)
 changequote([, ])dnl
 
 if test -n "$GITVERSION" ; then

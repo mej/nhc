@@ -181,6 +181,26 @@ function kill_watchdog() {
     return 0
 }
 
+function toggle_bash_tracing() {
+    if [[ "$-" == *x* ]]; then
+        : "BASH tracing mode (-x) turned off via SIGUSR1."
+        set +x
+    else
+        set -x
+        : "BASH tracing mode (-x) turned on via SIGUSR1."
+    fi
+}
+
+function toggle_debug_mode() {
+    if [[ -z "$DEBUG" || "$DEBUG" -eq 0 ]]; then
+        DEBUG=1
+        dbg "NHC DEBUG mode turned on via SIGUSR2."
+    else
+        dbg "NHC DEBUG mode turned off via SIGUSR2."
+        DEBUG=0
+    fi
+}
+
 #########################
 
 function nhcmain_init_env() {
@@ -660,6 +680,8 @@ if [[ -n "$NHC_LOAD_ONLY" ]]; then
     return 0 || exit 0
 fi
 
+trap 'toggle_bash_tracing' SIGUSR1
+trap 'toggle_debug_mode' SIGUSR2
 trap 'die 129 "Terminated by signal SIGHUP." ; exit 129' 1
 trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15

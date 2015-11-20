@@ -699,20 +699,23 @@ fi
 nhcmain_redirect_output
 nhcmain_check_conffile || exit 0
 if [[ "$NHC_RM" == "sge" ]]; then
-    while : ; do
-        read INPUT
-        if [[ $? != 0 || "$INPUT" == "quit" ]]; then
-            exit 0
-        fi
-	# We need to do this each time to flush the caches which the
-	# scripts mostly keep (filesystems, process trees, etc.).
-	# Also the scripts can be changed without having to kill the
-	# sensor on all the hosts to pick that up.
-	nhcmain_load_scripts
-        if nhcmain_run_checks ; then
-            nhcmain_finish
-        fi
-    done
+    read INPUT
+    if [[ $? != 0 || "$INPUT" == "quit" ]]; then
+        exit 0
+    fi
+    # We need to do this each time to flush the caches which the
+    # scripts mostly keep (filesystems, process trees, etc.).
+    # Also the scripts can be changed without having to kill the
+    # sensor on all the hosts to pick that up.
+    nhcmain_load_scripts
+    if nhcmain_run_checks ; then
+        nhcmain_finish
+    fi
+    if [[ "$*" == *NHC_RM=sge* ]]; then
+        exec $0 "$@"
+    else
+        exec $0 "$@" NHC_RM=sge
+    fi
 else
     nhcmain_load_scripts
     nhcmain_set_watchdog

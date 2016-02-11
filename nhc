@@ -617,6 +617,7 @@ function nhcmain_run_checks() {
         kill_watchdog
         exit $FAIL_CNT
     fi
+    CHECK="post check portions of nhc, after all checks completed successfully"
 }
 
 function nhcmain_mark_online() {

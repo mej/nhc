@@ -349,24 +349,21 @@ function nhc_load_conf() {
             CHECK="${CHECK%%[$WS]}"
         done
 
-        # Skip comments.
         if [[ "${TARGET###}" != "$TARGET" ]]; then
+            # Skip comments.
             continue
+        elif [[ -z "$TARGET" || -z "$CHECK" ]]; then
+            # Skip empty targets or checks.
+            continue
+        elif mcheck "$HOSTNAME" "$TARGET"; then
+             # Node's hostname matches target string.
+             dbg "Host match check:  \"${HOSTNAME}\" matches \"${TARGET}\" for check:  $CHECK"
+             # Add the check to our list.
+             CHECKS[${#CHECKS[*]}]="$CHECK"
+        else
+             # Host does not match target.  Continue to the next line.
+             dbg "Host match check:  \"${HOSTNAME}\" failed to match \"${TARGET}\" for check:  $CHECK"
         fi
-
-        # Skip empty targets or checks.
-        test "$TARGET" = "" -o "$CHECK" = "" && continue
-
-        # Print Debug Information if a check does not match
-        mcheck "$HOSTNAME" "$TARGET" || dbg "Host match check: '${HOSTNAME}' does not match '${TARGET}' for check: $CHECK"
-        mcheck "$HOSTNAME" "$TARGET" && dbg "Host match check: '${HOSTNAME}' does match '${TARGET}' for check: $CHECK"
-
-        # Check to see if the current host matches the check we just read.
-        # If we didn't match, skip to the next line.
-        mcheck "$HOSTNAME" "$TARGET" || continue
-
-        # Add the check to our list.
-        CHECKS[${#CHECKS[*]}]="$CHECK"
     done < "$CONFFILE"
 }
 

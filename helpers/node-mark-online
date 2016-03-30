@@ -74,7 +74,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
             exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$HOSTNAME
             ;;
-        alloc*|comp*|idle*|mix*|resume*|undrain*)
+        alloc*|comp*|idle*|mix*|resume*|resv*|undrain*)
             # Node is already online.
             echo "$0:  Node $HOSTNAME is already online."
             ;;

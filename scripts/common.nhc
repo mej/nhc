@@ -263,8 +263,9 @@ function mcheck_glob() {
     fi
 }
 
-# Check to see if an external node match expression ($2) contains a node ($1)
+# Check to see if an external node match expression ($3) contains a node ($2)
 function mcheck_external() {
+    local SDELIM="${NHC_MCHECK_DELIM[$1]:0:1}" EDELIM="${NHC_MCHECK_DELIM[$1]: -1:1}"
     local STRING="$2"
     local MATCH="$3"
     local MCHECK_CMD="${NHC_MCHECK_COMMAND[$1]}"
@@ -274,20 +275,20 @@ function mcheck_external() {
     eval $MCHECK_CMD &
     wait $!
     if [[ $? -eq 0 ]]; then
-        dbg "External match check:  $STRING matches %$MATCH%"
+        dbg "External match check:  $STRING matches $SDELIM$MATCH$EDELIM (via \"$MCHECK_CMD\")"
         return 0
     elif [[ $? -eq 127 ]]; then
-        die "External match check command \"$NHC_MCHECK_COMMAND\" not found or invalid"
+        die "External match check command \"$MCHECK_CMD\" not found or invalid"
         # FIXME:  Force exit here?
         return 127
     else
-        dbg "External match check:  $STRING does not match %$MATCH%"
+        dbg "External match check:  $STRING does not match $SDELIM$MATCH$EDELIM"
         return 1
     fi
 }
 
 # Detect regexp match (/.../), range match ({...}), external match
-# (%...%), or glob match (no delimiters), and call the appropriate
+# (dynamic), or glob match (no delimiters), and call the appropriate
 # mcheck_*() function above.
 function mcheck() {
     local STRING="$1"

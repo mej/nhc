@@ -47,11 +47,18 @@ function die() {
     shift
 
     CHECK_DIED=1
+    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $*"
     log "ERROR:  $NAME:  Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
     if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
-        eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+        if [[ "${CHECK:0:4}" == "die " ]]; then
+            CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
+            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+            CHECK="$FUNCNAME $*"
+        else
+            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+        fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         if [[ -w "$RESULTFILE" ]]; then
@@ -607,6 +614,7 @@ function nhcmain_run_checks() {
             return $RET
         fi
     done
+    CHECK=""
     if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
@@ -617,7 +625,6 @@ function nhcmain_run_checks() {
         kill_watchdog
         exit $FAIL_CNT
     fi
-    CHECK="post check portions of nhc, after all checks completed successfully"
 }
 
 function nhcmain_mark_online() {

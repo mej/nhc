@@ -220,7 +220,11 @@ function nhcwrap_spawn_command() {
     vecho "Executing \"$SUBPROG ${ARGLIST[*]}\"" `date "+$NW_DATEFMT"`
     # Remove output file so that it will be recreated by bash with ctime of now.
     rm -f "$OUTFILE"
-    "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
+    if [[ "$VERBOSE" -eq 1 ]]; then
+        "$SUBPROG" "${ARGLIST[@]}" 2>&1 | tee "$OUTFILE"
+    else
+        "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
+    fi
     RC=$?
     vecho "$SUBPROG returned $RC" `date "+$NW_DATEFMT"`
 

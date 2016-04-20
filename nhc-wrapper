@@ -250,7 +250,7 @@ function nhcwrap_spawn_command() {
 }
 
 function nhcwrap_check_output() {
-    local RC
+    local PROG_RC=$1 RC
 
     if [[ -f "$SAVEFILE" ]]; then
         # We have previous results, so compare them against the new results.
@@ -270,7 +270,7 @@ function nhcwrap_check_output() {
             PREV_RESULTS=$(< "$SAVEFILE")
             rm -f "$SAVEFILE"
             mv -f "$OUTFILE" "$SAVEFILE"
-            RC=1
+            RC=$PROG_RC
         fi
     elif [[ ! -s "$OUTFILE" ]]; then
         # Empty output and no previous save file.
@@ -281,7 +281,7 @@ function nhcwrap_check_output() {
         # Non-empty output and no saved results file.
         vecho "Output file is non-empty (no saved results file found)."
         mv -f "$OUTFILE" "$SAVEFILE"
-        RC=1
+        RC=$PROG_RC
     fi
 
     return $RC
@@ -348,7 +348,7 @@ function nhcwrap_loop() {
             echo "Invoking $SUBPROG at" `date "+$NW_DATEFMT"`
         fi
         nhcwrap_spawn_command
-        nhcwrap_check_output || nhcwrap_report_results
+        nhcwrap_check_output $? || nhcwrap_report_results
     done
     return 0
 }
@@ -358,7 +358,7 @@ nhcwrap_parse_cmdline "$@" || exit 99
 nhcwrap_finalize_env
 
 nhcwrap_spawn_command
-nhcwrap_check_output || nhcwrap_report_results
+nhcwrap_check_output $? || nhcwrap_report_results
 if [[ -n "$LOOP_TS" ]]; then
     nhcwrap_loop
 fi

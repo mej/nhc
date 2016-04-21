@@ -188,6 +188,7 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+    PS4='>[${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
     SYSCONFIGDIR="/etc/sysconfig"
     LIBEXECDIR="/usr/libexec"
     if [[ -r /proc/sys/kernel/hostname ]]; then
@@ -208,7 +209,7 @@ function nhcmain_init_env() {
     FORCE_SETSID=1
     NHC_FD_OUT=1
     NHC_FD_ERR=2
-    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
+    export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
     export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.

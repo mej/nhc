@@ -115,6 +115,35 @@ function array_join() {
         fi
     fi
 }
+
+### Show a stack trace of bash functions and file locations
+function bash_stack_trace() {
+    local FRAME ARGS ARGC i
+    local -a ARGV=( "${BASH_ARGV[@]}" )
+
+    for ((FRAME=1; FRAME < ${#FUNCNAME[*]}; FRAME++)); do
+        ARGS=""
+        if shopt -q extdebug; then
+            ARGC=${BASH_ARGC[$FRAME]:-0}
+            if [[ $ARGC -gt 0 ]]; then
+                for ((i=1; i <= ARGC; i++)); do
+                    if [[ ${ARGV[ARGC-i]} == *[[:space:]]* ]]; then
+                        ARGV[ARGC-i]=\"${ARGV[ARGC-i]//\"/\\\"}\"
+                    fi
+                    ARGS+=${ARGV[ARGC-i]}', '
+                    if [[ $ARGC -eq $i ]]; then
+                        ### FIXME:  BASH bug?  "unset ARGV[0]" deletes the whole array!
+                        ARGV=( "${ARGV[@]:1}" )
+                    else
+                        unset ARGV[ARGC-i]
+                    fi
+                done
+                ARGS="${ARGS%, }"
+            fi
+        fi
+        echo "[BT]:  ${FUNCNAME[$FRAME]}($ARGS) at ${BASH_SOURCE[$FRAME]:-<UNK-FILE>}:${BASH_LINENO[$((FRAME-1))]:-<UNK-LINE>}"
+    done
+}
 ###########################################################
 
 # Define regexp match check conditionally based on bash version.

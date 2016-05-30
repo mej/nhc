@@ -188,7 +188,7 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
+    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
     SYSCONFIGDIR="/etc/sysconfig"
     LIBEXECDIR="/usr/libexec"
     if [[ -r /proc/sys/kernel/hostname ]]; then

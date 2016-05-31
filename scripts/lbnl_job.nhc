@@ -54,7 +54,7 @@ function nhc_job_find_users() {
     elif [[ "$NHC_RM" == "slurm" ]]; then
         SLURM_SERVER_HOME="${SLURM_SERVER_HOME:-/var/spool/slurmd}"
         JOBFILE_PATH="${JOBFILE_PATH:-$SLURM_SERVER_HOME}"
-	SQUEUE_OUT=$(${SQUEUE_CMD:-/usr/bin/squeue} ${SQUEUE_NODE:--w $(hostname -s)} ${SQUEUE_FMT_ARGS:---noheader -o  %u})
+	SQUEUE_OUT=$(${SQUEUE_CMD:-/usr/bin/squeue} ${SQUEUE_NODE:--w ${HOSTNAME_S}} ${SQUEUE_FMT_ARGS:---noheader -o %u})
         IFS=$'\n'
         USERLIST=( $SQUEUE_OUT )
         IFS=$' \t\n'

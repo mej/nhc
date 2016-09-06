@@ -21,11 +21,11 @@ The following instructions will walk you through downloading and installing LBNL
 
 ### Installation
 
-Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes (e.g., [lbnl-nhc-1.4.1-1.el6.noarch.rpm](https://github.com/mej/nhc/releases/1.4.1/archive/lbnl-nhc-1.4.1-1.el6.noarch.rpm)) and install it into your compute node VNFS.
+Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes (e.g., [lbnl-nhc-1.4.2-1.el7.noarch.rpm](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2-1.el7.noarch.rpm)) and install it into your compute node VNFS.
 
 The NHC Yum repository is currently unavailable, but we hope to provide one in the very near future!
 
-The [source tarball for the latest release](https://github.com/mej/nhc/releases/1.4.1/archive/lbnl-nhc-1.4.1.tar.gz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
+The [source tarball for the latest release](https://github.com/mej/nhc/archive/1.4.2.tar.gz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
 
 ```
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec

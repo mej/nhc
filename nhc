@@ -245,7 +245,7 @@ $UNDERLINE
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
- -t <timeout>      Use timeout of <timeout> seconds (default: 10)
+ -t <timeout>      Use timeout of <timeout> seconds (default: 30)
  -v                Run verbosely (i.e., VERBOSE=1)
  -x                Run in eXtreme debug/trace mode (same as "bash -x")
 

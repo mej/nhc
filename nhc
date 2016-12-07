@@ -433,10 +433,24 @@ function nhcmain_find_rm() {
         NHC_RM="sge"
     fi
 
+    if [[ -d /var/spool/pbs ]]; then
+        NHC_RM="pbspro"
+        return 0
+    fi
+
     # Search PATH for commands
     if type -a -p -f -P pbsnodes >&/dev/null ; then
-        NHC_RM="pbs"
-        return 0
+        # PBSpro prints version to stdout, Torque prints version to stderr
+        VERSION_LINE=( $($(type -a -p -f -P pbsnodes) --version 2>&1) )
+        if [[ "pbs_version" == ${VERSION_LINE[0]} ]]; then
+            NHC_RM="pbspro"
+            return 0
+        else
+            # Assume Torque if its not PBSpro
+            # [[ "Version:" == ${VERSION_LINE[0]} ]] is True
+            NHC_RM="pbs"
+            return 0
+        fi
     elif type -a -p -f -P scontrol >&/dev/null ; then
         NHC_RM="slurm"
         return 0

@@ -47,7 +47,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
 
 
-### PBSpro
+### PBSPRO
 elif [[ "$NHC_RM" == "pbspro" ]]; then
     PBSNODES="${PBSNODES:-pbsnodes}"
     PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--l}"
@@ -58,7 +58,6 @@ elif [[ "$NHC_RM" == "pbspro" ]]; then
     for LINE_RAW in $LINES; do
     IFS=' '
     LINE=( $LINE_RAW )
-    echo "${LINE[0]}" >> /tmp/testnhc
     if [[ "${LINE[0]}" == "$HOSTNAME" ]]; then
     STATUS="${LINE[1]}"
     OLD_NOTE_LEADER="${LINE[2]}"

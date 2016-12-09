@@ -75,8 +75,11 @@ elif [[ "$NHC_RM" == "pbspro" ]]; then
                 exit 0
             fi
             echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
-            exec $PBSNODES $PBSNODES_ONLINE_ARGS $HOSTNAME
-            exec $PBSNODES -C '' $HOSTNAME # Note Clear, With PBSpro you cannot clear in the same command
+            # PBSpro cannot clear and online in the same command
+            if $PBSNODES -C '' $HOSTNAME ; then
+                # If the note clear finished successfully, online node
+                exec $PBSNODES $PBSNODES_ONLINE_ARGS $HOSTNAME
+            fi
             ;;
     esac
     fi

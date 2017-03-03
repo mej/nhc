@@ -65,7 +65,8 @@ function nhc_ps_gather_data() {
     # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
-        LINE=( ${LINES[$i]//\*/\\\*} )
+        # The below escaping should no longer be needed now that globbing is disabled.
+        #LINE=( ${LINES[$i]//\*/\\\*} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi
@@ -80,8 +81,6 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
-        # NOTE:  We want to leave the *'s backslash-escaped for future expansion safety!
-        #PS_ARGS[$THIS_PID]="${PS_ARGS[$THIS_PID]//\\\*/*}"
         if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" ]]; then
             nhc_common_get_userid "${PS_UID[$THIS_PID]}" "PS_USER[$THIS_PID]"
         fi

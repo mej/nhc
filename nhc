@@ -244,6 +244,10 @@ function nhcmain_init_env() {
         export NHC_DETACHED
         DETACHED_MODE=1
     fi
+
+    # Disable pathname expansion by default so no unintended globbing happens.
+    # We'll turn it back on only where, and only for as long as, we need it.
+    set -f
 }
 
 function nhcmain_help() {
@@ -482,11 +486,17 @@ function nhcmain_check_conffile() {
 }
 
 function nhcmain_load_scripts() {
+    local -a NHC_SCRIPTS
+    local IFS=''
+
     vlog "Node Health Check starting."
 
     # Load all include scripts.
     dbg "Loading scripts from $INCDIR..."
-    for SCRIPT in $INCDIR/*.nhc ; do
+    set +f
+    NHC_SCRIPTS=( $INCDIR/*.nhc )
+    set -f
+    for SCRIPT in "${NHC_SCRIPTS[@]}" ; do
 	if [[ -e "$SCRIPT" ]]; then
             dbg "Loading ${SCRIPT/#*\/}"
             . $SCRIPT

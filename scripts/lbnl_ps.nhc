@@ -66,7 +66,7 @@ function nhc_ps_gather_data() {
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
         # The below escaping should no longer be needed now that globbing is disabled.
-        #LINE=( ${LINES[$i]//\*/\\\*} )
+        LINE=( ${LINES[$i]} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi

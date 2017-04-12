@@ -2,6 +2,8 @@
 
 [![Join the chat at https://gitter.im/mej/nhc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mej/nhc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+[![Join the chat at https://gitter.im/mej/nhc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mej/nhc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 TORQUE, SLURM, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
 
 Though many sites have created their own scripts to serve this function, the vast majority are one-off efforts with little attention paid to extensibility, flexibility, reliability, speed, or reuse.  Developers at [Lawrence Berkeley National Laboratory](http://www.lbl.gov/) created this project in an effort to change that.  LBNL Node Health Check (NHC) has several design features that set it apart from most home-grown solutions:

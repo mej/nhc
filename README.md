@@ -166,6 +166,20 @@ Once the configuration has been modified, try running `/usr/sbin/nhc` again.  Co
 Instructions for putting NHC into production depend entirely on your use case.  We can't possibly hope to delineate them all, but we'll cover some of the most common.
 
 
+#### SLURM Integration
+
+Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
+
+```
+HealthCheckProgram=/usr/sbin/nhc
+HealthCheckInterval=300
+```
+
+This will execute NHC every 5 minutes.
+
+For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
+
+
 #### TORQUE Integration
 
 NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/help.htm#topics/11-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
@@ -199,18 +213,30 @@ This will cause the offline/online helpers to use the shorter hostname when invo
 It's also important to note here that NHC will only set a note on nodes that don't already have one (and aren't yet offline) or have one set by NHC itself; also, it will only online nodes and clear notes if it sees a note that was set by NHC.  It looks for the string "NHC:" in the note to distinguish between notes set by NHC and notes set by operators.  If you use this feature, and you need to mark nodes offline manually (e.g., for testing), setting a note when doing so is strongly encouraged.  (You can do this via the `-N` option, like this:  `pbsnodes -o -N 'Testing stuff' n0000 n0001 n0002`)  There was a bug in versions prior to 1.2.1 which would cause it to treat nodes with no notes the same way it treats nodes with NHC-assigned notes.  This _should_ be fixed in 1.2.1 and higher, but you never know....
 
 
-#### SLURM Integration
+#### Grid Engine Integration
 
-Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
+Sun Grid Engine (SGE) has had a somewhat "colorful"
+[history](https://en.wikipedia.org/wiki/Oracle_Grid_Engine#History)
+over the years.  It has evolved and changed hands numerous times, and
+there are currently multiple incarnations of it which are developed
+under both commercial and open source models.  Unfortunately, I don't
+have a whole lot of experience with any of them -- it was on its way
+out when I first joined the [team](http://scs.lbl.gov/) at
+[LBNL](https://www.lbl.gov/) and was eliminated completely shortly
+thereafter.  So I'm afraid I don't have the expertise to get NHC
+working with any of the Grid Engine variants.
 
-```
-HealthCheckProgram=/usr/sbin/nhc
-HealthCheckInterval=300
-```
-
-This will execute NHC every 5 minutes.
-
-For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
+The good news, though, is that Dave Love -- developer of the [Son of
+Grid Engine](https://arc.liv.ac.uk/SGE/) open source project -- does!
+He has made [multiple](https://github.com/mej/nhc/commit/46899ea7)
+[contributions](https://github.com/mej/nhc/commit/642c420e) over the
+years to help get NHC integrating effectively with SGE and all the
+assorted Grid Engine variants.  Additionally, he put together a great
+[recipe](https://arc.liv.ac.uk/SGE/howto/nhc-recipe.html) to help SGE
+users (and other users of &#x2753;GE incarnations), so rather than try
+to reproduce it here and keep it updated, I recommend you peruse his
+work in its entirety if you're a user of one of those products!
+&#x1f935;
 
 
 #### Periodic Execution

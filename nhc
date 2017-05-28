@@ -437,10 +437,21 @@ function nhcmain_find_rm() {
         NHC_RM="sge"
     fi
 
+    if [[ -d /var/spool/pbs ]]; then
+        NHC_RM="pbspro"
+        return 0
+    fi
+
     # Search PATH for commands
     if type -a -p -f -P pbsnodes >&/dev/null ; then
-        NHC_RM="pbs"
-        return 0
+        if  type -a -p -f -P pbs_password >&/dev/null ; then
+            # PBSpro has the command pbs_password, Torque does not
+            NHC_RM="pbspro"
+            return 0
+        else
+            NHC_RM="pbs"
+            return 0
+        fi
     elif type -a -p -f -P scontrol >&/dev/null ; then
         NHC_RM="slurm"
         return 0

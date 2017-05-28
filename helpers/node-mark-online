@@ -47,6 +47,46 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
 
 
+### PBSPRO
+elif [[ "$NHC_RM" == "pbspro" ]]; then
+    PBSNODES="${PBSNODES:-pbsnodes}"
+    PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--l}"
+    PBSNODES_ONLINE_ARGS="${PBSNODES_ONLINE_ARGS:--c}"
+
+    IFS=$'\n'
+    LINES=$($PBSNODES $PBSNODES_LIST_ARGS)
+    for LINE_RAW in $LINES; do
+    IFS=' '
+    LINE=( $LINE_RAW )
+    if [[ "${LINE[0]}" == "$HOSTNAME" ]]; then
+    STATUS="${LINE[1]}"
+    OLD_NOTE_LEADER="${LINE[2]}"
+    OLD_NOTE="${LINE[*]:3}"
+    case "$STATUS" in
+        *offline*)
+            # If there is no old note, and we've not been told to ignore that, do not online the node.
+            if [[ -z "$OLD_NOTE_LEADER" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  No note set."
+                exit 0
+            fi
+            # If there IS an old note, but it wasn't set by NHC, do not online the node.
+            if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+                echo "$0:  Not onlining $HOSTNAME:  Offline for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+                exit 0
+            fi
+            echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
+            # PBSpro cannot clear and online in the same command
+            if $PBSNODES -C '' $HOSTNAME ; then
+                # If the note clear finished successfully, online node
+                exec $PBSNODES $PBSNODES_ONLINE_ARGS $HOSTNAME
+            fi
+            ;;
+    esac
+    fi
+    done
+    echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+
+
 ### SLURM
 elif [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"

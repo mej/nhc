@@ -303,7 +303,7 @@ function check_file_stat() {
                 return 1
             elif [[ ${NHC_STAT_MODE[$IDX]} -ne $MODE_IS ]]; then
                 # File permissions should exactly equal $MODE_IS, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be $MODE_IS"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be $MODE_IS"
                 return 1
             fi
         fi
@@ -313,7 +313,7 @@ function check_file_stat() {
                 return 1
             elif [[ $((NHC_STAT_MODE[IDX] & MODE_MATCHES)) -ne $MODE_MATCHES ]]; then
                 # File permissions should include those specified in $MODE_MATCHES, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be at least $MODE_MATCHES"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be at least $MODE_MATCHES"
                 return 1
             fi
         fi

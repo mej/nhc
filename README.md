@@ -518,7 +518,7 @@ The LBNL Node Health Check distribution supplies the following checks:
 | **Check&nbsp;Option** | **Purpose** |
 | ---------------- | ----------- |
 | `-e`_`command`_ | Execute _`command`_ and gather its output.  The _`command`_ is split on word boundaries, much like `/bin/sh -c '...'` does. |
-| `-m`_`mstr`_ | If negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
+| `-m`_`mstr`_ | If the match string is negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
 | `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ or the check will fail. |
 | `-t`_`secs`_ | Command will timeout if not completed within _`secs`_ seconds (default is 5). |
 
@@ -603,7 +603,7 @@ _**Example** (verify setting of $pbsserver in pbs_mom config)_:  `check_file_con
 | `-U`_`name`_ | Specifies that filename(s) should be owned by user _`name`_ |
 | `-d`_`num`_ | Specifies that the device ID for _filename(s)_ should be _`num`_ (decimal or hex) |
 | `-g`_`gid`_ | Specifies that _filename(s)_ should be owned by group id _`gid`_ |
-| `-m`_`mode`_ | Specifies that the permissions for _filename(s)_ should include at LEAST the bits set in _`mode`_ |
+| `-m`_`mode`_ | Specifies that the permissions for _filename(s)_ should EXACTLY be the bits set in _`mode`_ |
 | `-n`_`secs`_ | Specifies that the `mtime` (i.e., modification time) of _filename(s)_ should be newer than _`secs`_ seconds ago |
 | `-o`_`secs`_ | Specifies that the `mtime` (i.e., modification time) of _filename(s)_ should be older than _`secs`_ seconds ago |
 | `-t`_`num`_ | Specifies that the major device number for _filename(s)_ be _`num`_ |

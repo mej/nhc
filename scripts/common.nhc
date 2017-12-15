@@ -277,7 +277,7 @@ function mcheck_external() {
         dbg "External match check:  $STRING matches %$MATCH%"
         return 0
     elif [[ $? -eq 127 ]]; then
-        die "External match check command \"$NHC_MCHECK_COMMAND\" not found or invalid"
+        die 1 "External match check command \"$NHC_MCHECK_COMMAND\" not found or invalid"
         # FIXME:  Force exit here?
         return 127
     else

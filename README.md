@@ -1232,8 +1232,12 @@ function check_stuff_works() {
 
     # Use cached data
     if [[ "${STUFF_ARRAY_VARIABLE[0]}" = "" ]]; then
-        die "Stuff is not working"
+        # check failed
+        die 1 "Stuff is not working"
+        return 1
     fi
+    
+    # check passed
     return 0
 }
 ```

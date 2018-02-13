@@ -48,6 +48,8 @@ function nhc_ps_gather_data() {
         # least.  (The shepherd process name is normally
         # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
         RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
+    elif [[ "$NHC_RM" == "lsf" ]]; then
+        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bres\b/}"
     else
         dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
     fi
@@ -704,7 +706,7 @@ function check_ps_userproc_lineage() {
         THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
-        if [[ ${THIS_UID:-0} -lt $MAX_SYS_UID ]]; then
+        if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi
         if mcheck "${NHC_AUTH_USERS}" "/(^|[^A-Za-z0-9])$THIS_USER(\$|[^A-Za-z0-9])/" ; then

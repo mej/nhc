@@ -28,6 +28,12 @@ else
     AC_MSG_RESULT([unknown, using default $GITVERSION])
 fi
 AC_SUBST([GITVERSION])
+AC_SUBST([exec_prefix])
+AC_SUBST([sbindir])
+AC_SUBST([bindir])
+AC_SUBST([prefix])
+
+#AC_CONFIG_FILES([nhc nhc-genconf nhc-wrapper])
 
 AC_OUTPUT([
    Makefile

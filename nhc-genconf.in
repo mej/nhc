@@ -145,7 +145,7 @@ function nhcgc_parse_cmdline() {
 }
 
 function nhcgc_finalize_env() {
-    CONFDIR="${CONFDIR:-/etc/nhc}"
+    CONFDIR="${CONFDIR:-@sysconfdir@/nhc}"
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf.auto}"
     INCDIR="${INCDIR:-$CONFDIR/scripts}"
     DEBUG=${DEBUG:-0}

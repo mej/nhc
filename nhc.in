@@ -315,7 +315,7 @@ function nhcmain_load_sysconfig() {
 function nhcmain_finalize_env() {
     # Set some variables relative to possible /etc/sysconfig/nhc
     # modifications.  Users may have overridden some of these.
-    CONFDIR="${CONFDIR:-/etc/nhc}"
+    CONFDIR="${CONFDIR:-@sysconfdir@/nhc}"
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
     INCDIR="${INCDIR:-$CONFDIR/scripts}"
     HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"

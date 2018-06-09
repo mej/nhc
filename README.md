@@ -1410,9 +1410,9 @@ So here are some ways the above constructs can be used to do common operations o
 | ------------------ | -------------------- |
 | `sed 's/^ *//'` | `while [[ "$LINE" != "${LINE## }" ]]; do LINE="${LINE## }" ; done` |
 | `sed 's/ *$//'` | `while [[ "$LINE" != "${LINE%% }" ]]; do LINE="${LINE%% }" ; done` |
-| `echo ${LIST[*]} | fgrep string` | `[[ "${LIST[*]//string}" != "${LIST[*]}" ]]` |
+| `echo ${LIST[*]} \| fgrep string` | `[[ "${LIST[*]//string}" != "${LIST[*]}" ]]` |
 | `tail -1` | `${LINES[*]:-1}` |
-| `cat file | tr '\r' ''` | `LINES=( "${LINES[@]//$'\r'}" )` |
+| `cat file \| tr '\r' ''` | `LINES=( "${LINES[@]//$'\r'}" )` |
 
 There are infinitely more, of course, but these should get you thinking along the right lines!
 

@@ -59,7 +59,7 @@ function nhc_ps_gather_data() {
         
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
-    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
+    LINES=( $(COLUMNS=1024 ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.

@@ -65,7 +65,8 @@ function nhc_ps_gather_data() {
     # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
-        LINE=( ${LINES[$i]//\*/\\\*} )
+        # The below escaping should no longer be needed now that globbing is disabled.
+        LINE=( ${LINES[$i]} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi
@@ -80,8 +81,6 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
-        # NOTE:  We want to leave the *'s backslash-escaped for future expansion safety!
-        #PS_ARGS[$THIS_PID]="${PS_ARGS[$THIS_PID]//\\\*/*}"
         if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" ]]; then
             nhc_common_get_userid "${PS_UID[$THIS_PID]}" "PS_USER[$THIS_PID]"
         fi
@@ -638,8 +637,22 @@ function check_ps_time() {
 # to be running on the node (i.e., root, and owners of current PBS jobs).
 # Arguments to function are actions to take (ignore, log, syslog, die, kill).
 function check_ps_unauth_users() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_CMD IGNORE_UID IGNORE_USER IGNORE_PID
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -658,6 +671,14 @@ function check_ps_unauth_users() {
         THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         nhc_job_user_auth "$THIS_USER" "$THIS_UID"
         IS_AUTH=$?
         if [[ $IS_AUTH -eq 0 ]]; then
@@ -684,8 +705,22 @@ function check_ps_unauth_users() {
 # Check the lineage for all non-system processes to make sure they're children
 # of torque (i.e., pbs_mom).  Arguments are actions (same as above).
 function check_ps_userproc_lineage() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_USER
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -704,6 +739,14 @@ function check_ps_userproc_lineage() {
         THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi

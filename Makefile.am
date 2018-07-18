@@ -22,6 +22,23 @@ CLEANFILES =
 EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate		\
              nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
+edit = sed \
+            -e 's|[@]libexecdir@|$(libexecdir)|g' \
+            -e 's|[@]prefix@|$(prefix)|g' \
+            -e 's|[@]exec_prefix@|$(exec_prefix)|g' \
+            -e 's|[@]bindir@|$(bindir)|g' \
+            -e 's|[@]sbindir@|$(bindir)|g' \
+            -e 's|[@]sysconfdir@|$(sysconfdir)|g' \
+            < "$<" > "$@"
+
+nhc nhc-genconf nhc-wrapper: Makefile
+	$(edit) '$(srcdir)/$@.in' > $@
+
+nhc: nhc.in
+nhc-genconf: nhc-genconf.in
+nhc-wrapper: nhc-wrapper.in
+
+
 install-data-local:
 	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
 	$(INSTALL_DATA) $(srcdir)/nhc.logrotate '$(DESTDIR)$(logrotatedir)/nhc'

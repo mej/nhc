@@ -180,14 +180,13 @@ function nhcmain_init_env() {
     ### Variable declarations
 
     # Static variables
-    PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+    PATH="@sbindir@:/sbin:/usr/sbin:/bin:/usr/bin"
+    LIBEXECDIR="@libexecdir@"
     if [ -f /etc/debian_version ]
     then
         SYSCONFIGDIR="/etc/default"
-        LIBEXECDIR="/usr/lib"
     else
         SYSCONFIGDIR="/etc/sysconfig"
-        LIBEXECDIR="/usr/libexec"
     fi
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
@@ -316,7 +315,7 @@ function nhcmain_load_sysconfig() {
 function nhcmain_finalize_env() {
     # Set some variables relative to possible /etc/sysconfig/nhc
     # modifications.  Users may have overridden some of these.
-    CONFDIR="${CONFDIR:-/etc/nhc}"
+    CONFDIR="${CONFDIR:-@sysconfdir@/nhc}"
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
     INCDIR="${INCDIR:-$CONFDIR/scripts}"
     HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"

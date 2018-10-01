@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# SURFsara Node Health Check -- Node Rebooting Helper
+#
+# Martijn Kruiten <martijn.kruiten@surfsara.nl>
+# 26 apr 2018
+#
+
+# This script is a simple wrapper that the node health check can run
+# in the background to mark nodes for reboot.  It will first obtain
+# the current node state information to avoid rebooting a node that
+# is already offline or in maintenance.  If these checks pass, the
+# node is marked for reboot.
+
+IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}"
+LEADER="NHC:"
+
+echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
+
+HOSTNAME="$1"
+shift
+NOTE="$*"
+
+### SLURM
+if [[ "$NHC_RM" == "slurm" ]]; then
+    SLURM_SINFO="${SLURM_SINFO:-sinfo}"
+    SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
+    SLURM_SC_OFFLINE_ARGS="${SLURM_SC_OFFLINE_ARGS:-reboot ASAP}"
+
+    LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
+    STATUS="${LINE[0]}"
+    case "$STATUS" in
+        alloc*|comp*|idle*|mix*|resume*|resv*|undrain*)
+            echo "$0:  Marking $STATUS $HOSTNAME for reboot:  $LEADER $NOTE"
+            exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS $HOSTNAME
+            ;;
+        down*|drain*|drng*|fail*|maint*)
+            echo "$0:  Not changing state of down node $HOSTNAME."
+            ;;
+        *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;
+    esac
+
+### Everything else is unsupported.
+else
+    echo "$0:  Unsupported RM detected in $0:  \"$NHC_RM\""
+    exit -1
+fi
+exit 0

@@ -151,11 +151,13 @@ function check_file_contents() {
 # supplied arguments to the "test" command returns false.
 function check_file_test() {
     local OP ARG RESULT
+    local NEG=0
     local -a FLAGS=( ) ARGS=( )
 
     for ARG in "$@" ; do
         case "$ARG" in
             -[abcdefghkprstuwxOGLSN]) FLAGS[${#FLAGS[*]}]="$ARG" ;;
+            -!) NEG=1 ;;
             -*) die 1 "$FUNCNAME:  Syntax error:  Invalid/unsupported operator \"$ARG\"." ; return 1 ;;
             *) ARGS[${#ARGS[*]}]="$ARG" ;;
         esac
@@ -169,12 +171,21 @@ function check_file_test() {
             eval test $OP "$ARG"
             RESULT=$?
             if [[ $RESULT -ne 0 ]]; then
-                die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
-                return 1
+                if [[ $NEG == 1 ]]; then
+                    return 0
+                else
+                    die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+                    return 1
+                fi
             fi
         done
     done
-    return 0
+    if [[ $NEG == 1 ]]; then
+        die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+        return 1
+    else
+        return 0
+    fi
 }
 
 # Check various aspects of the results of stat() on a file.

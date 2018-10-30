@@ -182,7 +182,7 @@ For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior v
 
 #### TORQUE Integration
 
-NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/help.htm#topics/11-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
+NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/6-1-2/adminGuide/torque.htm#topics/torque/12-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
 
 ```bash
 $node_check_script /usr/sbin/nhc
@@ -370,8 +370,8 @@ Examples:
 ```bash
 # This is a comment.
        # This is also a comment.
-# This line and the next one will both be ignored.
 
+# This line and the previous one will both be ignored.
 ```
 
 Configuration lines contain a **target** specifier, the separator string `||`, and the **check** command.  The target specifies which hosts should execute the check; only nodes whose hostname matches the given target will execute the check on that line.  All other nodes will ignore it and proceed to the next check.

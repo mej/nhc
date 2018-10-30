@@ -829,9 +829,11 @@ The default behavior is to run `mcelog --client` but is configurable via the `$M
 
 
 ##### check_hw_mem
-`check_hw_mem min_kb max_kb`
+`check_hw_mem min_kb max_kb [fudge]`
 
 `check_hw_mem` compares the total system memory (RAM + swap) with the minimum and maximum values provided (in kB).  If the total memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of memory, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of memory, it represents a "fudge factor," a tolerance by which the amount of memory detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (exactly 26 GB system memory required)_:  `check_hw_mem 27262976 27262976`
 
@@ -851,9 +853,11 @@ _**Example** (require at least 640 kB free)_:  `check_hw_mem_free 640`
 
 
 ##### check_hw_physmem
-`check_hw_physmem min_kb max_kb`
+`check_hw_physmem min_kb max_kb [fudge]`
 
 `check_hw_physmem` compares the amount of physical memory (RAM) present in the system with the minimum and maximum values provided (in kB).  If the physical memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of RAM, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of RAM, it represents a "fudge factor," a tolerance by which the amount of RAM detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (at least 12 GB RAM/node, no more than 48 GB)_:  `check_hw_physmem 12582912 50331648`
 

@@ -547,13 +547,13 @@ _**Example** (Make sure SELinux is disabled)_:  `check_cmd_status -t 1 -r 1 seli
 
 
 ##### check_dmi_data_match
-`check_dmi_data_match [-h handle] [-t type] [-n | '!'] string`
+`check_dmi_data_match [-! | -n | '!'] [-h handle] [-t type] string`
 
 `check_dmi_data_match` uses parsed, structured data taken from the output of the `dmidecode` command to allow the administrator to make very specific assertions regarding the contents of the DMI (a.k.a. SMBIOS) data.  Matches can be made against any output or against specific types (classifications of data) or even handles (identifiers of data blocks, typically sequential).  Output is restructured such that sections which are indented underneath a section header have the text of the section header prepended to the output line along with a colon and intervening space.  So, for example, the string "<tab><tab>ISA is supported" which appears underneath the "Characteristics:" header, which in turn is underneath the "BIOS Information" header/type, would be parsed by `check_dmi_data_match` as "BIOS Information: Characteristics: ISA is supported"
 
 See the `dmidecode` man page for more details.
 
-> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-n` or `!` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction!
+> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-!` or `-n` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction.
 
 _**Example** (check for BIOS version)_:  `check_dmi_data_match "BIOS Information: Version: 1.0.37"`
 

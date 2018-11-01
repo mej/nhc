@@ -1,0 +1,160 @@
+# OSC NHC - slabinfo checks
+#
+# Trey Dockendorf <tdockendorf@osc.edu>
+# 21 September 2018
+#
+
+SLAB_NAME=()
+SLAB_ACTIVE_OBJS=()
+SLAB_NUM_OBJS=()
+SLAB_ACTIVE_SLABS=()
+SLAB_NUM_SLABS=()
+export SLAB_NAME SLAB_ACTIVE_OBJS SLAB_NUM_OBJS SLAB_ACTIVE_SLABS SLAB_NUM_SLABS
+
+function nhc_slabinfo_gather_data() {
+    local LINE_CNT
+    local -a FIELD
+
+    SLAB_NAME=() SLAB_ACTIVE_OBJS=() SLAB_NUM_OBJS=() SLAB_ACTIVE_SLABS=() SLAB_NUM_SLABS=()
+
+    ((LINE_CNT=0))
+    while read -a FIELD; do
+        if [[ "${FIELD[0]}" == "#" ]]; then
+            continue
+        fi
+        if [[ "${FIELD[0]}" == "slabinfo" ]]; then
+            continue
+        fi
+        SLAB_NAME[$LINE_CNT]="${FIELD[0]}"
+        SLAB_ACTIVE_OBJS[$LINE_CNT]="${FIELD[1]}"
+        SLAB_NUM_OBJS[$LINE_CNT]="${FIELD[2]}"
+        SLAB_ACTIVE_SLABS[$LINE_CNT]="${FIELD[13]}"
+        SLAB_NUM_SLABS[$LINE_CNT]="${FIELD[14]}"
+        dbg "Got slabinfo ${SLAB_NAME[$LINE_CNT]} ${SLAB_ACTIVE_OBJS[$LINE_CNT]} ${SLAB_NUM_OBJS[$LINE_CNT]} ${SLAB_ACTIVE_SLABS[$LINE_CNT]} ${SLAB_NUM_SLABS[$LINE_CNT]}"
+        ((LINE_CNT++))
+    done < /proc/slabinfo
+
+    export SLAB_NAME SLAB_ACTIVE_OBJS SLAB_NUM_OBJS SLAB_ACTIVE_SLABS SLAB_NUM_SLABS
+}
+
+# Do the actual work of looking at slabinfo.
+# Used by check_slabinfo_{active_objs,num_objs,active_slabs,num_slabs}.
+# Additional parameters are the check name and the type of resource to look at.
+function nhc_slabinfo_check() {
+    local NONFATAL=0 ALL=0 LOG=0 SYSLOG=0 MATCH="" ACTION=""
+    local CHECK="$1" COL="$2" THRESHOLD
+    local THIS_NAME MSG i
+
+    if [[ ${#SLAB_NAME[*]} -eq 0 ]]; then
+        nhc_slabinfo_gather_data
+    fi
+
+    shift 2
+    OPTIND=1
+    while getopts ":0alsm:e:" OPTION ; do
+        case "$OPTION" in
+            0) NONFATAL=1 ;;
+            a) ALL=1 ;;
+            l) LOG=1 ;;
+            s) SYSLOG=1 ;;
+            m) MATCH="$OPTARG" ;;
+            e) ACTION="$OPTARG" ;;
+            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    THRESHOLD="$1"
+    if [[ -z "$THRESHOLD" || "${THRESHOLD//[^0-9]}" != "$THRESHOLD" ]]; then
+        die 1 "$CHECK: Syntax error: threshold must be an integer."
+    fi
+    if [[ -z "$MATCH" ]]; then
+        MATCH="*"
+    fi
+    dbg "Looking for slabinfo matching \"$MATCH\""
+    for ((i=0; i < ${#SLAB_NAME[*]}; i++)); do
+        THIS_NAME="${SLAB_NAME[$i]}"
+        dbg "CHECKING \"$THIS_NAME\" vs. \"$MATCH\""
+        if ! mcheck "$THIS_NAME" "$MATCH"; then
+            continue
+        fi
+        dbg "Matching slabinfo found: $THIS_NAME: active_objs=${SLAB_ACTIVE_OBJS[$i]} num_objs=${SLAB_NUM_OBJS[$i]} active_slabs=${SLAB_ACTIVE_SLABS[$i]} num_slabs=${SLAB_NUM_SLABS[$i]}"
+        case $COL in
+            1)  if [[ ${SLAB_ACTIVE_OBJS[$i]} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK: slabinfo \"$THIS_NAME\" using ${SLAB_ACTIVE_OBJS[$i]} active_objs (limit $THRESHOLD)"
+                ;;
+            2)  if [[ ${SLAB_NUM_OBJS[$i]} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK: slabinfo \"$THIS_NAME\" using ${SLAB_NUM_OBJS[$i]} num_objs (limit $THRESHOLD)"
+                ;;
+            3)  if [[ ${SLAB_ACTIVE_SLABS[$i]} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK: slabinfo \"$THIS_NAME\" using ${SLAB_ACTIVE_SLABS[$i]} active_slabs (limit $THRESHOLD)"
+                ;;
+            4)  if [[ ${SLAB_NUM_SLABS[$i]} -lt $THRESHOLD ]]; then continue ; fi
+                MSG="$CHECK: slabinfo \"$THIS_NAME\" using ${SLAB_NUM_SLABS[$i]} num_slabs (limit $THRESHOLD)"
+                ;;
+        esac
+        # We have a winner.  Or loser, as the case may be.
+        if [[ "$LOG" == "1" ]]; then
+            log $MSG
+        fi
+        if [[ "$SYSLOG" == "1" ]]; then
+            syslog $MSG
+        fi
+        if [[ "$ACTION" != "" ]]; then
+            ${SHELL:-/bin/bash} -c "$ACTION" &
+        fi
+        if [[ $ALL -ge 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG ($ALL)"
+            fi
+            ((ALL++))
+            continue
+        elif [[ $NONFATAL == 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG (non-fatal)"
+            fi
+            return 0
+        fi
+        die 1 "$MSG"
+        return 1
+    done
+    # -a (all) does not necessarily imply -0 (non-fatal).  A value of 1 for $ALL
+    # means -a was passed in but no errors were found.  2 or above is an error.
+    if [[ $ALL -gt 1 ]]; then
+        # We had at least 1 flagged process.  Fail unless we're also non-fatal.
+        if [[ $NONFATAL == 1 ]]; then
+            if [[ -n "$MSG" ]]; then
+                log "$MSG (non-fatal)"
+            fi
+            return 0
+        fi
+        ((ALL--))
+        die $ALL "$MSG (last of $ALL)"
+        return $ALL
+    fi
+    return 0
+}
+
+# Checks slabinfo active_objs is above a threshold
+#   check_slabinfo_active_objs [-0] [-a] [-l] [-s] [-m <match>] [-e <action>] <threshold>
+function check_slabinfo_active_objs() {
+    nhc_slabinfo_check $FUNCNAME 1 "$@"
+}
+
+# Checks slabinfo num_objs is above a threshold
+#   check_slabinfo_num_objs [-0] [-a] [-l] [-s] [-m <match>] [-e <action>] <threshold>
+function check_slabinfo_num_objs() {
+    nhc_slabinfo_check $FUNCNAME 2 "$@"
+}
+
+# Checks slabinfo active_slabs is above a threshold
+#   check_slabinfo_active_slabs [-0] [-a] [-l] [-s] [-m <match>] [-e <action>] <threshold>
+function check_slabinfo_active_slabs() {
+    nhc_slabinfo_check $FUNCNAME 3 "$@"
+}
+
+# Checks slabinfo num_slabs is above a threshold
+#   check_slabinfo_num_slabs [-0] [-a] [-l] [-s] [-m <match>] [-e <action>] <threshold>
+function check_slabinfo_num_slabs() {
+    nhc_slabinfo_check $FUNCNAME 4 "$@"
+}

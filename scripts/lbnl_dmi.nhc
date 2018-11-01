@@ -106,7 +106,7 @@ function nhc_dmi_gather_raw_data() {
 
 
 # Check the DMI info table for matching data.  Syntax is:
-#  check_dmi_data_match [-h handle] [-t type] [ -n | ! ] <string match>
+#  check_dmi_data_match [ -! | -n | ! ] [-h handle] [-t type] <string match>
 function check_dmi_data_match() {
     local HANDLE TYPE OPTION i l
     local NEG=0 MATCH
@@ -117,11 +117,11 @@ function check_dmi_data_match() {
     fi
 
     OPTIND=1
-    while getopts ":h:t:n" OPTION ; do
+    while getopts ":!h:nt:" OPTION ; do
         case "$OPTION" in
+            !|n) NEG=1 ;;
             h) HANDLES=( $OPTARG ) ;;
             t) TYPE="$OPTARG" ;;
-            n) NEG=1 ;;
             :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
             \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac

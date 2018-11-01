@@ -25,7 +25,7 @@ Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are 
 
 The NHC Yum repository is currently unavailable, but we hope to provide one in the very near future!
 
-The [source tarball for the latest release](https://github.com/mej/nhc/archive/1.4.2.tar.gz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
+The [source tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
 
 ```
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec
@@ -182,7 +182,7 @@ For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior v
 
 #### TORQUE Integration
 
-NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/help.htm#topics/11-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
+NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/6-1-2/adminGuide/torque.htm#topics/torque/12-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
 
 ```bash
 $node_check_script /usr/sbin/nhc
@@ -370,8 +370,8 @@ Examples:
 ```bash
 # This is a comment.
        # This is also a comment.
-# This line and the next one will both be ignored.
 
+# This line and the previous one will both be ignored.
 ```
 
 Configuration lines contain a **target** specifier, the separator string `||`, and the **check** command.  The target specifies which hosts should execute the check; only nodes whose hostname matches the given target will execute the check on that line.  All other nodes will ignore it and proceed to the next check.
@@ -547,13 +547,13 @@ _**Example** (Make sure SELinux is disabled)_:  `check_cmd_status -t 1 -r 1 seli
 
 
 ##### check_dmi_data_match
-`check_dmi_data_match [-h handle] [-t type] [-n | '!'] string`
+`check_dmi_data_match [-! | -n | '!'] [-h handle] [-t type] string`
 
 `check_dmi_data_match` uses parsed, structured data taken from the output of the `dmidecode` command to allow the administrator to make very specific assertions regarding the contents of the DMI (a.k.a. SMBIOS) data.  Matches can be made against any output or against specific types (classifications of data) or even handles (identifiers of data blocks, typically sequential).  Output is restructured such that sections which are indented underneath a section header have the text of the section header prepended to the output line along with a colon and intervening space.  So, for example, the string "<tab><tab>ISA is supported" which appears underneath the "Characteristics:" header, which in turn is underneath the "BIOS Information" header/type, would be parsed by `check_dmi_data_match` as "BIOS Information: Characteristics: ISA is supported"
 
 See the `dmidecode` man page for more details.
 
-> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-n` or `!` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction!
+> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-!` or `-n` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction.
 
 _**Example** (check for BIOS version)_:  `check_dmi_data_match "BIOS Information: Version: 1.0.37"`
 
@@ -829,9 +829,11 @@ The default behavior is to run `mcelog --client` but is configurable via the `$M
 
 
 ##### check_hw_mem
-`check_hw_mem min_kb max_kb`
+`check_hw_mem min_kb max_kb [fudge]`
 
 `check_hw_mem` compares the total system memory (RAM + swap) with the minimum and maximum values provided (in kB).  If the total memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of memory, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of memory, it represents a "fudge factor," a tolerance by which the amount of memory detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (exactly 26 GB system memory required)_:  `check_hw_mem 27262976 27262976`
 
@@ -851,9 +853,11 @@ _**Example** (require at least 640 kB free)_:  `check_hw_mem_free 640`
 
 
 ##### check_hw_physmem
-`check_hw_physmem min_kb max_kb`
+`check_hw_physmem min_kb max_kb [fudge]`
 
 `check_hw_physmem` compares the amount of physical memory (RAM) present in the system with the minimum and maximum values provided (in kB).  If the physical memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of RAM, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of RAM, it represents a "fudge factor," a tolerance by which the amount of RAM detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (at least 12 GB RAM/node, no more than 48 GB)_:  `check_hw_physmem 12582912 50331648`
 

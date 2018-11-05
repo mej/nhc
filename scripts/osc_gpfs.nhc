@@ -7,7 +7,8 @@
 GPFS_COMPONENT=()
 GPFS_ENTITY=()
 GPFS_STATUS=()
-export GPFS_COMPONENT GPFS_ENTITY GPFS_STATUS
+MMHEALTH="${MMHEALTH:-/usr/lpp/mmfs/bin/mmhealth}"
+export GPFS_COMPONENT GPFS_ENTITY GPFS_STATUS MMHEALTH
 
 function nhc_gpfs_health_gather_data() {
     local LINE_CNT
@@ -31,7 +32,7 @@ function nhc_gpfs_health_gather_data() {
         GPFS_STATUS[$LINE_CNT]="${FIELD[10]}"
         dbg "Got GPFS health ${GPFS_COMPONENT[$LINE_CNT]} ${GPFS_ENTITY[$LINE_CNT]} ${GPFS_STATUS[$LINE_CNT]}"
         ((LINE_CNT++))
-    done < <(/usr/lpp/mmfs/bin/mmhealth node show -Y)
+    done < <($MMHEALTH node show -Y)
 
     export GPFS_COMPONENT GPFS_ENTITY GPFS_STATUS
 }

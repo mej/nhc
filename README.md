@@ -452,6 +452,7 @@ The table below provides a list of the configuration variables which may be used
 | MCELOG_MAX_CORRECTED_RATE | `9` | Maximum number of **corrected** MCEs allowed before `check_hw_mcelog()` returns failure |
 | MCELOG_MAX_UNCORRECTED_RATE | `0` | Maximum number of **uncorrected** MCEs allowed before `check_hw_mcelog()` returns failure |
 | MDIAG_CMD | `mdiag` | Command to use to invoke Moab's `mdiag` command (may include path) |
+| MMHEALTH | `/usr/lpp/mmfs/bin/mmhealth` | Command to use to invoke the GPFS `mmhealth` command |
 | *NAME | `nhc` | Used to populate default paths/filenames for configuration |
 | NHC_AUTH_USERS | `root nobody` | Users authorized to have arbitrary processes running on compute nodes |
 | NHC_CHECK_ALL | `0` | Forces all checks to be non-fatal.  Displays each failure message, reports total number of failed checks, and returns that number. |
@@ -767,6 +768,23 @@ _**Example**_:  `check_fs_size /tmp 512m 4g`
 
 _**Example**_:  `check_fs_used / 98%`
 
+
+<br />
+
+##### check_gpfs_health
+`check_gpfs_health [-0] [-a] [-l] [-s] [-e <action>] <component>`
+
+Checks the health of a GPFS component.  The value for _component_ must match a component reported by mmhealth.
+
+| **Check&nbsp;Option** | **Purpose** |
+| ---------------- | ----------- |
+| `-0` | Non-fatal.  Failure of this check will be ignored. |
+| `-a` | Find, report, and act on all matching components.  Default behavior is to fail check after first matching component. |
+| `-l` | Log unhealthy component (or components, if used with `-a`) to NHC log (`$LOGFILE`). |
+| `-s` | Log unhealthy component (or components, if used with `-a`) to the syslog. |
+| `-e`_`action`_ | Execute `/bin/bash -c`_`action`_ if component is NOT healthy. |
+
+_**Example**_: `check_gpfs_health NETWORK`
 
 <br />
 

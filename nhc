@@ -61,11 +61,11 @@ function die() {
         fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
-        if [[ -w "$RESULTFILE" ]]; then
-            echo "$RET $*" > $RESULTFILE
+        if [[ -w "$RESULTFILE" || (! -e "$RESULTFILE" && -w "${RESULTFILE%/*}") ]] && echo "$RET $*" > $RESULTFILE ; then
+            dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
-            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
-            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
+            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
             syslog_flush
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then

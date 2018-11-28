@@ -898,6 +898,17 @@ _**Example** (require at least 1 GB free)_:  `check_hw_swap_free 1048576`
 <br />
 
 
+##### check_hw_slab_unreclaimable
+`check_hw_slab_unreclaimable max_kb`
+
+`check_hw_slab_unreclaimable` compares the amount of slab unreclaimable memory to the maximum provided (in kB).  If the slab unreclaimable is greater than _max_kb_ kilobytes, the check fails.
+
+_**Example** (require less than 5 GB unreclaimable)_:  `check_hw_slab_unreclaimable 5242880`
+
+
+<br />
+
+
 ##### check_moab_sched
 `check_moab_sched [-t timeout] [-a alert_match] [-m [!]mstr] [-v version_match]`
 

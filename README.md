@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/mej/nhc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mej/nhc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-TORQUE, SLURM, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
+TORQUE, Slurm, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
 
 Though many sites have created their own scripts to serve this function, the vast majority are one-off efforts with little attention paid to extensibility, flexibility, reliability, speed, or reuse.  Developers at [Lawrence Berkeley National Laboratory](http://www.lbl.gov/) created this project in an effort to change that.  LBNL Node Health Check (NHC) has several design features that set it apart from most home-grown solutions:
  * Reliable - To prevent single-threaded script execution from causing hangs, execution of subcommands is kept to an absolute minimum, and a watchdog timer is used to terminate the check if it runs for too long.
@@ -166,7 +166,7 @@ Once the configuration has been modified, try running `/usr/sbin/nhc` again.  Co
 Instructions for putting NHC into production depend entirely on your use case.  We can't possibly hope to delineate them all, but we'll cover some of the most common.
 
 
-#### SLURM Integration
+#### Slurm Integration
 
 Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
 
@@ -177,7 +177,7 @@ HealthCheckInterval=300
 
 This will execute NHC every 5 minutes.
 
-For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
+For optimal support of Slurm, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
 
 
 #### TORQUE Integration
@@ -350,7 +350,7 @@ To run for testing purposes in debug mode with no timeout and with node online/o
 # nhc -d -t 0 MARK_OFFLINE=0
 ```
 
-To force use of SLURM as the resource manager and use a sysconfig path in `/opt`:
+To force use of Slurm as the resource manager and use a sysconfig path in `/opt`:
 ```
 # nhc NHC_RM=slurm SYSCONFIGDIR=/opt/etc/sysconfig
 ```
@@ -439,7 +439,7 @@ The table below provides a list of the configuration variables which may be used
 | *HOSTNAME_S | `$HOSTNAME` truncated at first `.` | Short name (no domain or subdomain) of current node |
 | IGNORE_EMPTY_NOTE | `0` | Set to `1` to treat empty notes like NHC-assigned notes (<1.2.1 behavior) |
 | *INCDIR | `$CONFDIR/scripts` | Directory for NHC check scripts |
-| JOBFILE_PATH | TORQUE/PBS:  `$PBS_SERVER_HOME/mom_priv/jobs` <br /> SLURM:  `$SLURM_SERVER_HOME` | Directory on compute nodes where job records are kept |
+| JOBFILE_PATH | TORQUE/PBS:  `$PBS_SERVER_HOME/mom_priv/jobs` <br /> Slurm:  `$SLURM_SERVER_HOME` | Directory on compute nodes where job records are kept |
 | *LOGFILE | `>>/var/log/nhc.log` | File name/path or BASH-syntax directive for logging output (`-` for `STDOUT`) |
 | LSF_BADMIN | `badmin` | Command to use for LSF's `badmin` (may include path) |
 | LSF_BHOSTS | `bhosts` | Command to use for LSF's `bhosts` (may include path) |
@@ -469,13 +469,13 @@ The table below provides a list of the configuration variables which may be used
 | PBSNODES_ONLINE_ARGS | `-c -N` | Arguments to `$PBSNODES` to mark node online with note |
 | PBS_SERVER_HOME | `/var/spool/torque` | Directory for TORQUE files |
 | RESULTFILE | `/var/run/nhc/$NAME.status` | Used in [Detached Mode](#detached-mode) to store result of checks for subsequent handling
-| RM_DAEMON_MATCH | TORQUE/PBS:  `/\bpbs_mom\b/` <br /> SLURM:  `/\bslurmd\b/` <br /> SGE/UGE:  `/\bsge_execd\b/` | [Match string](#match-strings) used by `check_ps_userproc_lineage` to make sure all user processes were spawned by the RM daemon |
+| RM_DAEMON_MATCH | TORQUE/PBS:  `/\bpbs_mom\b/` <br /> Slurm:  `/\bslurmd\b/` <br /> SGE/UGE:  `/\bsge_execd\b/` | [Match string](#match-strings) used by `check_ps_userproc_lineage` to make sure all user processes were spawned by the RM daemon |
 | SILENT | `0` | Set to `1` to disable logging via `$LOGFILE` |
-| SLURM_SCONTROL | `scontrol` | Command to use for SLURM's `scontrol` (may include path) |
-| SLURM_SC_OFFLINE_ARGS | `update State=DRAIN` | Arguments to pass to SLURM's `scontrol` to offline a node |
-| SLURM_SC_ONLINE_ARGS | `update State=IDLE` | Arguments to pass to SLURM's `scontrol` to online a node |
-| SLURM_SERVER_HOME | `/var/spool/slurmd` | Location of SLURM data files (see also:  `$JOBFILE_PATH`) |
-| SLURM_SINFO | `sinfo` | Command to use for SLURM's `sinfo` (may include path) |
+| SLURM_SCONTROL | `scontrol` | Command to use for Slurm's `scontrol` (may include path) |
+| SLURM_SC_OFFLINE_ARGS | `update State=DRAIN` | Arguments to pass to Slurm's `scontrol` to offline a node |
+| SLURM_SC_ONLINE_ARGS | `update State=IDLE` | Arguments to pass to Slurm's `scontrol` to online a node |
+| SLURM_SERVER_HOME | `/var/spool/slurmd` | Location of Slurm data files (see also:  `$JOBFILE_PATH`) |
+| SLURM_SINFO | `sinfo` | Command to use for Slurm's `sinfo` (may include path) |
 | STAT_CMD | `/usr/bin/stat` | Command to use to `stat()` files |
 | STAT_FMT_ARGS | `-c` | Parameter to introduce format string to `stat` command |
 | *TIMEOUT | `30` | Watchdog timer (in seconds) |

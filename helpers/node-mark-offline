@@ -52,7 +52,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
     exec $PBSNODES $PBSNODES_OFFLINE_ARGS "$LEADER $NOTE" $HOSTNAME
 
-### SLURM
+### Slurm
 elif [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"

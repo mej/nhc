@@ -82,7 +82,7 @@ function nhc_file_stat() {
 # fail to match the file's contents.  Matching is done line by line.
 function check_file_contents() {
     local FILENAME="$1"
-    local LINE LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
+    local LINE LINENUM=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
     local -a MATCHES MATCHED
 
     # Create an array of all matches for which we must search.
@@ -101,12 +101,12 @@ function check_file_contents() {
 
     # Read the file line by line.
     while read LINE ; do
-        ((LINENO++))
+        ((LINENUM++))
         for ((i = 0; i < ${#MATCHES[*]}; i++)); do
             if [[ ${MATCHED[$i]} -eq 1 ]]; then
                 if [[ "${MATCHES[$i]:0:1}" = '!' ]] && mcheck "$LINE" "${MATCHES[$i]:1}" ; then
                     # Match expression is negated.  Fail if the line matches this expression.
-                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENO matches \"${MATCHES[$i]:1}\"."
+                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENUM matches \"${MATCHES[$i]:1}\"."
                     return 1
                 fi
             elif mcheck "$LINE" "${MATCHES[$i]}" ; then

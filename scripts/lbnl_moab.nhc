@@ -14,7 +14,7 @@ NHC_RE_QMGR_NOSCHED='set server scheduling = ([A-Za-z0-9]+)'
 
 # Examine output of "mdiag -S -v" for anomalies.
 function check_moab_sched() {
-    local RET LINENO CMD_TIMEOUT MATCHSTR MOABVER ALERTMATCH
+    local RET LINENUM CMD_TIMEOUT MATCHSTR MOABVER ALERTMATCH
     local -a OUTPUT MATCHES
 
     MATCHES=( )
@@ -39,14 +39,14 @@ function check_moab_sched() {
 
     # Additional checks require regexp support, so skip them in old versions.
     if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
-        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
-            if [[ -n "$MOABVER" && "${OUTPUT[$LINENO]}" =~ $NHC_RE_MOAB_VERSION ]]; then
+        for ((LINENUM = 0; LINENUM <= ${#OUTPUT[*]}; LINENUM++)); do
+            if [[ -n "$MOABVER" && "${OUTPUT[$LINENUM]}" =~ $NHC_RE_MOAB_VERSION ]]; then
                 MATCHSTR="${BASH_REMATCH[1]}"
                 if ! mcheck "$MATCHSTR" "$MOABVER" ; then
                     die 1 "$FUNCNAME:  Moab version $MATCHSTR != expected version $MOABVER"
                     return 1
                 fi
-            elif [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_MOAB_ALERT ]]; then
+            elif [[ "${OUTPUT[$LINENUM]}" =~ $NHC_RE_MOAB_ALERT ]]; then
                 MATCHSTR="${BASH_REMATCH[1]}"
                 if mcheck "$MATCHSTR" "$ALERTMATCH" ; then
                     die 1 "$FUNCNAME:  Moab Alert:  $MATCHSTR"
@@ -60,7 +60,7 @@ function check_moab_sched() {
 
 # Examine output of "mdiag -R -v" for anomalies.
 function check_moab_rm() {
-    local RET LINENO CMD_TIMEOUT RMID MATCHSTR
+    local RET LINENUM CMD_TIMEOUT RMID MATCHSTR
     local -a OUTPUT MATCHES
 
     MATCHES=( )
@@ -83,8 +83,8 @@ function check_moab_rm() {
 
     # Additional checks require regexp support, so skip them in old versions.
     if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
-        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
-            if [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_RM_STATE ]]; then
+        for ((LINENUM = 0; LINENUM <= ${#OUTPUT[*]}; LINENUM++)); do
+            if [[ "${OUTPUT[$LINENUM]}" =~ $NHC_RE_RM_STATE ]]; then
                 RMID="${BASH_REMATCH[1]}"
                 MATCHSTR="${BASH_REMATCH[2]}"
                 if [[ "$RMID" != "*internal*" && "$MATCHSTR" != "Active" ]]; then
@@ -99,7 +99,7 @@ function check_moab_rm() {
 
 # Check TORQUE for responsiveness and server configuration errors.
 function check_moab_torque() {
-    local RET LINENO CMD_TIMEOUT RMID MATCHSTR
+    local RET LINENUM CMD_TIMEOUT RMID MATCHSTR
     local -a OUTPUT MATCHES
 
     MATCHES=( )
@@ -122,8 +122,8 @@ function check_moab_torque() {
 
     # Additional checks require regexp support, so skip them in old versions.
     if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
-        for ((LINENO = 0; LINENO <= ${#OUTPUT[*]}; LINENO++)); do
-            if [[ "${OUTPUT[$LINENO]}" =~ $NHC_RE_QMGR_NOSCHED ]]; then
+        for ((LINENUM = 0; LINENUM <= ${#OUTPUT[*]}; LINENUM++)); do
+            if [[ "${OUTPUT[$LINENUM]}" =~ $NHC_RE_QMGR_NOSCHED ]]; then
                 MATCHSTR="${BASH_REMATCH[1]}"
                 if [[ "$MATCHSTR" != "True" ]]; then
                     die 1 "$FUNCNAME:  Scheduling not active (set to \"$MATCHSTR\") in TORQUE configuration"

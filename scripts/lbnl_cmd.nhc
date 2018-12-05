@@ -128,7 +128,7 @@ function check_cmd_output() {
     for ((i = 0; i < ${#MATCHES[*]}; i++)); do
         if [[ ${MATCHED[$i]} == 0 ]]; then
             MSG=${MSGS[$i]:-\"%m\" failed to match \"%c\" output (%f patterns failed)}
-            MSG=${MSG//\%m/${MATCHES[0]}}
+            MSG=${MSG//\%m/${MATCHES[$i]}}
             MSG=${MSG//\%c/$CMD}
             MSG=${MSG//\%f/$((${#MATCHES[*]}-MATCH_CNT))/${#MATCHES[*]}}
             die 1 "$CHECKNAME:  $MSG."

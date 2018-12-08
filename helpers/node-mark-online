@@ -47,7 +47,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
 
 
-### SLURM
+### Slurm
 elif [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
@@ -57,7 +57,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     STATUS="${LINE[0]}"
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
-    # SLURM does not run the HealthCheckProgram on nodes in the DOWN state,
+    # Slurm does not run the HealthCheckProgram on nodes in the DOWN state,
     # but if someone runs NHC by hand, we want to be able to do the right thing.
     case "$STATUS" in
         down*|drain*|drng*|fail*|maint*)

@@ -771,6 +771,7 @@ _**Example**_:  `check_fs_used / 98%`
 
 <br />
 
+
 ##### check_gpfs_health
 `check_gpfs_health [-0] [-a] [-l] [-s] [-e <action>] <component>`
 
@@ -785,6 +786,22 @@ Checks the health of a GPFS component.  The value for _component_ must match a c
 | `-e`_`action`_ | Execute `/bin/bash -c`_`action`_ if component is NOT healthy. |
 
 _**Example**_: `check_gpfs_health NETWORK`
+
+<br />
+
+
+##### check_gpfs_verbs_status
+`check_gpfs_verbs_status [-0] [-l] [-s]`
+
+Checks that GPFS has started Verbs and is using RDMA.
+
+| **Check&nbsp;Option** | **Purpose** |
+| ---------------- | ----------- |
+| `-0` | Non-fatal.  Failure of this check will be ignored. |
+| `-l` | Log if verbs is not started to NHC log (`$LOGFILE`). |
+| `-s` | Log if verbs is not started to the syslog. |
+
+_**Example**_: `check_gpfs_verbs_status`
 
 <br />
 

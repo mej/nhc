@@ -8,7 +8,8 @@ GPFS_COMPONENT=()
 GPFS_ENTITY=()
 GPFS_STATUS=()
 MMHEALTH="${MMHEALTH:-/usr/lpp/mmfs/bin/mmhealth}"
-export GPFS_COMPONENT GPFS_ENTITY GPFS_STATUS MMHEALTH
+MMFSADM="${MMFSADM:-/usr/lpp/mmfs/bin/mmfsadm}"
+export GPFS_COMPONENT GPFS_ENTITY GPFS_STATUS MMHEALTH MMFSADM
 
 function nhc_gpfs_health_gather_data() {
     local LINE_CNT
@@ -119,4 +120,54 @@ function check_gpfs_health() {
         return $ALL
     fi
     return 0
+}
+
+# Checks GPFS verbs status
+#   check_gpfs_verbs_status [-0] [-l] [-s]
+function check_gpfs_verbs_status() {
+    local NONFATAL=0 LOG=0 SYSLOG=0 MSG=''
+    local RET OUTPUT OLD_DEBUG
+
+    OPTIND=1
+    while getopts ":0ls" OPTION ; do
+        case "$OPTION" in
+            0) NONFATAL=1 ;;
+            l) LOG=1 ;;
+            s) SYSLOG=1 ;;
+            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    OLD_DEBUG=$DEBUG
+    unset DEBUG
+    check_cmd_output -t ${CMD_TIMEOUT:-5} -C "$FUNCNAME" -O OUTPUT -m '/status/' $MMFSADM test verbs status
+    RET=$?
+    export DEBUG=$OLD_DEBUG
+    if [[ $RET -ne 0 ]]; then
+        return $RET
+    fi
+
+    dbg "$MMFSADM test verbs status: \"$OUTPUT\""
+    
+    if [[ "$OUTPUT" == *": started" ]]; then
+        continue
+    else
+        MSG="$FUNCNAME: GPFS verbs is not started"
+    fi
+    if [[ "$LOG" == "1" ]]; then
+        log $MSG
+    fi
+    if [[ "$SYSLOG" == "1" ]]; then
+        syslog $MSG
+    fi
+    if [[ $NONFATAL == 1 ]]; then
+        if [[ -n "$MSG" ]]; then
+            log "$MSG (non-fatal)"
+        fi
+        return 0
+    fi
+    die 1 "$MSG"
+    return 1
 }

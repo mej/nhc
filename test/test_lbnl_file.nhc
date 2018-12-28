@@ -7,9 +7,7 @@ plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
 
     FILEDATA=$'line1\nline2\nline3\nline4\nline5\nline6\n'
 
-    SANITY_CHECK=<(echo "check123") 2>/dev/null && check_file_contents $SANITY_CHECK '123' 2>/dev/null && SANE=1
-
-    if [[ $SANE != 1 || $- == *x* ]]; then
+    if ! check_file_contents <(echo "check123") '*123*' ; then
         # There seems to be a bash bug.  It doesn't handle process substitution
         # correctly (i.e., <(...) constructs) when debugging (set -x).  Skip.
         skip $((5+5+3+9+6+8+10))

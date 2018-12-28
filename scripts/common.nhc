@@ -641,14 +641,28 @@ function nhc_cmd_with_timeout() {
 
 # Find system definition for UID range
 function nhc_common_get_max_sys_uid() {
-    local LINE
+    local LINE UID_MIN SYS_UID_MAX
 
+    MAX_SYS_UID=${MAX_SYS_UID:-99}
     if [[ -e "$LOGIN_DEFS_SRC" ]]; then
         while read LINE ; do
             if [[ "${LINE##UID_MIN}" != "$LINE" ]]; then
-                MAX_SYS_UID="${LINE//[^0-9]}"
+                UID_MIN="${LINE//[^0-9]}"
+            elif [[ "${LINE##SYS_UID_MAX}" != "$LINE" ]]; then
+                SYS_UID_MAX="${LINE//[^0-9]}"
                 break
             fi
         done < "$LOGIN_DEFS_SRC"
+        if [[ -n "$SYS_UID_MAX" ]]; then
+            MAX_SYS_UID=$((SYS_UID_MAX+0))
+        elif [[ -n "$UID_MIN" ]]; then
+            MAX_SYS_UID=$((UID_MIN-1))
+        fi
+        if (( MAX_SYS_UID <= 0 )); then
+            MAX_SYS_UID=99
+        fi
+        return 0
+    else
+        return 1
     fi
 }

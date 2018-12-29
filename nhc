@@ -385,7 +385,12 @@ function nhcmain_finalize_env() {
         exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
     fi
 
-    if [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
+    if [[ -n "$EVAL_LINE" ]]; then
+        LOGFILE=""
+        ONLINE_NODE=:
+        OFFLINE_NODE=:
+        MARK_OFFLINE=0
+    elif [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
         # If the log file looks like a path rather than a redirect, fix it.
         LOGFILE=">>$LOGFILE 2>&1"
     elif [[ "$LOGFILE" == "-" ]]; then

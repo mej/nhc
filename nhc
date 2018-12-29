@@ -449,11 +449,11 @@ function nhcmain_find_rm() {
     elif type -a -p -f -P scontrol >&/dev/null ; then
         NHC_RM="slurm"
         return 0
-    elif type -a -p -f -P badmin >&/dev/null ; then
-        NHC_RM="lsf"
-        return 0
     elif type -a -p -f -P qselect >&/dev/null ; then
         NHC_RM="sge"
+        return 0
+    elif type -a -p -f -P badmin >&/dev/null || type -a -p -f -P sbatchd >&/dev/null ; then
+        NHC_RM="lsf"
         return 0
     fi
 

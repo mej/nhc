@@ -34,29 +34,7 @@ function nhc_ps_gather_data() {
 
     # We need this for user authorization checks.  Try to read system defaults.
     [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
-    MAX_SYS_UID=${MAX_SYS_UID:-99}
 
-    # Set default for $RM_DAEMON_MATCH based on configured resource manager.
-    if [[ "$NHC_RM" == "pbs" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
-    elif [[ "$NHC_RM" == "slurm" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
-    elif [[ "$NHC_RM" == "sge" ]]; then
-        # If you limit this to execd, you lose when it's been restarted,
-        # and the shepherd is detached.  Even if execd is safe because of
-        # system uids, it can spawn mail commands as the job owner, at
-        # least.  (The shepherd process name is normally
-        # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
-    else
-        dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
-    fi
-    if [[ ! "test" =~ \btest\b ]]; then
-        # Workaround for lack of \b support in regexp library.
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
-    fi
-        
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
     LINES=( $(COLUMNS=1024 ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
@@ -115,6 +93,9 @@ function nhc_ps_pid_lineage() {
         nhc_ps_gather_data
     fi
 
+    if [[ -z "$PROCNAME" ]]; then
+        return 1
+    fi
     while [[ -n "$THIS_PID" && $THIS_PID -ne 1 ]]; do
         THIS_PID=${PS_PPID[$THIS_PID]}
         mcheck "${PS_ARGS[$THIS_PID]}" "$PROCNAME" && return 0
@@ -647,8 +628,8 @@ function check_ps_unauth_users() {
             u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
             n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
             p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
-            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -715,8 +696,8 @@ function check_ps_userproc_lineage() {
             u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
             n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
             p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
-            :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -732,6 +713,34 @@ function check_ps_userproc_lineage() {
 
     if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
+    fi
+
+    if [[ -z "$NHC_RM" || "$NHC_RM" == "none" ]]; then
+        die 1 "$FUNCNAME:  This check requires a supported resource manager (e.g., Slurm, TORQUE, SGE, LSF)"
+        return 1
+    elif [[ -z "$RM_DAEMON_MATCH" ]]; then
+        # Set default for $RM_DAEMON_MATCH based on configured resource manager.
+        if [[ "$NHC_RM" == "pbs" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
+        elif [[ "$NHC_RM" == "slurm" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
+        elif [[ "$NHC_RM" == "sge" ]]; then
+            # If you limit this to execd, you lose when it's been restarted,
+            # and the shepherd is detached.  Even if execd is safe because of
+            # system uids, it can spawn mail commands as the job owner, at
+            # least.  (The shepherd process name is normally
+            # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
+        elif [[ "$NHC_RM" == "lsf" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bres\b/}"
+        else
+            dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
+        fi
+        if [[ ! "test" =~ \btest\b ]]; then
+            # Workaround for lack of \b support in regexp library.
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
+        fi
     fi
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do

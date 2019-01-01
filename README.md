@@ -317,6 +317,7 @@ From version 1.3 onward, NHC supports a subset of command-line options and argum
 | `-a` | `NHC_CHECK_ALL=1` | Run ALL checks; don't exit on first failure (useful for `cron`-based monitoring) |
 | `-c` _`conffile`_ | `CONFFILE=`_`conffile`_ | Load config from _`conffile`_ (default: _`confdir`_`/`_`name`_`.conf`) |
 | `-d` | `DEBUG=1` | Activate debugging output |
+| `-e` _`check`_ | `EVAL_LINE=`_`check`_ | Evaluate _`check`_ and exit immediately based on its result |
 | `-f` | `NHC_CHECK_FORKED=1` | Run each check in a separate background process (_EXPERIMENTAL_) |
 | `-h` | N/A | Show command line help |
 | `-l` _`logspec`_ | `LOGFILE=`_`logspec`_ | File name/path or BASH-syntax directive for logging output (`-` for `STDOUT`) |
@@ -353,6 +354,11 @@ To run for testing purposes in debug mode with no timeout and with node online/o
 To force use of Slurm as the resource manager and use a sysconfig path in `/opt`:
 ```
 # nhc NHC_RM=slurm SYSCONFIGDIR=/opt/etc/sysconfig
+```
+
+NHC can also be invoked with the `-e` option to run a specific single check rather than reading checks from a config file.  This technique is great for debugging a new check you're writing, testing your syntax for a particular check line before adding it to a config file, or running a single system check (possibly with an auto-fix option activated) across a cluster or nodeset during routine maintenance or cluster bring-up.  For example, to check that `/net/scratch1` and `/net/scratch2` are mounted (type `lustre`) from the correct location, or if they are not, to restart the `rlustre` service to (hopefully) correct the problem:
+```
+# nhc -e 'check_fs_mount_rw -t lustre -s "fs[0-9]:/export/fs/scratch[12]" -e "/sbin/service rlustre restart" -f /net/scratch1 /net/scratch2'
 ```
 
 To run NHC out-of-band (e.g., from cron) with the name `nhc-oob` (which will load its config from `/etc/sysconfig/nhc-oob` and `/etc/nhc/nhc-oob.conf`):
@@ -433,6 +439,7 @@ The table below provides a list of the configuration variables which may be used
 | DF_FLAGS | `-Tka` | Flags to pass to `$DF_CMD` for space checks. **_NOTE:_  Adding the `-l` flag is _strongly_ recommended if only checking local filesystems.** |
 | DFI_CMD | `df` | Command used by `check_fs_inodes`, `check_fs_ifree`, and `check_fs_iused` |
 | DFI_FLAGS | `-Tia` | Flags to pass to `$DFI_CMD`. **_NOTE:_  Adding the `-l` flag is _strongly_ recommended if only checking local filesystems.** |
+| *EVAL_LINE | None (unset) | Same as `-e` command-line option:  If set, evaluate `$EVAL_LINE` as a check and exit immediately based on its result. |
 | *FORCE_SETSID | `1` |  Re-execute NHC as a session leader if it isn't already one at startup |
 | *HELPERDIR | `/usr/libexec/nhc` | Directory for NHC helper scripts |
 | *HOSTNAME | Set from `/proc/sys/kernel/hostname` | Canonical name of current node |

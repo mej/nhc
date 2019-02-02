@@ -78,7 +78,7 @@ function nhcgc_init_env() {
     NAME=${0/#*\/}
     NAME=${NAME/%-genconf}
 
-    unset VERBOSE
+    unset VERBOSE CONFDIR CONFFILE 
 }
 
 function nhcgc_help() {
@@ -99,6 +99,7 @@ $UNDERLINE
  OPTION            DESCRIPTION
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
+ -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
  -H <hostmask>     Use <hostmask> for hostmask in config (default: $HOSTNAME)
  -b <matchstr>     Prune BIOS/DMI section via <matchstr> (default: $DMI_MATCH)
  -c <conffile>     Write config to <conffile> (default: ${CONFDIR:-/etc/nhc}/$NAME.conf.auto)
@@ -122,8 +123,9 @@ function nhcgc_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":H:b:c:dhn:vx" OPTION ; do
+    while getopts ":D:H:b:c:dhn:vx" OPTION ; do
         case "$OPTION" in
+            D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             H) HOSTNAME="$OPTARG" ; dbg "\$HOSTNAME set to $HOSTNAME." ;;
             b) DMI_MATCH="$OPTARG" ; dbg "\$DMI_MATCH set to $DMI_MATCH." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;

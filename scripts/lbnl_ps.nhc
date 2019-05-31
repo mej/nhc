@@ -670,7 +670,7 @@ function check_ps_unauth_users() {
         if [[ -z "$THIS_UID" ]]; then
             nhc_common_get_uid "$THIS_USER" THIS_UID
         fi
-        UNAUTH_MSG="$FUNCNAME:  $THIS_USER's \"$THIS_CMD\" process is unauthorized. (PID $THIS_PID)"
+        UNAUTH_MSG="$FUNCNAME:  $THIS_USER \"$THIS_CMD\" process is unauthorized. (PID $THIS_PID)"
         for ACTION in $ACTIONS ; do
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;
@@ -769,7 +769,7 @@ function check_ps_userproc_lineage() {
             continue
         fi
         # Not a child of RM daemon.  Take action.
-        UNAUTH_MSG="$FUNCNAME:  $THIS_USER's \"$THIS_CMD\" process is rogue. (PID $THIS_PID)"
+        UNAUTH_MSG="$FUNCNAME:  $THIS_USER \"$THIS_CMD\" process is rogue. (PID $THIS_PID)"
         for ACTION in $ACTIONS ; do
             case "$ACTION" in
                 log )    log "$UNAUTH_MSG" ;;

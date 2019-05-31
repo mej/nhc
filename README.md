@@ -2,7 +2,7 @@
 
 [![Join the chat at https://gitter.im/mej/nhc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mej/nhc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-TORQUE, SLURM, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
+TORQUE, Slurm, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
 
 Though many sites have created their own scripts to serve this function, the vast majority are one-off efforts with little attention paid to extensibility, flexibility, reliability, speed, or reuse.  Developers at [Lawrence Berkeley National Laboratory](http://www.lbl.gov/) created this project in an effort to change that.  LBNL Node Health Check (NHC) has several design features that set it apart from most home-grown solutions:
  * Reliable - To prevent single-threaded script execution from causing hangs, execution of subcommands is kept to an absolute minimum, and a watchdog timer is used to terminate the check if it runs for too long.
@@ -14,6 +14,88 @@ Though many sites have created their own scripts to serve this function, the vas
 In a typical scenario, the NHC driver script is run periodically on each compute node by the resource manager client daemon (e.g., `pbs_mom`).  It loads its configuration file to determine which checks are to be run on the current node (based on its hostname).  Each matching check is run, and if a failure is encountered, NHC will exit with an error message describing the problem.  It can also be configured to mark nodes offline so that the scheduler will not assign jobs to bad nodes, reducing the risk of system-induced job failures.  NHC can also log errors to the syslog (which is often forwarded to the master node).  Some resource managers are even able to use NHC as a pre-job validation tool, keeping scheduled jobs from running on a newly-failed node, and/or a post-job cleanup/checkup utility to remove nodes from the scheduler which may have been adversely affected by the just-completed job.
 
 
+## Table of Contents (by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
+
+<!--ts-->
+   * [Getting Started](#getting-started)
+      * [Installation](#installation)
+      * [Sample Configuration](#sample-configuration)
+         * [Config File Auto-Generation](#config-file-auto-generation)
+      * [Testing](#testing)
+      * [Implementation](#implementation)
+         * [Slurm Integration](#slurm-integration)
+         * [TORQUE Integration](#torque-integration)
+         * [Grid Engine Integration](#grid-engine-integration)
+         * [Periodic Execution](#periodic-execution)
+   * [Configuration](#configuration)
+      * [Command-Line Invocation](#command-line-invocation)
+         * [Options](#options)
+         * [Variable/Value Arguments](#variablevalue-arguments)
+         * [Example Invocations](#example-invocations)
+      * [Configuration File Syntax](#configuration-file-syntax)
+      * [Match Strings](#match-strings)
+      * [Supported Variables](#supported-variables)
+      * [Detached Mode](#detached-mode)
+      * [Built-in Checks](#built-in-checks)
+            * [check_cmd_output](#check_cmd_output)
+            * [check_cmd_status](#check_cmd_status)
+            * [check_dmi_data_match](#check_dmi_data_match)
+            * [check_dmi_raw_data_match](#check_dmi_raw_data_match)
+            * [check_file_contents](#check_file_contents)
+            * [check_file_stat](#check_file_stat)
+            * [check_file_test](#check_file_test)
+            * [check_fs_inodes](#check_fs_inodes)
+            * [check_fs_ifree](#check_fs_ifree)
+            * [check_fs_iused](#check_fs_iused)
+            * [check_fs_mount](#check_fs_mount)
+            * [check_fs_mount_ro](#check_fs_mount_ro)
+            * [check_fs_mount_rw](#check_fs_mount_rw)
+            * [check_fs_free](#check_fs_free)
+            * [check_fs_size](#check_fs_size)
+            * [check_fs_used](#check_fs_used)
+            * [check_hw_cpuinfo](#check_hw_cpuinfo)
+            * [check_hw_eth](#check_hw_eth)
+            * [check_hw_gm](#check_hw_gm)
+            * [check_hw_ib](#check_hw_ib)
+            * [check_hw_mcelog](#check_hw_mcelog)
+            * [check_hw_mem](#check_hw_mem)
+            * [check_hw_mem_free](#check_hw_mem_free)
+            * [check_hw_physmem](#check_hw_physmem)
+            * [check_hw_physmem_free](#check_hw_physmem_free)
+            * [check_hw_swap](#check_hw_swap)
+            * [check_hw_swap_free](#check_hw_swap_free)
+            * [check_moab_sched](#check_moab_sched)
+            * [check_moab_rm](#check_moab_rm)
+            * [check_moab_torque](#check_moab_torque)
+            * [check_net_ping](#check_net_ping)
+            * [check_net_socket](#check_net_socket)
+            * [check_nv_healthmon](#check_nv_healthmon)
+            * [check_ps_blacklist](#check_ps_blacklist)
+            * [check_ps_cpu](#check_ps_cpu)
+            * [check_ps_daemon](#check_ps_daemon)
+            * [check_ps_kswapd](#check_ps_kswapd)
+            * [check_ps_loadavg](#check_ps_loadavg)
+            * [check_ps_mem](#check_ps_mem)
+            * [check_ps_physmem](#check_ps_physmem)
+            * [check_ps_service](#check_ps_service)
+            * [check_ps_time](#check_ps_time)
+            * [check_ps_unauth_users](#check_ps_unauth_users)
+            * [check_ps_userproc_lineage](#check_ps_userproc_lineage)
+   * [Customization](#customization)
+      * [Writing Checks](#writing-checks)
+      * [Tips and Best Practices for Checks](#tips-and-best-practices-for-checks)
+         * [Arrays](#arrays)
+         * [File I/O](#file-io)
+         * [Line Parsing and Loops](#line-parsing-and-loops)
+         * [Text Transformations](#text-transformations)
+         * [Matching](#matching)
+   * [Footnotes](#footnotes)
+
+<!-- Added by: mej, at: 2019-01-01T03:03-0700 -->
+
+<!--te-->
+
+
 ## Getting Started
 
 The following instructions will walk you through downloading and installing LBNL NHC, configuring it for your system, testing the configuration, and implementing it for use with the TORQUE resource manager.
@@ -21,11 +103,11 @@ The following instructions will walk you through downloading and installing LBNL
 
 ### Installation
 
-Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes (e.g., [lbnl-nhc-1.4.1-1.el6.noarch.rpm](https://github.com/mej/nhc/releases/1.4.1/archive/lbnl-nhc-1.4.1-1.el6.noarch.rpm)) and install it into your compute node VNFS.
+Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes (e.g., [lbnl-nhc-1.4.2-1.el7.noarch.rpm](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2-1.el7.noarch.rpm)) and install it into your compute node VNFS.
 
 The NHC Yum repository is currently unavailable, but we hope to provide one in the very near future!
 
-The [source tarball for the latest release](https://github.com/mej/nhc/releases/1.4.1/archive/lbnl-nhc-1.4.1.tar.gz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
+The [source tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
 
 ```
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec
@@ -88,9 +170,9 @@ The scan also includes BIOS information obtained via the `dmidecode` command.  T
 It can be incredibly tedious, especially for large, well-established heterogeneous or multi-generational clusters to gather up all the different types of hardware that exist in your system and write the appropriate NHC config file rules, match expressions, etc.  The following commands might come in handy for aggregating the results of `nhc-genconf` across a large group of nodes:
 
 ```
-# wwsh ssh 'n*' /usr/sbin/nhc-genconf -H '*' -c - | dshbak -c
+# wwsh ssh 'n*' "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
  OR
-# pdsh -a /usr/sbin/nhc-genconf -H '*' -c - | dshbak -c
+# pdsh -a "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
 ```
 
 
@@ -166,9 +248,23 @@ Once the configuration has been modified, try running `/usr/sbin/nhc` again.  Co
 Instructions for putting NHC into production depend entirely on your use case.  We can't possibly hope to delineate them all, but we'll cover some of the most common.
 
 
+#### Slurm Integration
+
+Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
+
+```
+HealthCheckProgram=/usr/sbin/nhc
+HealthCheckInterval=300
+```
+
+This will execute NHC every 5 minutes.
+
+For optimal support of Slurm, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
+
+
 #### TORQUE Integration
 
-NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/help.htm#topics/11-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
+NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/6-1-2/adminGuide/torque.htm#topics/torque/12-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
 
 ```bash
 $node_check_script /usr/sbin/nhc
@@ -199,18 +295,30 @@ This will cause the offline/online helpers to use the shorter hostname when invo
 It's also important to note here that NHC will only set a note on nodes that don't already have one (and aren't yet offline) or have one set by NHC itself; also, it will only online nodes and clear notes if it sees a note that was set by NHC.  It looks for the string "NHC:" in the note to distinguish between notes set by NHC and notes set by operators.  If you use this feature, and you need to mark nodes offline manually (e.g., for testing), setting a note when doing so is strongly encouraged.  (You can do this via the `-N` option, like this:  `pbsnodes -o -N 'Testing stuff' n0000 n0001 n0002`)  There was a bug in versions prior to 1.2.1 which would cause it to treat nodes with no notes the same way it treats nodes with NHC-assigned notes.  This _should_ be fixed in 1.2.1 and higher, but you never know....
 
 
-#### SLURM Integration
+#### Grid Engine Integration
 
-Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
+Sun Grid Engine (SGE) has had a somewhat "colorful"
+[history](https://en.wikipedia.org/wiki/Oracle_Grid_Engine#History)
+over the years.  It has evolved and changed hands numerous times, and
+there are currently multiple incarnations of it which are developed
+under both commercial and open source models.  Unfortunately, I don't
+have a whole lot of experience with any of them -- it was on its way
+out when I first joined the [team](http://scs.lbl.gov/) at
+[LBNL](https://www.lbl.gov/) and was eliminated completely shortly
+thereafter.  So I'm afraid I don't have the expertise to get NHC
+working with any of the Grid Engine variants.
 
-```
-HealthCheckProgram=/usr/sbin/nhc
-HealthCheckInterval=300
-```
-
-This will execute NHC every 5 minutes.
-
-For optimal support of SLURM, NHC version 1.3 or higher is recommended.  Prior versions will require manual intervention.
+The good news, though, is that Dave Love -- developer of the [Son of
+Grid Engine](https://arc.liv.ac.uk/SGE/) open source project -- does!
+He has made [multiple](https://github.com/mej/nhc/commit/46899ea7)
+[contributions](https://github.com/mej/nhc/commit/642c420e) over the
+years to help get NHC integrating effectively with SGE and all the
+assorted Grid Engine variants.  Additionally, he put together a great
+[recipe](https://arc.liv.ac.uk/SGE/howto/nhc-recipe.html) to help SGE
+users (and other users of &#x2753;GE incarnations), so rather than try
+to reproduce it here and keep it updated, I recommend you peruse his
+work in its entirety if you're a user of one of those products!
+&#x1f935;
 
 
 #### Periodic Execution
@@ -324,7 +432,7 @@ To run for testing purposes in debug mode with no timeout and with node online/o
 # nhc -d -t 0 MARK_OFFLINE=0
 ```
 
-To force use of SLURM as the resource manager and use a sysconfig path in `/opt`:
+To force use of Slurm as the resource manager and use a sysconfig path in `/opt`:
 ```
 # nhc NHC_RM=slurm SYSCONFIGDIR=/opt/etc/sysconfig
 ```
@@ -344,8 +452,8 @@ Examples:
 ```bash
 # This is a comment.
        # This is also a comment.
-# This line and the next one will both be ignored.
 
+# This line and the previous one will both be ignored.
 ```
 
 Configuration lines contain a **target** specifier, the separator string `||`, and the **check** command.  The target specifies which hosts should execute the check; only nodes whose hostname matches the given target will execute the check on that line.  All other nodes will ignore it and proceed to the next check.
@@ -413,7 +521,7 @@ The table below provides a list of the configuration variables which may be used
 | *HOSTNAME_S | `$HOSTNAME` truncated at first `.` | Short name (no domain or subdomain) of current node |
 | IGNORE_EMPTY_NOTE | `0` | Set to `1` to treat empty notes like NHC-assigned notes (<1.2.1 behavior) |
 | *INCDIR | `$CONFDIR/scripts` | Directory for NHC check scripts |
-| JOBFILE_PATH | TORQUE/PBS:  `$PBS_SERVER_HOME/mom_priv/jobs` <br /> SLURM:  `$SLURM_SERVER_HOME` | Directory on compute nodes where job records are kept |
+| JOBFILE_PATH | TORQUE/PBS:  `$PBS_SERVER_HOME/mom_priv/jobs` <br /> Slurm:  `$SLURM_SERVER_HOME` | Directory on compute nodes where job records are kept |
 | *LOGFILE | `>>/var/log/nhc.log` | File name/path or BASH-syntax directive for logging output (`-` for `STDOUT`) |
 | LSF_BADMIN | `badmin` | Command to use for LSF's `badmin` (may include path) |
 | LSF_BHOSTS | `bhosts` | Command to use for LSF's `bhosts` (may include path) |
@@ -443,13 +551,13 @@ The table below provides a list of the configuration variables which may be used
 | PBSNODES_ONLINE_ARGS | `-c -N` | Arguments to `$PBSNODES` to mark node online with note |
 | PBS_SERVER_HOME | `/var/spool/torque` | Directory for TORQUE files |
 | RESULTFILE | `/var/run/nhc/$NAME.status` | Used in [Detached Mode](#detached-mode) to store result of checks for subsequent handling
-| RM_DAEMON_MATCH | TORQUE/PBS:  `/\bpbs_mom\b/` <br /> SLURM:  `/\bslurmd\b/` <br /> SGE/UGE:  `/\bsge_execd\b/` | [Match string](#match-strings) used by `check_ps_userproc_lineage` to make sure all user processes were spawned by the RM daemon |
+| RM_DAEMON_MATCH | TORQUE/PBS:  `/\bpbs_mom\b/` <br /> Slurm:  `/\bslurmd\b/` <br /> SGE/UGE:  `/\bsge_execd\b/` | [Match string](#match-strings) used by `check_ps_userproc_lineage` to make sure all user processes were spawned by the RM daemon |
 | SILENT | `0` | Set to `1` to disable logging via `$LOGFILE` |
-| SLURM_SCONTROL | `scontrol` | Command to use for SLURM's `scontrol` (may include path) |
-| SLURM_SC_OFFLINE_ARGS | `update State=DRAIN` | Arguments to pass to SLURM's `scontrol` to offline a node |
-| SLURM_SC_ONLINE_ARGS | `update State=IDLE` | Arguments to pass to SLURM's `scontrol` to online a node |
-| SLURM_SERVER_HOME | `/var/spool/slurmd` | Location of SLURM data files (see also:  `$JOBFILE_PATH`) |
-| SLURM_SINFO | `sinfo` | Command to use for SLURM's `sinfo` (may include path) |
+| SLURM_SCONTROL | `scontrol` | Command to use for Slurm's `scontrol` (may include path) |
+| SLURM_SC_OFFLINE_ARGS | `update State=DRAIN` | Arguments to pass to Slurm's `scontrol` to offline a node |
+| SLURM_SC_ONLINE_ARGS | `update State=IDLE` | Arguments to pass to Slurm's `scontrol` to online a node |
+| SLURM_SERVER_HOME | `/var/spool/slurmd` | Location of Slurm data files (see also:  `$JOBFILE_PATH`) |
+| SLURM_SINFO | `sinfo` | Command to use for Slurm's `sinfo` (may include path) |
 | STAT_CMD | `/usr/bin/stat` | Command to use to `stat()` files |
 | STAT_FMT_ARGS | `-c` | Parameter to introduce format string to `stat` command |
 | *TIMEOUT | `30` | Watchdog timer (in seconds) |
@@ -492,7 +600,7 @@ The LBNL Node Health Check distribution supplies the following checks:
 | **Check&nbsp;Option** | **Purpose** |
 | ---------------- | ----------- |
 | `-e`_`command`_ | Execute _`command`_ and gather its output.  The _`command`_ is split on word boundaries, much like `/bin/sh -c '...'` does. |
-| `-m`_`mstr`_ | If negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
+| `-m`_`mstr`_ | If the match string is negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
 | `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ or the check will fail. |
 | `-t`_`secs`_ | Command will timeout if not completed within _`secs`_ seconds (default is 5). |
 
@@ -521,13 +629,13 @@ _**Example** (Make sure SELinux is disabled)_:  `check_cmd_status -t 1 -r 1 seli
 
 
 ##### check_dmi_data_match
-`check_dmi_data_match [-h handle] [-t type] [-n | '!'] string`
+`check_dmi_data_match [-! | -n | '!'] [-h handle] [-t type] string`
 
 `check_dmi_data_match` uses parsed, structured data taken from the output of the `dmidecode` command to allow the administrator to make very specific assertions regarding the contents of the DMI (a.k.a. SMBIOS) data.  Matches can be made against any output or against specific types (classifications of data) or even handles (identifiers of data blocks, typically sequential).  Output is restructured such that sections which are indented underneath a section header have the text of the section header prepended to the output line along with a colon and intervening space.  So, for example, the string "<tab><tab>ISA is supported" which appears underneath the "Characteristics:" header, which in turn is underneath the "BIOS Information" header/type, would be parsed by `check_dmi_data_match` as "BIOS Information: Characteristics: ISA is supported"
 
 See the `dmidecode` man page for more details.
 
-> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-n` or `!` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction!
+> **WARNING**:  Although _`string`_ is technically a [match string](#match-strings), and supports negation in its own right, you probably don't want to use negated [match strings](#match-strings) here.  Passing the `-!` or `-n` parameters to the check means, "check all relevant DMI data and pass the check only if no matching line is found."  Using a negated [match string](#match-strings) here would mean, "The check passes as soon as _ANY_ non-matching line is found" -- almost certainly not the desired behavior!  A subtle but important distinction.
 
 _**Example** (check for BIOS version)_:  `check_dmi_data_match "BIOS Information: Version: 1.0.37"`
 
@@ -577,7 +685,7 @@ _**Example** (verify setting of $pbsserver in pbs_mom config)_:  `check_file_con
 | `-U`_`name`_ | Specifies that filename(s) should be owned by user _`name`_ |
 | `-d`_`num`_ | Specifies that the device ID for _filename(s)_ should be _`num`_ (decimal or hex) |
 | `-g`_`gid`_ | Specifies that _filename(s)_ should be owned by group id _`gid`_ |
-| `-m`_`mode`_ | Specifies that the permissions for _filename(s)_ should include at LEAST the bits set in _`mode`_ |
+| `-m`_`mode`_ | Specifies that the permissions for _filename(s)_ should EXACTLY be the bits set in _`mode`_ |
 | `-n`_`secs`_ | Specifies that the `mtime` (i.e., modification time) of _filename(s)_ should be newer than _`secs`_ seconds ago |
 | `-o`_`secs`_ | Specifies that the `mtime` (i.e., modification time) of _filename(s)_ should be older than _`secs`_ seconds ago |
 | `-t`_`num`_ | Specifies that the major device number for _filename(s)_ be _`num`_ |
@@ -803,9 +911,11 @@ The default behavior is to run `mcelog --client` but is configurable via the `$M
 
 
 ##### check_hw_mem
-`check_hw_mem min_kb max_kb`
+`check_hw_mem min_kb max_kb [fudge]`
 
 `check_hw_mem` compares the total system memory (RAM + swap) with the minimum and maximum values provided (in kB).  If the total memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of memory, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of memory, it represents a "fudge factor," a tolerance by which the amount of memory detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (exactly 26 GB system memory required)_:  `check_hw_mem 27262976 27262976`
 
@@ -825,9 +935,11 @@ _**Example** (require at least 640 kB free)_:  `check_hw_mem_free 640`
 
 
 ##### check_hw_physmem
-`check_hw_physmem min_kb max_kb`
+`check_hw_physmem min_kb max_kb [fudge]`
 
 `check_hw_physmem` compares the amount of physical memory (RAM) present in the system with the minimum and maximum values provided (in kB).  If the physical memory is less than _min_kb_ or more than _max_kb_ kilobytes, the check fails.  To require an exact amount of RAM, use the same value for both parameters.
+
+If the optional _fudge_ value is specified, either as an absolute size value or as a percentage of the total amount of RAM, it represents a "fudge factor," a tolerance by which the amount of RAM detected in the system may vary (either below _min_kb_ or above _max_kb_) without failing the check.  This allows both for slight variations in the Linux kernel's reported values and for rounding errors in the size calculations and unit conversions.
 
 _**Example** (at least 12 GB RAM/node, no more than 48 GB)_:  `check_hw_physmem 12582912 50331648`
 
@@ -1206,8 +1318,12 @@ function check_stuff_works() {
 
     # Use cached data
     if [[ "${STUFF_ARRAY_VARIABLE[0]}" = "" ]]; then
-        die "Stuff is not working"
+        # check failed
+        die 1 "Stuff is not working"
+        return 1
     fi
+    
+    # check passed
     return 0
 }
 ```
@@ -1384,9 +1500,9 @@ So here are some ways the above constructs can be used to do common operations o
 | ------------------ | -------------------- |
 | `sed 's/^ *//'` | `while [[ "$LINE" != "${LINE## }" ]]; do LINE="${LINE## }" ; done` |
 | `sed 's/ *$//'` | `while [[ "$LINE" != "${LINE%% }" ]]; do LINE="${LINE%% }" ; done` |
-| `echo ${LIST[*]} | fgrep string` | `[[ "${LIST[*]//string}" != "${LIST[*]}" ]]` |
+| `echo ${LIST[*]} \| fgrep string` | `[[ "${LIST[*]//string}" != "${LIST[*]}" ]]` |
 | `tail -1` | `${LINES[*]:-1}` |
-| `cat file | tr '\r' ''` | `LINES=( "${LINES[@]//$'\r'}" )` |
+| `cat file \| tr '\r' ''` | `LINES=( "${LINES[@]//$'\r'}" )` |
 
 There are infinitely more, of course, but these should get you thinking along the right lines!
 

@@ -52,7 +52,7 @@ if [[ "$NHC_RM" == "pbs" ]]; then
     echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
     exec $PBSNODES $PBSNODES_OFFLINE_ARGS "$LEADER $NOTE" $HOSTNAME
 
-### SLURM
+### Slurm
 elif [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
@@ -63,7 +63,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
-        alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|undrain*)
+        alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|resv*|undrain*)
             case "$STATUS" in
                 drain*|drng*|fail*|maint*)
                     # If the node is already offline, and there is no old note, and

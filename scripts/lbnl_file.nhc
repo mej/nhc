@@ -82,7 +82,7 @@ function nhc_file_stat() {
 # fail to match the file's contents.  Matching is done line by line.
 function check_file_contents() {
     local FILENAME="$1"
-    local LINE LINENO=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
+    local LINE LINENUM=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
     local -a MATCHES MATCHED
 
     # Create an array of all matches for which we must search.
@@ -101,12 +101,12 @@ function check_file_contents() {
 
     # Read the file line by line.
     while read LINE ; do
-        ((LINENO++))
+        ((LINENUM++))
         for ((i = 0; i < ${#MATCHES[*]}; i++)); do
             if [[ ${MATCHED[$i]} -eq 1 ]]; then
                 if [[ "${MATCHES[$i]:0:1}" = '!' ]] && mcheck "$LINE" "${MATCHES[$i]:1}" ; then
                     # Match expression is negated.  Fail if the line matches this expression.
-                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENO matches \"${MATCHES[$i]:1}\"."
+                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENUM matches \"${MATCHES[$i]:1}\"."
                     return 1
                 fi
             elif mcheck "$LINE" "${MATCHES[$i]}" ; then
@@ -151,11 +151,13 @@ function check_file_contents() {
 # supplied arguments to the "test" command returns false.
 function check_file_test() {
     local OP ARG RESULT
+    local NEG=0
     local -a FLAGS=( ) ARGS=( )
 
     for ARG in "$@" ; do
         case "$ARG" in
             -[abcdefghkprstuwxOGLSN]) FLAGS[${#FLAGS[*]}]="$ARG" ;;
+            -!) NEG=1 ;;
             -*) die 1 "$FUNCNAME:  Syntax error:  Invalid/unsupported operator \"$ARG\"." ; return 1 ;;
             *) ARGS[${#ARGS[*]}]="$ARG" ;;
         esac
@@ -169,12 +171,21 @@ function check_file_test() {
             eval test $OP "$ARG"
             RESULT=$?
             if [[ $RESULT -ne 0 ]]; then
-                die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
-                return 1
+                if [[ $NEG == 1 ]]; then
+                    return 0
+                else
+                    die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+                    return 1
+                fi
             fi
         done
     done
-    return 0
+    if [[ $NEG == 1 ]]; then
+        die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+        return 1
+    else
+        return 0
+    fi
 }
 
 # Check various aspects of the results of stat() on a file.
@@ -303,7 +314,7 @@ function check_file_stat() {
                 return 1
             elif [[ ${NHC_STAT_MODE[$IDX]} -ne $MODE_IS ]]; then
                 # File permissions should exactly equal $MODE_IS, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be $MODE_IS"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be $MODE_IS"
                 return 1
             fi
         fi
@@ -313,7 +324,7 @@ function check_file_stat() {
                 return 1
             elif [[ $((NHC_STAT_MODE[IDX] & MODE_MATCHES)) -ne $MODE_MATCHES ]]; then
                 # File permissions should include those specified in $MODE_MATCHES, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MINOR[$IDX]}; should be at least $MODE_MATCHES"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be at least $MODE_MATCHES"
                 return 1
             fi
         fi

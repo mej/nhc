@@ -480,13 +480,13 @@ plan $((14+10+6+29+18+6+5+7+6+6+9)) "lbnl_ps.nhc" && {
     check_ps_service -m 'sshd*' sshd
     is $? 1 "Service check with exact match glob (failure)"
     SHELL=: check_ps_service -e "/sbin/shutdown -r 1" trqauthd
-    is $? 0 "Service check with missing action (success)"
+    is $? 0 "Service check with missing action (daemon found -- success)"
     SHELL=: check_ps_service -e "/sbin/shutdown -r 1" httpd
-    is $? 1 "Service check with missing action (failure)"
+    is $? 1 "Service check with missing action (daemon not found -- failure)"
     SHELL=: check_ps_service -E "true" trqauthd
-    is $? 0 "Service check with found action (success)"
+    is $? 1 "Service check with found action (daemon found -- failure)"
     SHELL=: check_ps_service -E "true" httpd
-    is $? 1 "Service check with found action (failure)"
+    is $? 0 "Service check with found action (daemon not found -- success)"
 
     # Checks for excessive CPU utilization
     check_ps_cpu 99

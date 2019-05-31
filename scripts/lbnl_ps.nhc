@@ -25,6 +25,8 @@ function nhc_ps_gather_data() {
     local IFS PS_DATA THIS_PID i
     local -a LINES LINE
 
+    PS_PROCS=( ) PS_USER=( ) PS_PPID=( ) PS_PCPU=( ) PS_PMEM=( ) PS_RSS=( ) PS_VSZ=( ) PS_TIME=( ) PS_ARGS=( )
+
     # We need passwd data to resolve UIDs for users with lengthy userids
     if [[ ${#PWDATA_USERS[*]} -eq 0 ]]; then
         nhc_common_load_passwd
@@ -32,38 +34,17 @@ function nhc_ps_gather_data() {
 
     # We need this for user authorization checks.  Try to read system defaults.
     [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
-    MAX_SYS_UID=${MAX_SYS_UID:-99}
 
-    # Set default for $RM_DAEMON_MATCH based on configured resource manager.
-    if [[ "$NHC_RM" == "pbs" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
-    elif [[ "$NHC_RM" == "slurm" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
-    elif [[ "$NHC_RM" == "sge" ]]; then
-        # If you limit this to execd, you lose when it's been restarted,
-        # and the shepherd is detached.  Even if execd is safe because of
-        # system uids, it can spawn mail commands as the job owner, at
-        # least.  (The shepherd process name is normally
-        # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
-    else
-        dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
-    fi
-    if [[ ! "test" =~ \btest\b ]]; then
-        # Workaround for lack of \b support in regexp library.
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
-    fi
-        
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
-    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
+    LINES=( $(COLUMNS=1024 ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
-        LINE=( ${LINES[$i]//\*/\\\*} )
+        # The below escaping should no longer be needed now that globbing is disabled.
+        LINE=( ${LINES[$i]} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi
@@ -78,8 +59,6 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
-        # NOTE:  We want to leave the *'s backslash-escaped for future expansion safety!
-        #PS_ARGS[$THIS_PID]="${PS_ARGS[$THIS_PID]//\\\*/*}"
         if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" ]]; then
             nhc_common_get_userid "${PS_UID[$THIS_PID]}" "PS_USER[$THIS_PID]"
         fi
@@ -114,6 +93,9 @@ function nhc_ps_pid_lineage() {
         nhc_ps_gather_data
     fi
 
+    if [[ -z "$PROCNAME" ]]; then
+        return 1
+    fi
     while [[ -n "$THIS_PID" && $THIS_PID -ne 1 ]]; do
         THIS_PID=${PS_PPID[$THIS_PID]}
         mcheck "${PS_ARGS[$THIS_PID]}" "$PROCNAME" && return 0
@@ -379,10 +361,10 @@ function check_ps_blacklist() {
 }
 
 # Check to make sure a service is (or isn't) running.  Syntax:
-#  check_ps_service [-0] [-f] [-S|-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
+#  check_ps_service [-0] [-f] [-v|-V] [-S|-r|-c|-s|-k] [-u <user>] [-d <daemon> | -m <match>] [ -e <action> | -E <action> ] <service>
 function check_ps_service() {
-    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 ACTION FOUND_ACTION
-    local THIS_PID THIS_SVC i MSG
+    local SERVICE OWNER MATCH DAEMON NONFATAL=0 FULLMATCH=0 RESTART=0 CYCLE=0 START=0 STOP=0 KILL=0 VERIFY_SYNC=0 VERIFY_CHECK=0
+    local ACTION FOUND_ACTION THIS_PID THIS_SVC i MSG RET CMD
     local -a ARGS
 
     if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
@@ -390,20 +372,22 @@ function check_ps_service() {
     fi
 
     OPTIND=1
-    while getopts ":0Sfrcsku:d:m:e:E:" OPTION ; do
+    while getopts ":0E:SVcd:e:fkm:rsu:v" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
-            S) START=1 ;;
-            f) FULLMATCH=1 ;;
-            r) RESTART=1 ;;
-            c) CYCLE=1 ;;
-            s) STOP=1 ;;
-            k) KILL=1 ;;
-            u) OWNER="$OPTARG" ;;
-            d) DAEMON="$OPTARG" ;;
-            m) MATCH="$OPTARG" ;;
-            e) ACTION="$OPTARG" ;;
             E) FOUND_ACTION="$OPTARG" ;;
+            S) START=1 ;;
+            V) VERIFY_CHECK=1 ;;
+            c) CYCLE=1 ;;
+            d) DAEMON="$OPTARG" ;;
+            e) ACTION="$OPTARG" ;;
+            f) FULLMATCH=1 ;;
+            k) KILL=1 ;;
+            m) MATCH="$OPTARG" ;;
+            r) RESTART=1 ;;
+            s) STOP=1 ;;
+            u) OWNER="$OPTARG" ;;
+            v) VERIFY_SYNC=1 ;;
             :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
             \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
@@ -444,21 +428,94 @@ function check_ps_service() {
             fi
         fi
         # We have a matching process with the correct owner.
-        if [[ "$FOUND_ACTION" != "" ]]; then
-            ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
-        fi
-        if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+        if [[ $STOP -eq 1 || $KILL -eq 1 || -n "$FOUND_ACTION" ]]; then
             # Logic is inverted; we DON'T want this process running, so finding it is a failure.
             MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }running"
-            if [[ "$KILL" == "1" ]]; then
-                [[ "$SHELL" != ":" ]] && kill -9 $THIS_PID
-                MSG="$MSG; killed process ID $THIS_PID"
-            else
-                # $STOP must be 1
+            if [[ $KILL -eq 1 ]]; then
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; killed process ID $THIS_PID (test mode)"
+                else
+                    kill -9 $THIS_PID
+                    RET=$?
+                    if [[ $VERIFY_SYNC -eq 1 ]]; then
+                        # VERIFY_SYNC here only means we check the return value of the kill built-in.
+                        if [[ $RET -eq 0 ]]; then
+                            log "$MSG; process ID $THIS_PID killed successfully."
+                            continue
+                        else
+                            MSG="$MSG; \"kill -9 $THIS_PID\" failed (exit code $RET)."
+                        fi
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK here means we kill the PID again and make sure it's gone.
+                        # Sleep very briefly to yield CPU, hopefully ensuring signal delivery.
+                        sleep 0.01
+                        if [[ $RET -ne 0 ]]; then
+                            MSG="$MSG; \"kill -9 $THIS_PID\" failed (exit code $RET)."
+                        elif kill -0 $THIS_PID ; then
+                            MSG="$MSG; \"kill -9 $THIS_PID\" succeeded but failed to terminate process."
+                        else
+                            log "$MSG; process ID $THIS_PID terminated successfully."
+                            return 0
+                        fi
+                    else
+                        MSG="$MSG; killed process ID $THIS_PID (SIGKILL)"
+                    fi
+                fi
+            elif [[ $STOP -eq 1 ]]; then
                 ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop" &
-                MSG="$MSG; termination in progress"
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; termination in progress"
+                elif [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+                    # In VERIFY mode, we must "foreground" the service action to check its return value.
+                    wait $!
+                    RET=$?
+                    if [[ $RET -ne 0 ]]; then
+                        # If the "stop" fails, both VERIFY modes do the same thing.
+                        MSG="$MSG; \"/sbin/service $SERVICE stop\" failed (exit code $RET)."
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK mode requires that we also make sure the PID is really gone now.
+                        if kill -0 $THIS_PID ; then
+                            MSG="$MSG; \"/sbin/service $SERVICE stop\" succeeded but failed to stop process $THIS_PID."
+                        else
+                            log "$MSG; service $SERVICE stopped and process $THIS_PID terminated successfully."
+                            return 0
+                        fi
+                    else
+                        log "$MSG; service $SERVICE stopped successfully."
+                        return 0
+                    fi
+                else
+                    MSG="$MSG; service termination in progress"
+                fi
+            else
+                # We must have a $FOUND_ACTION to run.
+                ${SHELL:-/bin/bash} -c "$FOUND_ACTION" &
+                if [[ "$SHELL" == ":" ]]; then
+                    MSG="$MSG; \"$FOUND_ACTION\" in progress."
+                elif [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+                    # In VERIFY mode, we must "foreground" the action to check its return value.
+                    wait $!
+                    RET=$?
+                    if [[ $RET -ne 0 ]]; then
+                        # If the action fails, both VERIFY modes do the same thing.
+                        MSG="$MSG failed (exit code $RET)."
+                    elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                        # VERIFY_CHECK mode requires that we also make sure the PID is really gone now.
+                        if kill -0 $THIS_PID ; then
+                            MSG="$MSG succeeded but failed to terminate process $THIS_PID."
+                        else
+                            log "$MSG successfully terminated service $SERVICE (process $THIS_PID)."
+                            return 0
+                        fi
+                    else
+                        log "$MSG succeeded."
+                        return 0
+                    fi
+                else
+                    MSG="$MSG; \"$FOUND_ACTION\" in progress."
+                fi
             fi
-            if [[ $NONFATAL == 1 ]]; then
+            if [[ $NONFATAL -eq 1 ]]; then
                 if [[ -n "$MSG" ]]; then
                     log "$MSG (non-fatal)"
                 fi
@@ -472,26 +529,51 @@ function check_ps_service() {
     done
 
     # No matching process found.
-    if [[ "$STOP" == "1" || "$KILL" == "1" ]]; then
+    if [[ $STOP -eq 1 || $KILL -eq 1 || -n "$FOUND_ACTION" ]]; then
         # Logic is inverted; we DON'T want this process running, so not finding it is a success.
         return 0
     fi
 
     MSG="$FUNCNAME:  Service $SERVICE (process $DAEMON) ${OWNER:+owned by $OWNER }not running"
-    if [[ $START == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE start" &
-        MSG="$MSG; start in progress"
-    elif [[ $RESTART == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE restart" &
-        MSG="$MSG; restart in progress"
-    elif [[ $CYCLE == 1 ]]; then
-        ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start" &
-        MSG="$MSG; cycle in progress"
-    elif [[ "$ACTION" != "" ]]; then
-        ${SHELL:-/bin/bash} -c "$ACTION" &
-        MSG="$MSG; executed \"$ACTION\""
+    if [[ $START -eq 1 || $RESTART -eq 1 || $CYCLE -eq 1 || "$ACTION" != "" ]]; then
+        if [[ $START -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE start"
+            MSG="$MSG; start"
+        elif [[ $RESTART -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE restart"
+            MSG="$MSG; restart"
+        elif [[ $CYCLE -eq 1 ]]; then
+            CMD="/sbin/service $SERVICE stop ; sleep 2 ; /sbin/service $SERVICE start"
+            MSG="$MSG; cycle"
+        elif [[ "$ACTION" != "" ]]; then
+            CMD="$ACTION"
+            MSG="$MSG; \"$ACTION\""
+        fi
+        ${SHELL:-/bin/bash} -c "$CMD" &
+        if [[ $VERIFY_SYNC -eq 1 || $VERIFY_CHECK -eq 1 ]]; then
+            wait $!
+            RET=$?
+            if [[ $RET -ne 0 ]]; then
+                # If the command fails, both VERIFY modes do the same thing.
+                MSG="$MSG failed (exit code $RET)."
+            elif [[ $VERIFY_CHECK -eq 1 ]]; then
+                # VERIFY_CHECK mode requires that we also make sure the process/service is now running.
+                ${SHELL:-/bin/bash} -c "/sbin/service $SERVICE status" >&/dev/null
+                if [[ $? -ne 0 ]]; then
+                    MSG="$MSG succeeded but failed to start service $SERVICE."
+                else
+                    log "$MSG succeeded; service $SERVICE now running."
+                    return 0
+                fi
+            else
+                log "$MSG; service $SERVICE stopped successfully."
+                return 0
+            fi
+        else
+            MSG="$MSG in progress"
+        fi
     fi
-    if [[ $NONFATAL == 1 ]]; then
+    if [[ $NONFATAL -eq 1 ]]; then
         if [[ -n "$MSG" ]]; then
             log "$MSG (non-fatal)"
         fi
@@ -536,8 +618,22 @@ function check_ps_time() {
 # to be running on the node (i.e., root, and owners of current PBS jobs).
 # Arguments to function are actions to take (ignore, log, syslog, die, kill).
 function check_ps_unauth_users() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_CMD IGNORE_UID IGNORE_USER IGNORE_PID
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -553,9 +649,17 @@ function check_ps_unauth_users() {
 
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
-        THIS_USER="${PS_USER[$THIS_PID]}"
         THIS_UID="${PS_UID[$THIS_PID]}"
+        THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         nhc_job_user_auth "$THIS_USER" "$THIS_UID"
         IS_AUTH=$?
         if [[ $IS_AUTH -eq 0 ]]; then
@@ -582,8 +686,22 @@ function check_ps_unauth_users() {
 # Check the lineage for all non-system processes to make sure they're children
 # of torque (i.e., pbs_mom).  Arguments are actions (same as above).
 function check_ps_userproc_lineage() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_USER
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -597,11 +715,47 @@ function check_ps_userproc_lineage() {
         nhc_common_load_passwd
     fi
 
+    if [[ -z "$NHC_RM" || "$NHC_RM" == "none" ]]; then
+        die 1 "$FUNCNAME:  This check requires a supported resource manager (e.g., Slurm, TORQUE, SGE, LSF)"
+        return 1
+    elif [[ -z "$RM_DAEMON_MATCH" ]]; then
+        # Set default for $RM_DAEMON_MATCH based on configured resource manager.
+        if [[ "$NHC_RM" == "pbs" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
+        elif [[ "$NHC_RM" == "slurm" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
+        elif [[ "$NHC_RM" == "sge" ]]; then
+            # If you limit this to execd, you lose when it's been restarted,
+            # and the shepherd is detached.  Even if execd is safe because of
+            # system uids, it can spawn mail commands as the job owner, at
+            # least.  (The shepherd process name is normally
+            # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
+        elif [[ "$NHC_RM" == "lsf" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bres\b/}"
+        else
+            dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
+        fi
+        if [[ ! "test" =~ \btest\b ]]; then
+            # Workaround for lack of \b support in regexp library.
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
+        fi
+    fi
+
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         THIS_UID="${PS_UID[$THIS_PID]}"
-        THIS_USER="${PWUID_USER[$THIS_UID]:-$THIS_UID}"
+        THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi

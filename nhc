@@ -47,18 +47,25 @@ function die() {
     shift
 
     CHECK_DIED=1
+    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $*"
     log "ERROR:  $NAME:  Health check failed:  $*"
     syslog "Health check failed:  $*"
     syslog_flush
-    if [[ "$MARK_OFFLINE" == "1" && "$FAIL_CNT" == "0" ]]; then
-        eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
+        if [[ "${CHECK:0:4}" == "die " ]]; then
+            CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
+            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+            CHECK="$FUNCNAME $*"
+        else
+            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+        fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
-        if [[ -w "$RESULTFILE" ]]; then
-            echo "$RET $*" > $RESULTFILE
+        if [[ -w "$RESULTFILE" || (! -e "$RESULTFILE" && -w "${RESULTFILE%/*}") ]] && echo "$RET $*" > $RESULTFILE ; then
+            dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
-            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
-            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} read-only?"
+            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
             syslog_flush
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then
@@ -174,6 +181,26 @@ function kill_watchdog() {
     return 0
 }
 
+function toggle_bash_tracing() {
+    if [[ "$-" == *x* ]]; then
+        : "BASH tracing mode (-x) turned off via SIGUSR1."
+        set +x
+    else
+        set -x
+        : "BASH tracing mode (-x) turned on via SIGUSR1."
+    fi
+}
+
+function toggle_debug_mode() {
+    if [[ -z "$DEBUG" || "$DEBUG" -eq 0 ]]; then
+        DEBUG=1
+        dbg "NHC DEBUG mode turned on via SIGUSR2."
+    else
+        dbg "NHC DEBUG mode turned off via SIGUSR2."
+        DEBUG=0
+    fi
+}
+
 #########################
 
 function nhcmain_init_env() {
@@ -181,8 +208,14 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    SYSCONFIGDIR="/etc/sysconfig"
-    LIBEXECDIR="/usr/libexec"
+    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
+    if [[ -f /etc/debian_version ]]; then
+        SYSCONFIGDIR="/etc/default"
+        LIBEXECDIR="/usr/lib"
+    else
+        SYSCONFIGDIR="/etc/sysconfig"
+        LIBEXECDIR="/usr/libexec"
+    fi
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
     elif [[ -z "$HOSTNAME" ]]; then
@@ -201,7 +234,7 @@ function nhcmain_init_env() {
     FORCE_SETSID=1
     NHC_FD_OUT=1
     NHC_FD_ERR=2
-    export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
+    export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
     export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
@@ -209,13 +242,17 @@ function nhcmain_init_env() {
 
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
     unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
-    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED
+    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED EVAL_LINE
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
         export NHC_DETACHED
         DETACHED_MODE=1
     fi
+
+    # Disable pathname expansion by default so no unintended globbing happens.
+    # We'll turn it back on only where, and only for as long as, we need it.
+    set -f
 }
 
 function nhcmain_help() {
@@ -240,11 +277,12 @@ $UNDERLINE
  -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
+ -e <check>        Evaluate check line <check> and exit immediately
  -f                Run checks in forked subprocesses (i.e., NHC_CHECK_FORKED=1)
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
- -t <timeout>      Use timeout of <timeout> seconds (default: 10)
+ -t <timeout>      Use timeout of <timeout> seconds (default: 30)
  -v                Run verbosely (i.e., VERBOSE=1)
  -x                Run in eXtreme debug/trace mode (same as "bash -x")
 
@@ -270,12 +308,13 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:dfhl:n:qt:vx" OPTION ; do
+    while getopts ":D:ac:de:fhl:n:qt:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
+            e) EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
             f) NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
             h) nhcmain_help ; exit 0 ;;
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
@@ -346,7 +385,12 @@ function nhcmain_finalize_env() {
         exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
     fi
 
-    if [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
+    if [[ -n "$EVAL_LINE" ]]; then
+        LOGFILE=""
+        ONLINE_NODE=:
+        OFFLINE_NODE=:
+        MARK_OFFLINE=0
+    elif [[ "${LOGFILE##/}" != "$LOGFILE" ]]; then
         # If the log file looks like a path rather than a redirect, fix it.
         LOGFILE=">>$LOGFILE 2>&1"
     elif [[ "$LOGFILE" == "-" ]]; then
@@ -410,16 +454,16 @@ function nhcmain_find_rm() {
     elif type -a -p -f -P scontrol >&/dev/null ; then
         NHC_RM="slurm"
         return 0
-    elif type -a -p -f -P badmin >&/dev/null ; then
-        NHC_RM="lsf"
-        return 0
     elif type -a -p -f -P qselect >&/dev/null ; then
         NHC_RM="sge"
+        return 0
+    elif type -a -p -f -P badmin >&/dev/null || type -a -p -f -P sbatchd >&/dev/null ; then
+        NHC_RM="lsf"
         return 0
     fi
 
     if [[ -z "$NHC_RM" ]]; then
-        log "Unable to detect resource manager."
+        dbg "Unable to detect resource manager."
         return 1
     fi
 }
@@ -452,11 +496,17 @@ function nhcmain_check_conffile() {
 }
 
 function nhcmain_load_scripts() {
+    local -a NHC_SCRIPTS
+    local IFS=''
+
     vlog "Node Health Check starting."
 
     # Load all include scripts.
     dbg "Loading scripts from $INCDIR..."
-    for SCRIPT in $INCDIR/*.nhc ; do
+    set +f
+    NHC_SCRIPTS=( $INCDIR/*.nhc )
+    set -f
+    for SCRIPT in "${NHC_SCRIPTS[@]}" ; do
 	if [[ -e "$SCRIPT" ]]; then
             dbg "Loading ${SCRIPT/#*\/}"
             . $SCRIPT
@@ -605,6 +655,7 @@ function nhcmain_run_checks() {
             return $RET
         fi
     done
+    CHECK=""
     if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
@@ -618,7 +669,7 @@ function nhcmain_run_checks() {
 }
 
 function nhcmain_mark_online() {
-    if [[ "$MARK_OFFLINE" = "1" ]]; then
+    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 ]]; then
         eval $ONLINE_NODE "'$HOSTNAME'"
     fi
 }
@@ -649,6 +700,8 @@ if [[ -n "$NHC_LOAD_ONLY" ]]; then
     return 0 || exit 0
 fi
 
+trap 'toggle_bash_tracing' SIGUSR1
+trap 'toggle_debug_mode' SIGUSR2
 trap 'die 129 "Terminated by signal SIGHUP." ; exit 129' 1
 trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
@@ -658,23 +711,31 @@ nhcmain_init_env
 nhcmain_parse_cmdline "$@" || exit 10
 nhcmain_load_sysconfig
 nhcmain_finalize_env
+if [[ -n "$EVAL_LINE" ]]; then
+    nhcmain_load_scripts
+    eval $EVAL_LINE
+    exit $?
+fi
 nhcmain_redirect_output
 nhcmain_check_conffile || exit 0
 if [[ "$NHC_RM" == "sge" ]]; then
-    while : ; do
-        read INPUT
-        if [[ $? != 0 || "$INPUT" == "quit" ]]; then
-            exit 0
-        fi
-	# We need to do this each time to flush the caches which the
-	# scripts mostly keep (filesystems, process trees, etc.).
-	# Also the scripts can be changed without having to kill the
-	# sensor on all the hosts to pick that up.
-	nhcmain_load_scripts
-        if nhcmain_run_checks ; then
-            nhcmain_finish
-        fi
-    done
+    read INPUT
+    if [[ $? != 0 || "$INPUT" == "quit" ]]; then
+        exit 0
+    fi
+    # We need to do this each time to flush the caches which the
+    # scripts mostly keep (filesystems, process trees, etc.).
+    # Also the scripts can be changed without having to kill the
+    # sensor on all the hosts to pick that up.
+    nhcmain_load_scripts
+    if nhcmain_run_checks ; then
+        nhcmain_finish
+    fi
+    if [[ "$*" == *NHC_RM=sge* ]]; then
+        exec $0 "$@"
+    else
+        exec $0 "$@" NHC_RM=sge
+    fi
 else
     nhcmain_load_scripts
     nhcmain_set_watchdog

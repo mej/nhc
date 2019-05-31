@@ -1,0 +1,47 @@
+1.4.2
+=====
+New features:
+ - Support for negating *any* match string anywhere (configs and check
+   parameters)
+ - check_net_ping():  New check for monitoring of network connectivity
+ - check_ps_*():  Process owner parameters now accept match strings,
+   allowing them to take full advantage of wildcards, regular
+   expressions, ranges, and/or external dynamic matching (e.g., UNIX
+   group membership-based matching)
+ - check_ps_service():  Additional options to tell NHC to execute
+   stop/start/restart/cycle and/or user-defined actions synchronously
+   (instead of backgrounding them) so that NHC can verify they worked
+   correctly (or fail if not).
+    - -v (Verify Sync) will only fail check if action fails
+    - -V (Verify Check) additionally will make sure action appears to
+      have worked (e.g., killed process is gone, started daemon is
+      running, etc.)
+ - check_cmd_dmesg():  New check to validate/verify or catch/flag
+   certain important content in the output of the `dmesg` command.
+   This check is also a working example to facilitate user wrapping of
+   check_cmd_output() to generate custom/specific check failure
+   messages.
+ - New command-line flag:  "-e <check>" will override config file,
+   execute just the specified <check>, and return success/failure
+   based on that single check.  Useful for testing/troubleshooting new
+   checks.  Essentially analogous to having a 1-line config file
+   consisting of "* || <check>" and nothing else.
+ - check_fs_mount():  Create missing mount points as necessary
+
+Fixes/improvements:
+ - Silence warnings about watchdog timer and RM detection that were
+   confusing to users and/or no longer useful
+ - Refactored match string range checking to be comparative rather
+   than iterative.  Large ranges will see a huge speed-up!
+ - Refactored generation and handling of numerical quantities to avoid
+   excessive rounding/truncation errors.  For example, truncation of
+   1.5TB of RAM to 1TB is a significant error!  Now uses 1536GB
+   instead.
+ - Fixed issue with leading zeros in node range expressions causing
+   numbers to be interpreted as octal.
+ - Fixed typo in getent fallback handling that kept it from working in
+   certain cases.
+ - Simplified the killing of the watchdog timer to avoid apparent BASH
+   bug causing aborts.
+ - Fixed list of SLURM node states supported by node-mark-{on,off}line
+ - Fix trimming of whitespace in config files to include tabs

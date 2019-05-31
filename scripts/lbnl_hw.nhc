@@ -28,8 +28,8 @@ EDAC_MAX_UNCORRECTED="${EDAC_MAX_UNCORRECTED:-0}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
-    local LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
-    local -a FIELD PHYS_IDS
+    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
+    local -a FIELD PHYS_IDS IB_PORTS
 
     # Gather CPU info
     PROCESSOR=-1
@@ -97,7 +97,12 @@ function nhc_hw_gather_data() {
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
 
     # Gather IB info
-    for PORT in /sys/class/infiniband/*/ports/* ; do
+    set +f
+    IFS=''
+    IB_PORTS=( /sys/class/infiniband/*/ports/* )
+    IFS=$' \t\n'
+    set -f
+    for PORT in "${IB_PORTS[@]}" ; do
         test -e "$PORT" || break
         INDEX=${#HW_IB_STATE[*]}
         IFS=' :'
@@ -175,6 +180,7 @@ function check_hw_cpuinfo() {
 
 # Check RAM size against minimum ($1) and maximum ($2) allowable size in kB.  To
 # require an exact amount of RAM, pass the same value for both parameters.
+# The optional fudge factor ($3) allows a certain amount of variance to be tolerated.
 function check_hw_physmem() {
     local RAM_MIN="$1" RAM_MAX="$2" FUDGE="$3"
 
@@ -240,6 +246,7 @@ function check_hw_swap() {
 
 # Check total memory (RAM + swap) against minimum ($1) and maximum ($2) allowable size
 # in kB.  To require an exact amount of memory, pass the same value for both parameters.
+# The optional fudge factor ($3) allows a certain amount of variance to be tolerated.
 function check_hw_mem() {
     local MEM_MIN="$1" MEM_MAX="$2" FUDGE="$3"
     local MEM_TOTAL
@@ -250,9 +257,11 @@ function check_hw_mem() {
 
     nhc_common_parse_size "$MEM_MIN" MEM_MIN
     nhc_common_parse_size "$MEM_MAX" MEM_MAX
+    MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
     if [[ -n "$FUDGE" ]]; then
         if [[ "${FUDGE%%%}" != "$FUDGE" ]]; then
             FUDGE="${FUDGE%%%}"
+            FUDGE=$((FUDGE*MEM_TOTAL/100))
         else
             nhc_common_parse_size "$FUDGE" FUDGE
         fi
@@ -260,8 +269,6 @@ function check_hw_mem() {
         FUDGE=0
     fi
 
-    MEM_TOTAL=$((HW_RAM_TOTAL + HW_SWAP_TOTAL))
-    FUDGE=$((FUDGE*MEM_TOTAL/100))
     if [[ $((MEM_TOTAL+FUDGE)) -lt $MEM_MIN ]]; then
         die 1 "$FUNCNAME:  Actual system memory ($MEM_TOTAL kB) less than minimum allowed ($MEM_MIN kB)."
         return 1

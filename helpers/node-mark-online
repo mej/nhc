@@ -52,10 +52,12 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
     SLURM_SC_ONLINE_ARGS="${SLURM_SC_ONLINE_ARGS:-update State=RESUME}"
+    ## Strip off .internal* from $HOSTNAME
+    SLURM_HOST="${HOSTNAME%%.*}"
 
-    LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
-    STATUS="${LINE[0]}"
-    OLD_NOTE_LEADER="${LINE[1]}"
+    LINE=( $($SLURM_SINFO -o '%t %E' -n $SLURM_HOST) )
+    STATUS="${LINE[2]}"
+    OLD_NOTE_LEADER="${LINE[3]}"
     OLD_NOTE="${LINE[*]:2}"
     # Slurm does not run the HealthCheckProgram on nodes in the DOWN state,
     # but if someone runs NHC by hand, we want to be able to do the right thing.
@@ -63,24 +65,24 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
         down*|drain*|drng*|fail*|maint*)
             # If there is no old note, and we've not been told to ignore that, do not online the node.
             if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
-                echo "$0:  Not onlining $HOSTNAME:  No note set."
+                echo "$0:  Not onlining $SLURM_HOST:  No note set."
                 exit 0
             fi
             # If there IS an old note, but it wasn't set by NHC, do not online the node.
             if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
-                echo "$0:  Not onlining $HOSTNAME:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+                echo "$0:  Not onlining $SLURM_HOST:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
                 exit 0
             fi
-            echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
-            exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$HOSTNAME
+            echo "$0:  Marking $SLURM_HOST online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
+            exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$SLURM_HOST
             ;;
         alloc*|comp*|idle*|mix*|resume*|resv*|undrain*)
             # Node is already online.
-            echo "$0:  Node $HOSTNAME is already online."
+            echo "$0:  Node $SLURM_HOST is already online."
             ;;
-        *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;
+        *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $SLURM_HOST" ;;
     esac
-    echo "$0:  Skipping $STATUS node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
+    echo "$0:  Skipping $STATUS node $SLURM_HOST ($OLD_NOTE_LEADER $OLD_NOTE)"
 
 
 ### IBM Platform LSF

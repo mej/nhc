@@ -74,6 +74,11 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
                         echo "$0:  Not offlining $SLURM_HOST:  Already offline with no note set."
                         exit 0
                     fi
+                    # We have already marked the node as down so don't keep marking it down
+                    if [[ "$OLD_NOTE_LEADER" == "NHC:" ]]; then
+                        echo "$0:  Not offlining $SLURM_HOST:  Already marked offline."
+                        exit 0
+                    fi
                     ;;
             esac
             # If there's an old note that wasn't set by NHC, preserve it.
@@ -81,7 +86,8 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
             fi
-            echo "$0:  Marking $STATUS $SLURM_HOST offline:  $LEADER $NOTE"
+            echo "$0: Marking $STATUS $SLURM_HOST offline:  $LEADER $NOTE"
+            curl -X POST --data-urlencode "payload={\"text\": \"$LEADER $NOTE\nTaking [$SLURM_HOST] OFFLINE. Current Status: [$STATUS]\"}" https://hooks.slack.com/services/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
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$SLURM_HOST Reason="$LEADER $NOTE"
             ;;
         down*)

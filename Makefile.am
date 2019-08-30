@@ -7,7 +7,7 @@ logrotatedir = $(sysconfdir)/logrotate.d
 
 dist_sbin_SCRIPTS = nhc nhc-genconf nhc-wrapper
 dist_conf_DATA = nhc.conf
-dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline
+dist_helper_SCRIPTS = helpers/node-mark-online helpers/node-mark-offline helpers/slack
 
 nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc		\
                         scripts/lbnl_dmi.nhc scripts/lbnl_file.nhc	\

@@ -36,7 +36,7 @@ init_params() {
   # you may declare ENV vars in /etc/profile.d/slack.sh
   if [ -z "${APP_SLACK_WEBHOOK:-}" ]; then
     
-    echo 'NO APP_SLACK_WEBHOOK ENV Var, using Default Webhook Address'
+    #echo 'NO APP_SLACK_WEBHOOK ENV Var, using Default Webhook Address'
     SLACK_WEBHOOK='https://hooks.slack.com/services/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'
     #echo 'error: Please configure Slack environment variable: ' > /dev/stderr
     #echo '  APP_SLACK_WEBHOOK' > /dev/stderr

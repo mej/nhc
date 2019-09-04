@@ -7,7 +7,7 @@
 MOUNT_CMD="${MOUNT_CMD:-mount}"
 DF_CMD="${DF_CMD:-df}"
 DFI_CMD="${DFI_CMD:-${DF_CMD}}"
-DF_FLAGS="${DF_FLAGS:--Tka}"
+DF_FLAGS="${DF_FLAGS:--Tk}"
 DFI_FLAGS="${DFI_FLAGS:--Tia}"
 
 FS_DEV=( )

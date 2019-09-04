@@ -300,9 +300,10 @@ function nhcwrap_report_results() {
         # results.  This means a prior error is now cleared.
         if [[ -n "$MAILTO" ]]; then
             #echo -e "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:"$'\n\n'"${PREV_RESULTS}" | /bin/mail -s "$SUBJECT" $MAILTO
-            APP_SLACK_USERNAME='Interactive Machine Notice' APP_SLACK_ICON_EMOJI='white_check_mark' $LIBEXECDIR/nhc/slack "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:\n${PREV_RESULTS}"
+            APP_SLACK_CHANNEL="$MAILTO" APP_SLACK_USERNAME='Interactive Machine Notice' APP_SLACK_ICON_EMOJI='white_check_mark' $LIBEXECDIR/nhc/slack "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:\n${PREV_RESULTS}"
             echo "E-mail notification of cleared error sent to $MAILTO."
         else
+            APP_SLACK_USERNAME='Interactive Machine Notice' APP_SLACK_ICON_EMOJI='white_check_mark' $LIBEXECDIR/nhc/slack "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:\n${PREV_RESULTS}"
             echo -e "The following $SUBPROG errors on $HOSTNAME_S have now been CLEARED:"$'\n\n'"${PREV_RESULTS}"
         fi
     else

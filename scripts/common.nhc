@@ -499,7 +499,9 @@ function nhc_common_unparse_size() {
     fi
     if [[ -n "$VAL" ]]; then
         for ((i=0; VAL >= MULT && i < ${#SUFFIXES[*]}-1; i++)); do
-            TMPERR=$((VAL%MULT*100/MULT))
+            ## Not sure what this was suppposed to do be doing, changed and it appears to be working better...
+            #TMPERR=$((VAL%MULT*100/MULT))
+            TMPERR=$((VAL/MULT))
             if (((TMPERR>50?100-TMPERR:TMPERR) > 10)); then
                 # If going another unit-prefix higher would give more than 10% truncation error, don't do it.
                 # (e.g., 1572864kB (1.5GB) should be converted to 1536MB instead of 1GB)
@@ -619,5 +621,16 @@ function nhc_common_get_max_sys_uid() {
                 break
             fi
         done < "$LOGIN_DEFS_SRC"
+    fi
+}
+
+# Print put the top 5 Users of a File System in a Slack Friendly Format
+function nhc_common_top_users() {
+    local VAL=$1
+    local VAR=$2
+    local DU_CMD=`du -h -d 1 $VAL | sort -hr | head -n 6 | perl -lne '/(.*)/ && print "$1\\\n"'`
+
+    if [[ -n "$VAR" ]]; then
+        eval $VAR='"\`\`\`$DU_CMD\`\`\`"'
     fi
 }

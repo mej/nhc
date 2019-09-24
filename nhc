@@ -396,7 +396,7 @@ function nhcmain_finalize_env() {
     fi
 
     ## Setting Default Group to Send Offline/Online Alerts too
-    if [[ -z "$MAILTO" && "$USER" == "root" ]]; then
+    if [[ -z "$MAILTO" && -z "$USER" ]]; then
         MAILTO='syseng-alerts'
         export MAILTO
     fi

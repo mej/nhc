@@ -91,9 +91,10 @@ slack() {
 
   cd ${__dir}
 
-  if [ -f $(cd; pwd)/.slackrc ]; then
-    . $(cd; pwd)/.slackrc
-  fi
+#  Removing for NHC
+#  if [ -f $(cd; pwd)/.slackrc ]; then
+#    . $(cd; pwd)/.slackrc
+#  fi
 
   declare -a slack_channels
 

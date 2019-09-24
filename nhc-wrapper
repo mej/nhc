@@ -178,6 +178,7 @@ function nhcwrap_parse_cmdline() {
     done
     shift $((OPTIND-1))
     ARGLIST=( $ARGS "$@" )
+    export MAILTO ## Send Mail Address Globally
     return 0
 }
 

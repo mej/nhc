@@ -63,7 +63,8 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     LINE=( $($SLURM_SINFO -o '%t %E' -n $SLURM_HOST) )
     STATUS="${LINE[2]}"
     OLD_NOTE_LEADER="${LINE[3]}"
-    OLD_NOTE="${LINE[*]:2}"
+    OLD_NOTE="${LINE[*]:3}"
+
     case "$STATUS" in
         alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|resv*|undrain*)
             case "$STATUS" in
@@ -83,11 +84,15 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             esac
             # If there's an old note that wasn't set by NHC, preserve it.
             if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
-                LEADER="$OLD_NOTE_LEADER"
-                NOTE="$OLD_NOTE"
+                NOTE="$NOTE Existing Lock MSG: $OLD_NOTE"
             fi
-            echo "$0: Marking $STATUS $SLURM_HOST offline:  $LEADER $NOTE"
-            curl -X POST --data-urlencode "payload={\"text\": \"$LEADER $NOTE\nTaking [$SLURM_HOST] OFFLINE. Current Status: [$STATUS]\"}" https://hooks.slack.com/services/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
+            echo "$0: Marking $STATUS $SLURM_HOST offline: $LEADER $NOTE"
+            MSG="Taking [$SLURM_HOST] OFFLINE. Current Status: [$STATUS]\n$NOTE"
+            if [[ -n "$MAILTO" ]]; then
+                APP_SLACK_CHANNEL="$MAILTO" APP_SLACK_USERNAME='NHC' APP_SLACK_ICON_EMOJI='skull' $LIBEXECDIR/nhc/slack "$MSG"
+            else
+                APP_SLACK_USERNAME='NHC' APP_SLACK_ICON_EMOJI='skull' $LIBEXECDIR/nhc/slack "$MSG"
+            fi
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$SLURM_HOST Reason="$LEADER $NOTE"
             ;;
         down*)

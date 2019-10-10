@@ -72,12 +72,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
                 exit 0
             fi
             # If there IS an old note, but it wasn't set by NHC, do not online the node.
-            if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
-                echo "$0:  Not onlining $SLURM_HOST:  Down for non-NHC reason [$OLD_NOTE]"
-                exit 0
-            fi
-            # If there IS an old note, but it wasn't set by NHC, do not online the node.
-            if [[ "$OLD_NOTE_LEADER" == "$LEADER" && -n $EXISTING_LOCK_MSG ]]; then
+            if [[ "$OLD_NOTE_LEADER" != "$LEADER" && -n $EXISTING_LOCK_MSG ]]; then
                 echo "$0:  Not onlining $SLURM_HOST:  Down for non-NHC reason [$EXISTING_LOCK_MSG]"
                 MSG="NHC Error on [$SLURM_HOST] Cleared, Though Keeping Machine Locked Due to Manual Lock [$EXISTING_LOCK_MSG]"
                 if [[ -n "$MAILTO" ]]; then

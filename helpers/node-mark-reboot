@@ -6,13 +6,13 @@
 # 26 apr 2018
 #
 
-# This script is a simple wrapper that the node health check can run
-# in the background to mark nodes for reboot.  It will first obtain
-# the current node state information to avoid rebooting a node that
-# is already offline or in maintenance.  If these checks pass, the
-# node is marked for reboot.
+# This script is a simple pbsnodes wrapper that the node health check
+# can run in the background to mark nodes for reboot.  It will first
+# obtain the current node state information to avoid rebooting a node
+# that is already offline or in maintenance.  If these checks pass,
+# the node is marked for reboot.
 
-IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}"
+FORCE_REBOOT="${FORCE_REBOOT:-0}"
 LEADER="NHC:"
 
 echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
@@ -25,16 +25,34 @@ NOTE="$*"
 if [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
-    SLURM_SC_OFFLINE_ARGS="${SLURM_SC_OFFLINE_ARGS:-reboot ASAP}"
+    SLURM_SC_REBOOT_ARGS="${SLURM_SC_REBOOT_ARGS:-reboot ASAP NextState=RESUME}"
 
     LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
     STATUS="${LINE[0]}"
+    OLD_NOTE_LEADER="${LINE[1]}"
+    OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
-        alloc*|comp*|idle*|mix*|resume*|resv*|undrain*)
+        alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|resv*|undrain*)
+            case "$STATUS" in
+                drain*|drng*|fail*|maint*)
+                    # If the node is already offline, and we've not been told to ignore that,
+                    # do not touch the node.
+                    if [[ "$OLD_NOTE_LEADER" != "$LEADER" && "$FORCE_REBOOT" != "1" ]]; then
+                        echo "$0:  Not rebooting $HOSTNAME:  Already offline."
+                        exit 0
+                    fi
+                    ;;
+            esac
+            # If there's an old note that wasn't set by NHC, preserve it.
+            if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+                LEADER="$OLD_NOTE_LEADER"
+                NOTE="$OLD_NOTE"
+                SLURM_SC_REBOOT_ARGS="reboot ASAP NextState=DOWN"
+            fi
             echo "$0:  Marking $STATUS $HOSTNAME for reboot:  $LEADER $NOTE"
-            exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS $HOSTNAME
+            exec $SLURM_SCONTROL $SLURM_SC_REBOOT_ARGS Reason="$LEADER $NOTE" $HOSTNAME
             ;;
-        down*|drain*|drng*|fail*|maint*)
+        down*)
             echo "$0:  Not changing state of down node $HOSTNAME."
             ;;
         *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;
@@ -46,3 +64,4 @@ else
     exit -1
 fi
 exit 0
+

@@ -1,0 +1,4 @@
+Do you have any lbnl_hw.nhc file to check physical memory by percentage rather than size ?
+
+e.g.
+* || check_hw_physmem_free 5%

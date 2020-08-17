@@ -23,7 +23,8 @@ EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate		\
              nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
 install-data-local:
-	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
+	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' \
+		'$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(confdir)/sysconfig'
 	$(INSTALL_DATA) $(srcdir)/nhc.logrotate '$(DESTDIR)$(logrotatedir)/nhc'
 
 uninstall-local:

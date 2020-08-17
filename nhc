@@ -412,11 +412,11 @@ function nhcmain_find_rm() {
     fi
 
     # Search PATH for commands
-    if type -a -p -f -P pbsnodes >&/dev/null ; then
-        NHC_RM="pbs"
-        return 0
-    elif type -a -p -f -P scontrol >&/dev/null ; then
+    if type -a -p -f -P scontrol >&/dev/null ; then
         NHC_RM="slurm"
+        return 0
+    elif type -a -p -f -P pbsnodes >&/dev/null ; then
+        NHC_RM="pbs"
         return 0
     elif type -a -p -f -P badmin >&/dev/null ; then
         NHC_RM="lsf"

@@ -75,6 +75,7 @@ test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 %dir %{_localstatedir}/run/%{sname}/
 %dir %{nhc_script_dir}/
 %dir %{nhc_helper_dir}/
+%ghost %dir %{_sysconfdir}/%{sname}/sysconfig/
 %config(noreplace) %{_sysconfdir}/%{sname}/%{sname}.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}
 %config(noreplace) %{nhc_script_dir}/*.nhc

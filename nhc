@@ -191,10 +191,9 @@ function nhcmain_init_env() {
             SYSCONFIGDIR="/etc/default"
         else
             SYSCONFIGDIR="/etc/nhc/sysconfig"
-            # We could auto-create here, but that may cause RPM removal issues.
-            #if [[ ! -d "${SYSCONFIGDIR}" ]]; then
-            #    mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
-            #fi
+            if [[ ! -d "${SYSCONFIGDIR}" ]]; then
+                mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
+            fi
         fi
         if [[ -d "/usr/libexec" ]]; then
             LIBEXECDIR="/usr/libexec"

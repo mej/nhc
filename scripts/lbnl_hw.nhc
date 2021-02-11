@@ -11,6 +11,7 @@ HW_RAM_TOTAL=0
 HW_RAM_FREE=0
 HW_SWAP_TOTAL=0
 HW_SWAP_FREE=0
+HW_SLAB_UNRECLAIMABLE=0
 HW_IB_STATE=( )
 HW_IB_PHYS_STATE=()
 HW_IB_RATE=( )
@@ -81,6 +82,8 @@ function nhc_hw_gather_data() {
                 HW_SWAP_TOTAL=${FIELD[1]}
             elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
                 HW_SWAP_FREE=${FIELD[1]}
+            elif [[ "${FIELD[0]}" = "SUnreclaim:" ]]; then
+                HW_SLAB_UNRECLAIMABLE=${FIELD[1]}
             fi
         done < /proc/meminfo
     else
@@ -323,6 +326,23 @@ function check_hw_mem_free() {
     MEM_FREE=$((HW_RAM_FREE + HW_SWAP_FREE))
     if [[ $MEM_FREE -lt $MEM_MINFREE ]]; then
         die 1 "$FUNCNAME:  Not enough free memory ($MEM_FREE kB < $MEM_MINFREE kB)."
+        return 1
+    fi
+    return 0
+}
+
+# Check amount of Slab unreclaimable against maximum ($1).
+function check_hw_slab_unreclaimable() {
+    local MAXUNRECLAIMABLE=$1
+
+    if [[ $HW_RAM_TOTAL -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    nhc_common_parse_size "$MAXUNRECLAIMABLE" MAXUNRECLAIMABLE
+
+    if [[ $HW_SLAB_UNRECLAIMABLE -gt $MAXUNRECLAIMABLE ]]; then
+        die 1 "$FUNCNAME:  Slab unreclaimable is too large ($HW_SLAB_UNRECLAIMABLE kB > $MAXUNRECLAIMABLE kB)."
         return 1
     fi
     return 0

@@ -208,13 +208,25 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
-    if [[ -f /etc/debian_version ]]; then
+    if [[ -f "/etc/debian_version" ]]; then
         SYSCONFIGDIR="/etc/default"
         LIBEXECDIR="/usr/lib"
     else
-        SYSCONFIGDIR="/etc/sysconfig"
-        LIBEXECDIR="/usr/libexec"
+        if [[ -d "/etc/sysconfig" ]]; then
+            SYSCONFIGDIR="/etc/sysconfig"
+        elif [[ -d "/etc/default" ]]; then
+            SYSCONFIGDIR="/etc/default"
+        else
+            SYSCONFIGDIR="/etc/nhc/sysconfig"
+            if [[ ! -d "${SYSCONFIGDIR}" ]]; then
+                mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
+            fi
+        fi
+        if [[ -d "/usr/libexec" ]]; then
+            LIBEXECDIR="/usr/libexec"
+        else
+            LIBEXECDIR="/usr/lib"
+        fi
     fi
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
@@ -448,11 +460,14 @@ function nhcmain_find_rm() {
     fi
 
     # Search PATH for commands
-    if type -a -p -f -P pbsnodes >&/dev/null ; then
+    if type -a -p -f -P scontrol >&/dev/null ; then
+        NHC_RM="slurm"
+        return 0
+    elif type -a -p -f -P pbsnodes >&/dev/null ; then
         NHC_RM="pbs"
         return 0
-    elif type -a -p -f -P scontrol >&/dev/null ; then
-        NHC_RM="slurm"
+    elif type -a -p -f -P badmin >&/dev/null ; then
+        NHC_RM="lsf"
         return 0
     elif type -a -p -f -P qselect >&/dev/null ; then
         NHC_RM="sge"

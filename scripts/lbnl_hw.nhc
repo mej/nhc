@@ -117,11 +117,18 @@ function nhc_hw_gather_data() {
         HW_IB_RATE[$INDEX]=${FIELD[0]}
         IFS=' /'
         arr=( $PORT )
+        HW_IB_DEVICE[$INDEX]="${arr[4]}"
         HW_IB_DEV[$INDEX]="${arr[4]}:${arr[6]}"
+        read LINE < /sys/class/infiniband/${HW_IB_DEVICE[$INDEX]}/device/current_link_speed
+        FIELD=( $LINE )
+        HW_IB_LINK_SPEED[$INDEX]=${FIELD[0]}
+        read LINE < /sys/class/infiniband/${HW_IB_DEVICE[$INDEX]}/device/current_link_width
+        FIELD=( $LINE )
+        HW_IB_LINK_WIDTH[$INDEX]=${FIELD[0]}
         IFS=$' \t\n'
-        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec)"
+        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec) with PCI-e link ${HW_IB_LINK_WIDTH[$INDEX]}x ${HW_IB_LINK_SPEED[$INDEX]} GT/s"
     done
-    export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
+    export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE HW_IB_LINK_SPEED HW_IB_LINK_WIDTH
 
     # Check if user-leved mad driver loaded and IB diag tools will succeed to run
     if [[ -f /sys/class/infiniband_mad/abi_version ]]; then
@@ -338,6 +345,8 @@ function check_hw_ib() {
     local PHYS_STATE="LinkUp"
     local RATE="$1"
     local DEV="$2"
+    local LINK_WIDTH="$3"
+    local LINK_SPEED="$4"
     local i
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
@@ -351,7 +360,7 @@ function check_hw_ib() {
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
         if [[ "${HW_IB_STATE[$i]}" == "$STATE" && "${HW_IB_PHYS_STATE[$i]}" == "$PHYS_STATE" ]]; then
-            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") ]]; then
+            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") && (-z "$LINK_WIDTH" || "${HW_IB_LINK_WIDTH[$i]}" == "$LINK_WIDTH") && (-z "$LINK_SPEED" || "${HW_IB_LINK_SPEED[$i]}" == "$LINK_SPEED") ]]; then
                 return 0
             fi
         fi
@@ -363,8 +372,14 @@ function check_hw_ib() {
     if [[ -n "$RATE" ]]; then
         RATE=" $RATE Gb/sec"
     fi
+    if [[ -n "$LINK_WIDTH" ]]; then
+        LINK_WIDTH="${LINK_WIDTH}x"
+    fi
+    if [[ -n "$LINK_SPEED" ]]; then
+        LINK_SPEED="${LINK_SPEED} GT/s"
+    fi
 
-    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
+    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE) with PCI-e link $LINK_WIDTH $LINK_SPEED."
     return 1
 }
 

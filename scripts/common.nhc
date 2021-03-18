@@ -369,6 +369,7 @@ function nhc_load_conf() {
 # Parse colon-delimited passwd entry ($1), optionally storing uid in
 # variable ($2).
 function nhc_common_parse_passwd_entry() {
+    set -f
     local IFS=':'
     local PASSWD_ENTRY="$1"
     local UID_VAR="$2"
@@ -392,6 +393,7 @@ function nhc_common_parse_passwd_entry() {
     if [[ -n "$UID_VAR" ]]; then
         eval $UID_VAR=$THIS_UID
     fi
+    set +f
 }
 
 # Load /etc/passwd data into arrays.

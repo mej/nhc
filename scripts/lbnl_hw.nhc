@@ -7,6 +7,8 @@
 HW_SOCKETS=0
 HW_CORES=0
 HW_THREADS=0
+HW_NUMA_NODES=0
+HW_NUMA_NPS=0
 HW_RAM_TOTAL=0
 HW_RAM_FREE=0
 HW_SWAP_TOTAL=0
@@ -28,7 +30,7 @@ EDAC_MAX_UNCORRECTED="${EDAC_MAX_UNCORRECTED:-0}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
-    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
+    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV NODES
     local -a FIELD PHYS_IDS IB_PORTS
 
     # Gather CPU info
@@ -69,6 +71,16 @@ function nhc_hw_gather_data() {
         MHZ=0
     fi
     dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
+
+    # Gather NUMA info
+    if [[ -d /sys/devices/system/node ]]; then
+        set +f
+        NODES=(/sys/devices/system/node/node*)
+        set -f
+        HW_NUMA_NODES=${#NODES[@]}
+        HW_NUMA_NPS=$((HW_NUMA_NODES/$HW_SOCKETS))
+    fi
+    dbg "Got $HW_NUMA_NODES NUMA node(s) (NPS: $HW_NUMA_NPS)"
 
     # Gather memory info
     if [[ -e /proc/meminfo ]]; then
@@ -180,6 +192,26 @@ function check_hw_cpuinfo() {
     fi
     if [[ -n "$THREADS" && $THREADS -ne $HW_THREADS ]]; then
         die 1 "$FUNCNAME:  Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
+        return 1
+    fi
+    return 0
+}
+
+# Check that the NUMA nodes ($1) and NPS ($2) counts all match.
+function check_hw_numa() {
+    local NUMA_NODES=$1
+    local NUMA_NPS=$2
+
+    if [[ $HW_NUMA_NODES -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ -n "$NUMA_NODES" && $NUMA_NODES -ne $HW_NUMA_NODES ]]; then
+        die 1 "$FUNCNAME:  Actual NUMA nodes count ($HW_NUMA_NODES) does not match expected ($NUMA_NODES)."
+        return 1
+    fi
+    if [[ -n "$NUMA_NPS" && $NUMA_NPS -ne $HW_NUMA_NPS ]]; then
+        die 1 "$FUNCNAME:  Actual Nodes Per Socket (NPS) value ($HW_NUMA_NPS) does not match expected ($NUMA_NPS)."
         return 1
     fi
     return 0

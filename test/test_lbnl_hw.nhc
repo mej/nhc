@@ -1,8 +1,9 @@
 # Tests for lbnl_hw.nhc
 
-plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
+plan $((12+7+1+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
+    is "`type -t check_hw_numa 2>&1`" 'function' 'check_hw_numa() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
     is "`type -t check_hw_swap 2>&1`" 'function' 'check_hw_swap() loaded properly'
     is "`type -t check_hw_mem 2>&1`" 'function' 'check_hw_mem() loaded properly'
@@ -40,6 +41,15 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     # Idiot-proofing
     check_hw_cpuinfo 0 0 0
     is $? 1 "Invalid test hardware:  Non-existent CPU"
+
+
+    # NUMA data: 2 NUMA nodes, 1 NUMA node per socket
+    HW_NUMA_NODES=2
+    HW_NUMA_NPS=1
+
+    # valid test
+    check_hw_numa 2 1
+    is $? 0 "Valid test hardware:  2 NUMA nodes, 1 NPS"
 
 
     # Memory data:  32GB RAM, 18GB swap

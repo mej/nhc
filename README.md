@@ -54,6 +54,7 @@ In a typical scenario, the NHC driver script is run periodically on each compute
             * [check_fs_size](#check_fs_size)
             * [check_fs_used](#check_fs_used)
             * [check_hw_cpuinfo](#check_hw_cpuinfo)
+            * [check_hw_numa](#check_hw_numa)
             * [check_hw_eth](#check_hw_eth)
             * [check_hw_gm](#check_hw_gm)
             * [check_hw_ib](#check_hw_ib)
@@ -866,6 +867,17 @@ _**Example**_:  `check_fs_used / 98%`
 `check_hw_cpuinfo` compares the properties of the OS-detected CPU(s) to the specified values to ensure that the correct number of physical sockets, execution cores, and "threads" (or "virtual cores") are present and functioning on the system.  For a single-core, non-hyperthreading-enabled processor, all 3 parameters would be identical.  Multicore CPUs will have more _cores_ than _sockets_, and CPUs with [Intel HyperThreading Technology (HT)](https://en.wikipedia.org/wiki/Hyper-threading) turned on will have more _threads_ than _cores_.  Since HPC workloads often suffer when HT is active, this check is a handy way to make sure that doesn't happen.
 
 _**Example** (dual-socket 4-core Intel Nehalem with HT turned off)_:  `check_hw_cpuinfo 2 8 8`
+
+
+<br />
+
+
+##### check_hw_numa
+`check_hw_numa [numa-nodes] [NPS]`
+
+`check_hw_numa` compares the properties of the [NUMA](https://en.wikipedia.org/wiki/Non-uniform_memory_access) nodes configured on the system to the specified values to ensure that the correct system topology is enabled. For CPUs with configurable NUMA nodes-per-socket (NPS), the 2nd parameter can be used to verify proper BIOS configuration.
+
+_**Example** (dual-socket AMD EPYC CPU with NPS=2)_:  `check_hw_numa 4 2`
 
 
 <br />

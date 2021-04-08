@@ -789,6 +789,17 @@ _**Example** (dual-socket 4-core Intel Nehalem with HT turned off)_:  `check_hw_
 <br />
 
 
+##### check_hw_numa
+`check_hw_numa [numa-nodes] [NPS]`
+
+`check_hw_numa` compares the properties of the [NUMA](https://en.wikipedia.org/wiki/Non-uniform_memory_access) nodes configured on the system to the specified values to ensure that the correct system topology is enabled. For CPUs with configurable NUMA nodes-per-socket (NPS), the 2nd parameter can be used to verify proper BIOS configuration.
+
+_**Example** (dual-socket AMD EPYC CPU with NPS=2)_:  `check_hw_numa 4 2`
+
+
+<br />
+
+
 ##### check_hw_eth
 `check_hw_eth device`
 
@@ -1247,7 +1258,7 @@ function check_stuff_works() {
         die 1 "Stuff is not working"
         return 1
     fi
-    
+
     # check passed
     return 0
 }

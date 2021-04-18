@@ -63,6 +63,10 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
+        *'@'*|*'#'*|boot*)
+            # These states aren't handled yet.
+            echo "$0:  State \"$STATUS\" not yet handled; ignoring."
+            exit 0
         alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|resv*|undrain*)
             case "$STATUS" in
                 drain*|drng*|fail*|maint*)

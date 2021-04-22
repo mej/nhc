@@ -443,6 +443,23 @@ function check_fs_used() {
     return 0
 }
 
+# Check all filesystems of type ($1) has at most a specified amount ($2) of
+# used space.  This may be either a percentage or a number of kB.
+# The function check_fs_used is called for each filesystem.
+function check_all_fs_used() {
+    local TYPE=$1
+    local MAX_USED=$2
+    local i
+
+    for ((i=0; i < ${#DF_DEV[*]}; i++)); do
+        if [[ "${DF_TYPE[$i]}" != "$TYPE" ]]; then
+            continue
+        fi
+        check_fs_used "${DF_MNTPT[$i]}" "$MAX_USED"
+    done
+    return 0
+}
+
 # Check to make sure a filesystem ($1) has between a minimum ($2) and
 # a maximum ($3) amount of inodes.  Either may be blank.  To check for
 # a specific inode count, pass the same value for both parameters.
@@ -480,6 +497,24 @@ function check_fs_inodes() {
             return 1
         fi
         return 0
+    done
+    return 0
+}
+
+# Check to make sure all filesystems of type ($1) has between a minimum ($2) and
+# a maximum ($3) amount of inodes.  Either may be blank.  To check for
+# a specific inode count, pass the same value for both parameters.
+function check_all_fs_inodes() {
+    local TYPE=$1
+    local MIN_INODES=$2
+    local MAX_INODES=$3
+    local i
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then
+            continue
+        fi
+        check_fs_inodes "${DF_MNTPT[$i]}" "$MIN_INODES" "$MAX_INODES"
     done
     return 0
 }
@@ -525,6 +560,22 @@ function check_fs_ifree() {
     return 0
 }
 
+# Check that all filesystems of type ($1) has at least a specified amount ($2) of
+# free inodes.  This may be either a percentage or an exact number.
+function check_all_fs_ifree() {
+    local TYPE=$1
+    local MIN_IFREE=$2
+    local i
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then
+            continue
+        fi
+        check_fs_ifree "${DF_MNTPT[$i]}" "$MIN_IFREE"
+    done
+    return 0
+}
+
 # Check that filesystem ($1) has at most a specified amount ($2) of
 # used inodes.  This may be either a percentage or an exact number.
 function check_fs_iused() {
@@ -561,6 +612,22 @@ function check_fs_iused() {
             fi
         fi
         return 0
+    done
+    return 0
+}
+
+# Check that all filesystems of type ($1) has at most a specified amount ($2) of
+# used inodes.  This may be either a percentage or an exact number.
+function check_all_fs_iused() {
+    local TYPE=$1
+    local MAX_IUSED=$2
+    local i
+
+    for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
+        if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then
+            continue
+        fi
+        check_fs_iused "${DFI_MNTPT[$i]}" "${MAX_IUSED}"
     done
     return 0
 }

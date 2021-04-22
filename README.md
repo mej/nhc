@@ -28,6 +28,7 @@ The NHC Yum repository is currently unavailable, but we hope to provide one in t
 The [source tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
 
 ```
+# ./autogen.sh
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec
 # make test
 # make install
@@ -670,6 +671,17 @@ _**Example** (make sure `/tmp` has at least 1000 inodes)_:  `check_fs_inodes /tm
 <br />
 
 
+##### check_all_fs_inodes
+`check_all_fs_inodes fstype [min] [max]`
+
+Ensures that all filesystems of type _fstype_ has at least _min_ but no more than _max_ total inodes.  Either may be blank. Calls check_fs_inodes for each filesystem.
+
+_**Example** (make sure xfs filesystems have at least 1000 inodes)_:  `check_all_fs_inodes xfs 1k`
+
+
+<br />
+
+
 ##### check_fs_ifree
 `check_fs_ifree mountpoint min`
 
@@ -683,6 +695,17 @@ _**Example** (make sure `/local` has at least 100 inodes free)_:  `check_fs_ifre
 <br />
 
 
+##### check_all_fs_ifree
+`check_all_fs_ifree fstype min`
+
+Ensures that all filesystems of type _fstype_ have at least _min_ free inodes. Calls check_fs_ifree for each filesystem.
+
+_**Example** (make sure xfs filesystems have at least 100 inodes free)_:  `check_all_fs_ifree xfs 100`
+
+
+<br />
+
+
 ##### check_fs_iused
 `check_fs_iused mountpoint max`
 
@@ -691,6 +714,17 @@ Ensures that the specified _mountpoint_ has no more than _max_ used inodes.
 > **WARNING:**  Use of this check requires execution of the `/usr/bin/df` command which may HANG in cases of NFS failure!  If you use this check, consider also using [Detached Mode](#detached-mode)!
 
 _**Example** (make sure `/tmp` has no more than 1 million used inodes)_:  `check_fs_iused /tmp 1M`
+
+
+<br />
+
+
+##### check_all_fs_iused
+`check_all_fs_iused fstype max`
+
+Ensures that all filesystems of type _fstype_ have no more than _max_ used inodes. Calls check_fs_iused for each filesystem.
+
+_**Example** (make sure xfs filesystems have no more than 1 million used inodes)_:  `check_all_fs_iused xfs 1M`
 
 
 <br />
@@ -773,6 +807,17 @@ _**Example**_:  `check_fs_size /tmp 512m 4g`
 > **WARNING:**  Use of this check requires execution of the `/usr/bin/df` command which may HANG in cases of NFS failure!  If you use this check, consider also using [Detached Mode](#detached-mode)!
 
 _**Example**_:  `check_fs_used / 98%`
+
+
+<br />
+
+
+##### check_all_fs_used
+`check_all_fs_used fstype maxused`
+
+Checks that all filesystems of type _fstype_ have less than _maxused_ space consumed.  Calls check_fs_used for each filesystem.
+
+_**Example**_:  `check_all_fs_used xfs 98%`
 
 
 <br />

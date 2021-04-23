@@ -451,6 +451,10 @@ function check_all_fs_used() {
     local MAX_USED=$2
     local i
 
+    if [[ ${#DF_DEV[*]} -eq 0 ]]; then
+        nhc_fs_df_gather_data
+    fi
+
     for ((i=0; i < ${#DF_DEV[*]}; i++)); do
         if [[ "${DF_TYPE[$i]}" != "$TYPE" ]]; then
             continue
@@ -510,6 +514,10 @@ function check_all_fs_inodes() {
     local MAX_INODES=$3
     local i
 
+    if [[ ${#DF_DEV[*]} -eq 0 ]]; then
+        nhc_fs_df_gather_data
+    fi
+
     for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
         if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then
             continue
@@ -567,6 +575,10 @@ function check_all_fs_ifree() {
     local MIN_IFREE=$2
     local i
 
+    if [[ ${#DF_DEV[*]} -eq 0 ]]; then
+        nhc_fs_df_gather_data
+    fi
+
     for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
         if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then
             continue
@@ -622,6 +634,10 @@ function check_all_fs_iused() {
     local TYPE=$1
     local MAX_IUSED=$2
     local i
+
+    if [[ ${#DF_DEV[*]} -eq 0 ]]; then
+        nhc_fs_df_gather_data
+    fi
 
     for ((i=0; i < ${#DFI_DEV[*]}; i++)); do
         if [[ "${DFI_TYPE[$i]}" != "$TYPE" ]]; then

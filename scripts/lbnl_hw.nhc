@@ -7,6 +7,8 @@
 HW_SOCKETS=0
 HW_CORES=0
 HW_THREADS=0
+HW_NUMA_NODES=0
+HW_NUMA_NPS=0
 HW_RAM_TOTAL=0
 HW_RAM_FREE=0
 HW_SWAP_TOTAL=0
@@ -21,11 +23,15 @@ MCELOG="${MCELOG:-mcelog}"
 MCELOG_ARGS="${MCELOG_ARGS:---client}"
 MCELOG_MAX_CORRECTED_RATE="${MCELOG_MAX_CORRECTED_RATE:-9}"
 MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-0}"
+EDAC="${EDAC:-edac-util}"
+EDAC_ARGS="${EDAC_ARGS:-}"
+EDAC_MAX_CORRECTED="${EDAC_MAX_CORRECTED:-9}"
+EDAC_MAX_UNCORRECTED="${EDAC_MAX_UNCORRECTED:-0}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
-    local LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
-    local -a FIELD PHYS_IDS
+    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV NODES
+    local -a FIELD PHYS_IDS IB_PORTS
 
     # Gather CPU info
     PROCESSOR=-1
@@ -66,6 +72,16 @@ function nhc_hw_gather_data() {
     fi
     dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
 
+    # Gather NUMA info
+    if [[ -d /sys/devices/system/node ]]; then
+        set +f
+        NODES=(/sys/devices/system/node/node*)
+        set -f
+        HW_NUMA_NODES=${#NODES[@]}
+        HW_NUMA_NPS=$((HW_NUMA_NODES/$HW_SOCKETS))
+    fi
+    dbg "Got $HW_NUMA_NODES NUMA node(s) (NPS: $HW_NUMA_NPS)"
+
     # Gather memory info
     if [[ -e /proc/meminfo ]]; then
         while read -a FIELD ; do
@@ -93,7 +109,12 @@ function nhc_hw_gather_data() {
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
 
     # Gather IB info
-    for PORT in /sys/class/infiniband/*/ports/* ; do
+    set +f
+    IFS=''
+    IB_PORTS=( /sys/class/infiniband/*/ports/* )
+    IFS=$' \t\n'
+    set -f
+    for PORT in "${IB_PORTS[@]}" ; do
         test -e "$PORT" || break
         INDEX=${#HW_IB_STATE[*]}
         IFS=' :'
@@ -108,11 +129,18 @@ function nhc_hw_gather_data() {
         HW_IB_RATE[$INDEX]=${FIELD[0]}
         IFS=' /'
         arr=( $PORT )
+        HW_IB_DEVICE[$INDEX]="${arr[4]}"
         HW_IB_DEV[$INDEX]="${arr[4]}:${arr[6]}"
+        read LINE < /sys/class/infiniband/${HW_IB_DEVICE[$INDEX]}/device/current_link_speed
+        FIELD=( $LINE )
+        HW_IB_LINK_SPEED[$INDEX]=${FIELD[0]}
+        read LINE < /sys/class/infiniband/${HW_IB_DEVICE[$INDEX]}/device/current_link_width
+        FIELD=( $LINE )
+        HW_IB_LINK_WIDTH[$INDEX]=${FIELD[0]}
         IFS=$' \t\n'
-        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec)"
+        dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec) with PCI-e link ${HW_IB_LINK_WIDTH[$INDEX]}x ${HW_IB_LINK_SPEED[$INDEX]} GT/s"
     done
-    export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
+    export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE HW_IB_LINK_SPEED HW_IB_LINK_WIDTH
 
     # Check if user-leved mad driver loaded and IB diag tools will succeed to run
     if [[ -f /sys/class/infiniband_mad/abi_version ]]; then
@@ -164,6 +192,26 @@ function check_hw_cpuinfo() {
     fi
     if [[ -n "$THREADS" && $THREADS -ne $HW_THREADS ]]; then
         die 1 "$FUNCNAME:  Actual CPU thread count ($HW_THREADS) does not match expected ($THREADS)."
+        return 1
+    fi
+    return 0
+}
+
+# Check that the NUMA nodes ($1) and NPS ($2) counts all match.
+function check_hw_numa() {
+    local NUMA_NODES=$1
+    local NUMA_NPS=$2
+
+    if [[ $HW_NUMA_NODES -eq 0 ]]; then
+        nhc_hw_gather_data
+    fi
+
+    if [[ -n "$NUMA_NODES" && $NUMA_NODES -ne $HW_NUMA_NODES ]]; then
+        die 1 "$FUNCNAME:  Actual NUMA nodes count ($HW_NUMA_NODES) does not match expected ($NUMA_NODES)."
+        return 1
+    fi
+    if [[ -n "$NUMA_NPS" && $NUMA_NPS -ne $HW_NUMA_NPS ]]; then
+        die 1 "$FUNCNAME:  Actual Nodes Per Socket (NPS) value ($HW_NUMA_NPS) does not match expected ($NUMA_NPS)."
         return 1
     fi
     return 0
@@ -329,6 +377,8 @@ function check_hw_ib() {
     local PHYS_STATE="LinkUp"
     local RATE="$1"
     local DEV="$2"
+    local LINK_WIDTH="$3"
+    local LINK_SPEED="$4"
     local i
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
@@ -342,7 +392,7 @@ function check_hw_ib() {
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
         if [[ "${HW_IB_STATE[$i]}" == "$STATE" && "${HW_IB_PHYS_STATE[$i]}" == "$PHYS_STATE" ]]; then
-            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") ]]; then
+            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") && (-z "$LINK_WIDTH" || "${HW_IB_LINK_WIDTH[$i]}" == "$LINK_WIDTH") && (-z "$LINK_SPEED" || "${HW_IB_LINK_SPEED[$i]}" == "$LINK_SPEED") ]]; then
                 return 0
             fi
         fi
@@ -354,8 +404,14 @@ function check_hw_ib() {
     if [[ -n "$RATE" ]]; then
         RATE=" $RATE Gb/sec"
     fi
+    if [[ -n "$LINK_WIDTH" ]]; then
+        LINK_WIDTH="${LINK_WIDTH}x"
+    fi
+    if [[ -n "$LINK_SPEED" ]]; then
+        LINK_SPEED="${LINK_SPEED} GT/s"
+    fi
 
-    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
+    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE) with PCI-e link $LINK_WIDTH $LINK_SPEED."
     return 1
 }
 
@@ -462,7 +518,7 @@ function check_hw_mcelog() {
             die 1 "$MSG"
             return 1
         fi
-        
+
         # If none of the above thresholds was met, return success.
         return 0
     else
@@ -471,4 +527,68 @@ function check_hw_mcelog() {
         die 1 "$FUNCNAME:  MCEs detected in log."
         return 1
     fi
+}
+
+# Check for EDAC errors
+function check_hw_edac() {
+    local HW_EDAC_ERRS MSG=""
+    local -a ERROR_LINES ERROR_LINE
+    local i
+
+    HW_EDAC_ERRS=$($EDAC $EDAC_ARGS 2>&1)
+    if [[ -z "$HW_EDAC_ERRS" ]]; then
+        return 0
+    elif mcheck_glob "$HW_EDAC_ERRS" "*No memory controller data found*" ; then
+        log "$FUNCNAME:  No memory controller data found on $HOSTNAME"
+        syslog "$FUNCNAME:  No memory controller data found on $HOSTNAME"
+        return 0
+    elif [[ -n "$EDAC_MAX_CORRECTED" && -n "$EDAC_MAX_UNCORRECTED" ]]; then
+        IFS=$'\n'
+        ERROR_LINES=( $HW_EDAC_ERRS )
+        IFS=$' \t\n'
+
+        dbg "$FUNCNAME:  Checking for hardware-related EDAC errors (with thresholds of $EDAC_MAX_CORRECTED corrected or $EDAC_MAX_UNCORRECTED uncorrected errors)"
+
+        # Determine if hardware errors have been reported.
+        # Corrected errors (CE) are OK in small quantities.
+        # The expected edac-util output format for each MC with errors will be:
+        #
+        # mc1: csrow3: CPU_SrcID#1_Channel#3_DIMM#0: 19 Corrected Errors
+        #
+        for ((i=0; i<${#ERROR_LINES[*]}; i++)); do
+            if [[ "${ERROR_LINES[$i]}" =~ "Corrected Errors" ]] ; then
+                ERROR_LINE=( ${ERROR_LINES[$i]} )
+                NUM_CE=${ERROR_LINE[$((${#ERROR_LINE[@]}-3))]}
+                dbg "$FUNCNAME:  This DIMM detected ${NUM_CE} corrected errors"
+
+                if [[ ${NUM_CE} -gt $EDAC_MAX_CORRECTED ]]; then
+                    MSG="$FUNCNAME:  ECC errors detected - ${NUM_CE} corrected memory errors detected (limit of $EDAC_MAX_CORRECTED)."
+                    break
+                fi
+            elif [[ "${ERROR_LINES[$i]}" == "Uncorrected Errors" ]] ; then
+                ERROR_LINE=( ${ERROR_LINES[$i]} )
+                NUM_UE=${ERROR_LINE[$((${#ERROR_LINE[@]}-3))]}
+                dbg "$FUNCNAME:  This DIMM detected ${NUM_UE} UNcorrected errors"
+
+                if [[ ${NUM_UE} -gt $EDAC_MAX_UNCORRECTED ]]; then
+                    MSG="$FUNCNAME:  ECC errors detected - ${NUM_UE} UNcorrected memory errors detected (limit of $EDAC_MAX_UNCORRECTED)."
+                    break
+                fi
+            fi
+        done
+        if [[ -n "$MSG" ]]; then
+            log "$MSG"
+            die 1 "$MSG"
+            return 1
+        fi
+
+        # If none of the above thresholds was met, return success.
+        return 0
+    else
+        dbg "$FUNCNAME:  edac-util output was not empty; thresholds have not been set, so we must assume the detected errors are fatal"
+        log "$FUNCNAME:  ECC errors detected:  $HW_EDAC_ERRS"
+        die 1 "$FUNCNAME:  ECC errors detected"
+        return 1
+    fi
+
 }

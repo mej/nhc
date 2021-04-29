@@ -115,6 +115,35 @@ function array_join() {
         fi
     fi
 }
+
+### Show a stack trace of bash functions and file locations
+function bash_stack_trace() {
+    local FRAME ARGS ARGC i
+    local -a ARGV=( "${BASH_ARGV[@]}" )
+
+    for ((FRAME=1; FRAME < ${#FUNCNAME[*]}; FRAME++)); do
+        ARGS=""
+        if shopt -q extdebug; then
+            ARGC=${BASH_ARGC[$FRAME]:-0}
+            if [[ $ARGC -gt 0 ]]; then
+                for ((i=1; i <= ARGC; i++)); do
+                    if [[ ${ARGV[ARGC-i]} == *[[:space:]]* ]]; then
+                        ARGV[ARGC-i]=\"${ARGV[ARGC-i]//\"/\\\"}\"
+                    fi
+                    ARGS+=${ARGV[ARGC-i]}', '
+                    if [[ $ARGC -eq $i ]]; then
+                        ### FIXME:  BASH bug?  "unset ARGV[0]" deletes the whole array!
+                        ARGV=( "${ARGV[@]:1}" )
+                    else
+                        unset ARGV[ARGC-i]
+                    fi
+                done
+                ARGS="${ARGS%, }"
+            fi
+        fi
+        echo "[BT]:  ${FUNCNAME[$FRAME]}($ARGS) at ${BASH_SOURCE[$FRAME]:-<UNK-FILE>}:${BASH_LINENO[$((FRAME-1))]:-<UNK-LINE>}"
+    done
+}
 ###########################################################
 
 # Define regexp match check conditionally based on bash version.
@@ -263,8 +292,9 @@ function mcheck_glob() {
     fi
 }
 
-# Check to see if an external node match expression ($2) contains a node ($1)
+# Check to see if an external node match expression ($3) contains a node ($2)
 function mcheck_external() {
+    local SDELIM="${NHC_MCHECK_DELIM[$1]:0:1}" EDELIM="${NHC_MCHECK_DELIM[$1]: -1:1}"
     local STRING="$2"
     local MATCH="$3"
     local MCHECK_CMD="${NHC_MCHECK_COMMAND[$1]}"
@@ -274,20 +304,20 @@ function mcheck_external() {
     eval $MCHECK_CMD &
     wait $!
     if [[ $? -eq 0 ]]; then
-        dbg "External match check:  $STRING matches %$MATCH%"
+        dbg "External match check:  $STRING matches $SDELIM$MATCH$EDELIM (via \"$MCHECK_CMD\")"
         return 0
     elif [[ $? -eq 127 ]]; then
         die 1 "External match check command \"$NHC_MCHECK_COMMAND\" not found or invalid"
         # FIXME:  Force exit here?
         return 127
     else
-        dbg "External match check:  $STRING does not match %$MATCH%"
+        dbg "External match check:  $STRING does not match $SDELIM$MATCH$EDELIM"
         return 1
     fi
 }
 
 # Detect regexp match (/.../), range match ({...}), external match
-# (%...%), or glob match (no delimiters), and call the appropriate
+# (dynamic), or glob match (no delimiters), and call the appropriate
 # mcheck_*() function above.
 function mcheck() {
     local STRING="$1"
@@ -349,20 +379,21 @@ function nhc_load_conf() {
             CHECK="${CHECK%%[$WS]}"
         done
 
-        # Skip comments.
         if [[ "${TARGET###}" != "$TARGET" ]]; then
+            # Skip comments.
             continue
+        elif [[ -z "$TARGET" || -z "$CHECK" ]]; then
+            # Skip empty targets or checks.
+            continue
+        elif mcheck "$HOSTNAME" "$TARGET"; then
+            # Node's hostname matches target string.
+            dbg "Host match check:  \"${HOSTNAME}\" matches \"${TARGET}\" for check:  $CHECK"
+            # Add the check to our list.
+            CHECKS[${#CHECKS[*]}]="$CHECK"
+        else
+            # Host does not match target.  Continue to the next line.
+            dbg "Host match check:  \"${HOSTNAME}\" failed to match \"${TARGET}\" for check:  $CHECK"
         fi
-
-        # Skip empty targets or checks.
-        test "$TARGET" = "" -o "$CHECK" = "" && continue
-
-        # Check to see if the current host matches the check we just read.
-        # If we didn't match, skip to the next line.
-        mcheck "$HOSTNAME" "$TARGET" || continue
-
-        # Add the check to our list.
-        CHECKS[${#CHECKS[*]}]="$CHECK"
     done < "$CONFFILE"
 }
 
@@ -610,14 +641,28 @@ function nhc_cmd_with_timeout() {
 
 # Find system definition for UID range
 function nhc_common_get_max_sys_uid() {
-    local LINE
+    local LINE UID_MIN SYS_UID_MAX
 
+    MAX_SYS_UID=${MAX_SYS_UID:-99}
     if [[ -e "$LOGIN_DEFS_SRC" ]]; then
         while read LINE ; do
             if [[ "${LINE##UID_MIN}" != "$LINE" ]]; then
-                MAX_SYS_UID="${LINE//[^0-9]}"
+                UID_MIN="${LINE//[^0-9]}"
+            elif [[ "${LINE##SYS_UID_MAX}" != "$LINE" ]]; then
+                SYS_UID_MAX="${LINE//[^0-9]}"
                 break
             fi
         done < "$LOGIN_DEFS_SRC"
+        if [[ -n "$SYS_UID_MAX" ]]; then
+            MAX_SYS_UID=$((SYS_UID_MAX+0))
+        elif [[ -n "$UID_MIN" ]]; then
+            MAX_SYS_UID=$((UID_MIN-1))
+        fi
+        if (( MAX_SYS_UID <= 0 )); then
+            MAX_SYS_UID=99
+        fi
+        return 0
+    else
+        return 1
     fi
 }

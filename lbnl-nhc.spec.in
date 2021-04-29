@@ -7,8 +7,8 @@
 Summary: LBNL Node Health Check
 Name: @PACKAGE@
 Version: @VERSION@
-#Release: %{_rel}%{?dist}
-Release: 1%{?dist}
+Release: %{_rel}%{?dist}
+#Release: 1%{?dist}
 License: US Dept. of Energy (BSD-like)
 Group: Applications/System
 URL: https://github.com/mej/nhc/

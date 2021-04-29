@@ -226,7 +226,11 @@ function nhcwrap_spawn_command() {
     vecho "Executing \"$SUBPROG ${ARGLIST[*]}\"" `date "+$NW_DATEFMT"`
     # Remove output file so that it will be recreated by bash with ctime of now.
     rm -f "$OUTFILE"
-    "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
+    if [[ "$VERBOSE" -eq 1 ]]; then
+        "$SUBPROG" "${ARGLIST[@]}" 2>&1 | tee "$OUTFILE"
+    else
+        "$SUBPROG" "${ARGLIST[@]}" >& "$OUTFILE"
+    fi
     RC=$?
     vecho "$SUBPROG returned $RC" `date "+$NW_DATEFMT"`
 
@@ -256,7 +260,7 @@ function nhcwrap_spawn_command() {
 }
 
 function nhcwrap_check_output() {
-    local RC
+    local PROG_RC=$1 RC
 
     if [[ -f "$SAVEFILE" ]]; then
         # We have previous results, so compare them against the new results.
@@ -276,7 +280,7 @@ function nhcwrap_check_output() {
             PREV_RESULTS=$(< "$SAVEFILE")
             rm -f "$SAVEFILE"
             mv -f "$OUTFILE" "$SAVEFILE"
-            RC=1
+            RC=$PROG_RC
         fi
     elif [[ ! -s "$OUTFILE" ]]; then
         # Empty output and no previous save file.
@@ -287,7 +291,7 @@ function nhcwrap_check_output() {
         # Non-empty output and no saved results file.
         vecho "Output file is non-empty (no saved results file found)."
         mv -f "$OUTFILE" "$SAVEFILE"
-        RC=1
+        RC=$PROG_RC
     fi
 
     return $RC
@@ -354,7 +358,7 @@ function nhcwrap_loop() {
             echo "Invoking $SUBPROG at" `date "+$NW_DATEFMT"`
         fi
         nhcwrap_spawn_command
-        nhcwrap_check_output || nhcwrap_report_results
+        nhcwrap_check_output $? || nhcwrap_report_results
     done
     return 0
 }
@@ -364,7 +368,7 @@ nhcwrap_parse_cmdline "$@" || exit 99
 nhcwrap_finalize_env
 
 nhcwrap_spawn_command
-nhcwrap_check_output || nhcwrap_report_results
+nhcwrap_check_output $? || nhcwrap_report_results
 if [[ -n "$LOOP_TS" ]]; then
     nhcwrap_loop
 fi

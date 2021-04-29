@@ -14,6 +14,89 @@ Though many sites have created their own scripts to serve this function, the vas
 In a typical scenario, the NHC driver script is run periodically on each compute node by the resource manager client daemon (e.g., `pbs_mom`).  It loads its configuration file to determine which checks are to be run on the current node (based on its hostname).  Each matching check is run, and if a failure is encountered, NHC will exit with an error message describing the problem.  It can also be configured to mark nodes offline so that the scheduler will not assign jobs to bad nodes, reducing the risk of system-induced job failures.  NHC can also log errors to the syslog (which is often forwarded to the master node).  Some resource managers are even able to use NHC as a pre-job validation tool, keeping scheduled jobs from running on a newly-failed node, and/or a post-job cleanup/checkup utility to remove nodes from the scheduler which may have been adversely affected by the just-completed job.
 
 
+## Table of Contents (by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
+
+<!--ts-->
+   * [Getting Started](#getting-started)
+      * [Installation](#installation)
+      * [Sample Configuration](#sample-configuration)
+         * [Config File Auto-Generation](#config-file-auto-generation)
+      * [Testing](#testing)
+      * [Implementation](#implementation)
+         * [Slurm Integration](#slurm-integration)
+         * [TORQUE Integration](#torque-integration)
+         * [Grid Engine Integration](#grid-engine-integration)
+         * [Periodic Execution](#periodic-execution)
+   * [Configuration](#configuration)
+      * [Command-Line Invocation](#command-line-invocation)
+         * [Options](#options)
+         * [Variable/Value Arguments](#variablevalue-arguments)
+         * [Example Invocations](#example-invocations)
+      * [Configuration File Syntax](#configuration-file-syntax)
+      * [Match Strings](#match-strings)
+      * [Supported Variables](#supported-variables)
+      * [Detached Mode](#detached-mode)
+      * [Built-in Checks](#built-in-checks)
+            * [check_cmd_output](#check_cmd_output)
+            * [check_cmd_status](#check_cmd_status)
+            * [check_dmi_data_match](#check_dmi_data_match)
+            * [check_dmi_raw_data_match](#check_dmi_raw_data_match)
+            * [check_file_contents](#check_file_contents)
+            * [check_file_stat](#check_file_stat)
+            * [check_file_test](#check_file_test)
+            * [check_fs_inodes](#check_fs_inodes)
+            * [check_fs_ifree](#check_fs_ifree)
+            * [check_fs_iused](#check_fs_iused)
+            * [check_fs_mount](#check_fs_mount)
+            * [check_fs_mount_ro](#check_fs_mount_ro)
+            * [check_fs_mount_rw](#check_fs_mount_rw)
+            * [check_fs_free](#check_fs_free)
+            * [check_fs_size](#check_fs_size)
+            * [check_fs_used](#check_fs_used)
+            * [check_hw_cpuinfo](#check_hw_cpuinfo)
+            * [check_hw_numa](#check_hw_numa)
+            * [check_hw_eth](#check_hw_eth)
+            * [check_hw_gm](#check_hw_gm)
+            * [check_hw_ib](#check_hw_ib)
+            * [check_hw_mcelog](#check_hw_mcelog)
+            * [check_hw_mem](#check_hw_mem)
+            * [check_hw_mem_free](#check_hw_mem_free)
+            * [check_hw_physmem](#check_hw_physmem)
+            * [check_hw_physmem_free](#check_hw_physmem_free)
+            * [check_hw_swap](#check_hw_swap)
+            * [check_hw_swap_free](#check_hw_swap_free)
+            * [check_moab_sched](#check_moab_sched)
+            * [check_moab_rm](#check_moab_rm)
+            * [check_moab_torque](#check_moab_torque)
+            * [check_net_ping](#check_net_ping)
+            * [check_net_socket](#check_net_socket)
+            * [check_nv_healthmon](#check_nv_healthmon)
+            * [check_ps_blacklist](#check_ps_blacklist)
+            * [check_ps_cpu](#check_ps_cpu)
+            * [check_ps_daemon](#check_ps_daemon)
+            * [check_ps_kswapd](#check_ps_kswapd)
+            * [check_ps_loadavg](#check_ps_loadavg)
+            * [check_ps_mem](#check_ps_mem)
+            * [check_ps_physmem](#check_ps_physmem)
+            * [check_ps_service](#check_ps_service)
+            * [check_ps_time](#check_ps_time)
+            * [check_ps_unauth_users](#check_ps_unauth_users)
+            * [check_ps_userproc_lineage](#check_ps_userproc_lineage)
+   * [Customization](#customization)
+      * [Writing Checks](#writing-checks)
+      * [Tips and Best Practices for Checks](#tips-and-best-practices-for-checks)
+         * [Arrays](#arrays)
+         * [File I/O](#file-io)
+         * [Line Parsing and Loops](#line-parsing-and-loops)
+         * [Text Transformations](#text-transformations)
+         * [Matching](#matching)
+   * [Footnotes](#footnotes)
+
+<!-- Added by: mej, at: 2019-01-01T03:03-0700 -->
+
+<!--te-->
+
+
 ## Getting Started
 
 The following instructions will walk you through downloading and installing LBNL NHC, configuring it for your system, testing the configuration, and implementing it for use with the TORQUE resource manager.
@@ -784,6 +867,17 @@ _**Example**_:  `check_fs_used / 98%`
 `check_hw_cpuinfo` compares the properties of the OS-detected CPU(s) to the specified values to ensure that the correct number of physical sockets, execution cores, and "threads" (or "virtual cores") are present and functioning on the system.  For a single-core, non-hyperthreading-enabled processor, all 3 parameters would be identical.  Multicore CPUs will have more _cores_ than _sockets_, and CPUs with [Intel HyperThreading Technology (HT)](https://en.wikipedia.org/wiki/Hyper-threading) turned on will have more _threads_ than _cores_.  Since HPC workloads often suffer when HT is active, this check is a handy way to make sure that doesn't happen.
 
 _**Example** (dual-socket 4-core Intel Nehalem with HT turned off)_:  `check_hw_cpuinfo 2 8 8`
+
+
+<br />
+
+
+##### check_hw_numa
+`check_hw_numa [numa-nodes] [NPS]`
+
+`check_hw_numa` compares the properties of the [NUMA](https://en.wikipedia.org/wiki/Non-uniform_memory_access) nodes configured on the system to the specified values to ensure that the correct system topology is enabled. For CPUs with configurable NUMA nodes-per-socket (NPS), the 2nd parameter can be used to verify proper BIOS configuration.
+
+_**Example** (dual-socket AMD EPYC CPU with NPS=2)_:  `check_hw_numa 4 2`
 
 
 <br />

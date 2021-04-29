@@ -1,8 +1,8 @@
 # Tests for common.nhc
 
-plan $((12+7+15+6+7+4+6+18+7+19+7)) "common.nhc" && {
+plan $((12+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
-    is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_regexp() loaded properly'
+    is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_range() loaded properly'
     is "`type -t mcheck_external 2>&1`" 'function' 'mcheck_external() loaded properly'
     is "`type -t mcheck_glob 2>&1`" 'function' 'mcheck_glob() loaded properly'
     is "`type -t mcheck 2>&1`" 'function' 'mcheck() loaded properly'
@@ -239,22 +239,25 @@ plan $((12+7+15+6+7+4+6+18+7+19+7)) "common.nhc" && {
         # There seems to be a bash bug.  It doesn't handle process substitution
         # correctly (i.e., <(...) constructs) when debugging (set -x).  Skip.
         skip 7
-        export MAX_SYS_UID=500
+        export MAX_SYS_UID=499
     else
+        LOGIN_DEFS_SRC=<(echo -e "SYS_UID_MAX\t\t\t  199") nhc_common_get_max_sys_uid
+        is "$MAX_SYS_UID" 199 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 199"
         LOGIN_DEFS_SRC=<(echo -e "UID_MIN\t\t\t  500") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 500 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 500"
-        LOGIN_DEFS_SRC=<(echo -e "UID_MIN        999") nhc_common_get_max_sys_uid
+        is "$MAX_SYS_UID" 499 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 499"
+        LOGIN_DEFS_SRC=<(echo -e "UID_MIN       1000") nhc_common_get_max_sys_uid
         is "$MAX_SYS_UID" 999 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 999"
         LOGIN_DEFS_SRC=<(echo -e "UID_MIN\t0\t") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 0 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 0"
+        is "$MAX_SYS_UID" 99 "nhc_common_get_max_sys_uid():  \$MAX_SYS_UID <- 0"
         LOGIN_DEFS_SRC=<(echo -e "GID_MIN\t\t\t  1234") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 0 "nhc_common_get_max_sys_uid():  Bad syntax"
+        is "$MAX_SYS_UID" 99 "nhc_common_get_max_sys_uid():  Bad syntax"
         LOGIN_DEFS_SRC=<(echo -e "2345") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 0 "nhc_common_get_max_sys_uid():  Ignore plain number"
+        is "$MAX_SYS_UID" 99 "nhc_common_get_max_sys_uid():  Ignore plain number"
         LOGIN_DEFS_SRC=<(echo -e "stuff\nGID_MIN 1\nGID_MAX 4\nUID_MIN 3\nUID_MAX 7\nblah blah blah\n") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 3 "nhc_common_get_max_sys_uid():  Multiline input"
-        LOGIN_DEFS_SRC=<(echo -e "UID_MIN\t\t\t  500") nhc_common_get_max_sys_uid
-        is "$MAX_SYS_UID" 500 "nhc_common_get_max_sys_uid():  Reset default"
+        is "$MAX_SYS_UID" 2 "nhc_common_get_max_sys_uid():  Multiline input"
+        unset MAX_SYS_UID
+        LOGIN_DEFS_SRC="" nhc_common_get_max_sys_uid
+        is "$MAX_SYS_UID" 99 "nhc_common_get_max_sys_uid():  Reset default"
     fi
 
 } ; unplan

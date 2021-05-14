@@ -235,12 +235,6 @@ function nhc_ps_check_res() {
                 ;;
         esac
         # We have a winner.  Or loser, as the case may be.
-        if [[ "$LOG" == "1" ]]; then
-            log $MSG
-        fi
-        if [[ "$SYSLOG" == "1" ]]; then
-            syslog $MSG
-        fi
         if [[ "$ACTION" != "" ]]; then
             ${SHELL:-/bin/bash} -c "$ACTION" &
         fi

@@ -107,9 +107,10 @@ function nhc_ps_pid_lineage() {
 # by check_ps_{cpu,mem,physmem}().  Additional parameters are the check
 # name and the type of resource to look at.
 function nhc_ps_check_res() {
-    local NONFATAL=0 FULLMATCH=0 ALL=0 SYSLOG=0 LOG=0 KILL=0 KILL_PARENT=0 RENICE="" OWNER="" MATCH="" ACTION=""
+    local ALLPROC=0 ALLUSERS=0 FULLMATCH=0 KILL=0 KILL_PARENT=0 LOG=0 NONFATAL=0 SYSLOG=0
+    local ACTION="" MATCH="" OWNER="" RENICE=""
     local CHECK="$1" COL="$2" THRESHOLD
-    local THIS_PID THIS_PROG MSG T_MIN T_SEC NUM LIM i
+    local LIM MSG NUM THIS_PID THIS_PROG T_MIN T_SEC i
 
     if [[ ${#PS_PROCS[*]} -eq 0 ]]; then
         nhc_ps_gather_data
@@ -117,19 +118,20 @@ function nhc_ps_check_res() {
 
     shift 2
     OPTIND=1
-    while getopts ":0Kfalskr:u:m:e:" OPTION ; do
+    while getopts ":0AKae:fklm:r:su:" OPTION ; do
         case "$OPTION" in
             0) NONFATAL=1 ;;
+            A) ALLUSERS=1 ;;
             K) KILL_PARENT=1 ;;
-            f) FULLMATCH=1 ;;
-            a) ALL=1 ;;
-            l) LOG=1 ;;
-            s) SYSLOG=1 ;;
-            k) KILL=1 ;;
-            r) RENICE="$OPTARG" ;;
-            u) OWNER="$OPTARG" ;;
-            m) MATCH="$OPTARG" ;;
+            a) ALLPROC=1 ;;
             e) ACTION="$OPTARG" ;;
+            f) FULLMATCH=1 ;;
+            k) KILL=1 ;;
+            l) LOG=1 ;;
+            m) MATCH="$OPTARG" ;;
+            r) RENICE="$OPTARG" ;;
+            s) SYSLOG=1 ;;
+            u) OWNER="$OPTARG" ;;
             :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
             \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
@@ -192,11 +194,16 @@ function nhc_ps_check_res() {
             ARGS=( ${PS_ARGS[$THIS_PID]} )
             THIS_PROG="${ARGS[0]}"
         fi
-        dbg "Checking $THIS_PID:  \"$MATCH\" vs. \"$THIS_PROG\""
+        dbg "Checking $THIS_PID for system user:  ${PS_UID[$THIS_PID]} <= $MAX_SYS_UID?"
+        if [[ $ALLUSERS -eq 0 && ${PS_UID[$THIS_PID]} -le $MAX_SYS_UID ]]; then
+            # Unless we were asked to look at all users, ignore system users' procs
+            continue
+        fi
+        dbg "Checking $THIS_PID for command match:  \"$MATCH\" vs. \"$THIS_PROG\""
         if ! mcheck "$THIS_PROG" "$MATCH" ; then
             continue
         fi
-        dbg "Checking $THIS_PID:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
+        dbg "Checking $THIS_PID for ownership match:  \"$OWNER\" vs. \"${PS_USER[$THIS_PID]}\""
         if [[ -n "$OWNER" ]]; then
             if ! mcheck "${PS_USER[$THIS_PID]}" "$OWNER" ; then
                 continue
@@ -255,11 +262,11 @@ function nhc_ps_check_res() {
                 MSG="$MSG; killed parent ${PS_PPID[$THIS_PID]}"
             fi
         fi
-        if [[ $ALL -ge 1 ]]; then
+        if [[ $ALLPROC -ge 1 ]]; then
             if [[ -n "$MSG" ]]; then
-                log "$MSG ($ALL)"
+                log "$MSG ($ALLPROC)"
             fi
-            ((ALL++))
+            ((ALLPROC++))
             continue
         elif [[ $NONFATAL == 1 ]]; then
             if [[ -n "$MSG" ]]; then
@@ -270,9 +277,9 @@ function nhc_ps_check_res() {
         die 1 "$MSG"
         return 1
     done
-    # -a (all) does not necessarily imply -0 (non-fatal).  A value of 1 for $ALL
+    # -a (all) does not necessarily imply -0 (non-fatal).  A value of 1 for $ALLPROC
     # means -a was passed in but no errors were found.  2 or above is an error.
-    if [[ $ALL -gt 1 ]]; then
+    if [[ $ALLPROC -gt 1 ]]; then
         # We had at least 1 flagged process.  Fail unless we're also non-fatal.
         if [[ $NONFATAL == 1 ]]; then
             if [[ -n "$MSG" ]]; then
@@ -280,9 +287,9 @@ function nhc_ps_check_res() {
             fi
             return 0
         fi
-        ((ALL--))
-        die $ALL "$MSG (last of $ALL)"
-        return $ALL
+        ((ALLPROC--))
+        die $ALLPROC "$MSG (last of $ALLPROC)"
+        return $ALLPROC
     fi
     return 0
 }

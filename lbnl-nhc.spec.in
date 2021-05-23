@@ -9,11 +9,11 @@ Name: @PACKAGE@
 Version: @VERSION@
 Release: %{_rel}%{?dist}
 #Release: 1%{?dist}
-License: US Dept. of Energy (BSD-like)
+License: BSD-3-Clause-LBNL (https://opensource.org/BSD-3-Clause-LBNL)
 Group: Applications/System
 URL: https://github.com/mej/nhc/
 Source: https://github.com/mej/nhc/archive/%{name}-%{version}.tar.gz
-Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@lbl.gov>}
+Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@eterm.org>}
 Vendor: %{?_vendorinfo}%{!?_vendorinfo:LBNL NHC Project (https://github.com/mej/nhc/)}
 Requires: bash
 Obsoletes: warewulf-nhc <= 1.4.2-1

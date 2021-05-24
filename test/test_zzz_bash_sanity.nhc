@@ -1,18 +1,18 @@
 # Tests for BASH variables we use to make sure we haven't clobbered them.  Work in progress!
 
-plan $((3+2+2)) "bash variable sanity check" && {
-    function test_funcname_variable() { is "$FUNCNAME" "test_funcname_variable" "BASH built-in variable \$FUNCNAME"; }
-    test_funcname_variable
-
-    local L=$LINENO
-    is $BASHPID $$ "BASH built-in variable \$BASHPID"
-    isnt $L $LINENO "BASH built-in variable \$LINENO"
-
-    for VAR in BASH_REMATCH BASH_VERSINFO ; do
-        like "$(declare -p $VAR 2>/dev/null)" 'declare -ar *' "BASH built-in variable \$$VAR"
-    done
-
-    is $BASH_SUBSHELL 0 "BASH built-in variable \$BASH_SUBSHELL (0)"
-    ( is $BASH_SUBSHELL 1 "" ) && pass || fail "BASH built-in variable \$BASH_SUBSHELL (1)"
-
-} ; unplan
+#plan $((3+2+2)) "bash variable sanity check" && {
+#    function test_funcname_variable() { is "$FUNCNAME" "test_funcname_variable" "BASH built-in variable \$FUNCNAME"; }
+#    test_funcname_variable
+#
+#    local L=$LINENO
+#    is $BASHPID $$ "BASH built-in variable \$BASHPID"
+#    isnt $L $LINENO "BASH built-in variable \$LINENO"
+#
+#    for VAR in BASH_REMATCH BASH_VERSINFO ; do
+#        like "$(declare -p $VAR 2>/dev/null)" 'declare -ar *' "BASH built-in variable \$$VAR"
+#    done
+#
+#    is $BASH_SUBSHELL 0 "BASH built-in variable \$BASH_SUBSHELL (0)"
+#    ( is $BASH_SUBSHELL 1 "" ) && pass || fail "BASH built-in variable \$BASH_SUBSHELL (1)"
+#
+#} ; unplan

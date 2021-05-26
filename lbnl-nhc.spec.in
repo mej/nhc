@@ -1,19 +1,29 @@
-%{!?_rel:%{expand:%%global _rel 0.@GITVERSION@}}
+%global name    @PACKAGE@
+%global version @VERSION@
+%global release %{rel}%{?dist}
+
+%global gitrelease @GITRELEASE@
+%{expand:%%global gd_rel_delta %(git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 | cut -d- -f 2- | tr '-' '.')}
+%{expand:%%global rel_pre_post %(git describe --tags HEAD | grep -Eq '^%{version}' >&/dev/null && echo 1. || echo 0.)}
+%{expand:%%global spec_rel %{rel_pre_post}%{gd_rel_delta}}
+%{!?rel:%{expand:%%global rel %(if test -z "%{spec_rel}" ; then echo "%{gitrelease}" ; else echo "%{spec_rel}" ; fi)}}
 
 %{!?sname:%global sname nhc}
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}
 %{!?nhc_helper_dir:%global nhc_helper_dir %{_libexecdir}/%{sname}}
 
+
 Summary: LBNL Node Health Check
-Name: @PACKAGE@
-Version: @VERSION@
-#Release: %{_rel}%{?dist}
-Release: 1%{?dist}
-License: US Dept. of Energy (BSD-like)
+Name: %{name}
+Version: %{version}
+Release: %{release}
+#Release: 1%{?dist}
+# LBNL Open Source License:  https://opensource.org/BSD-3-Clause-LBNL
+License: BSD-3-Clause-LBNL
 Group: Applications/System
 URL: https://github.com/mej/nhc/
 Source: https://github.com/mej/nhc/archive/%{name}-%{version}.tar.gz
-Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@lbl.gov>}
+Packager: %{?_packager}%{!?_packager:Michael Jennings <mej@eterm.org>}
 Vendor: %{?_vendorinfo}%{!?_vendorinfo:LBNL NHC Project (https://github.com/mej/nhc/)}
 Requires: bash
 Obsoletes: warewulf-nhc <= 1.4.2-1
@@ -21,14 +31,15 @@ BuildArch: noarch
 BuildRoot: %{?_tmppath}%{!?_tmppath:/var/tmp}/%{name}-%{version}-%{release}-root
 
 %description
-This package contains the LBNL Node Health Check system.
+This package contains the LBNL Node Health Check (NHC) system.
+Originally written to serve a very specific niche in validating
+compute nodes of High-Performance Computing (HPC) clusters, its unique
+combination of extensibility, portability, simplicity, and efficiency
+have made it a popular general-purpose system health monitoring and
+management tool.
 
-TORQUE (and other resource managers) allow for the execution of a
-script to determine if a node is "healthy" or "unhealthy" and
-potentially mark unhealthy nodes as unavailable.  The scripts
-contained in this package provide a flexible, extensible mechanism for
-collecting health checks to be run on your cluster and specifying
-which checks should be run on which nodes.
+Complete documentation and example use cases are available on the
+project home page at https://github.com/mej/nhc
 
 
 %prep

@@ -179,8 +179,12 @@ function test_nhc_driver() {
 
 function test_checks() {
     local CHECKTEST
+    local -a TEST_SCRIPTS
 
-    for CHECKTEST in $SRCDIR/test_*.nhc ; do
+    set +f
+    TEST_SCRIPTS=( $SRCDIR/test_*.nhc )
+    set -f
+    for CHECKTEST in "${TEST_SCRIPTS[@]}" ; do
         if [[ ! -s "$CHECKTEST" ]]; then
             continue
         fi

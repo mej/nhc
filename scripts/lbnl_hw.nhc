@@ -24,8 +24,8 @@ MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-0}"
 
 # Read hardware information from /proc and /sys files.
 function nhc_hw_gather_data() {
-    local LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
-    local -a FIELD PHYS_IDS
+    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
+    local -a FIELD PHYS_IDS IB_PORTS
 
     # Gather CPU info
     PROCESSOR=-1
@@ -93,7 +93,12 @@ function nhc_hw_gather_data() {
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
 
     # Gather IB info
-    for PORT in /sys/class/infiniband/*/ports/* ; do
+    set +f
+    IFS=''
+    IB_PORTS=( /sys/class/infiniband/*/ports/* )
+    IFS=$' \t\n'
+    set -f
+    for PORT in "${IB_PORTS[@]}" ; do
         test -e "$PORT" || break
         INDEX=${#HW_IB_STATE[*]}
         IFS=' :'

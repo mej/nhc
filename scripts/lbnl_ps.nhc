@@ -34,38 +34,17 @@ function nhc_ps_gather_data() {
 
     # We need this for user authorization checks.  Try to read system defaults.
     [[ -z "$MAX_SYS_UID" ]] && nhc_common_get_max_sys_uid
-    MAX_SYS_UID=${MAX_SYS_UID:-99}
 
-    # Set default for $RM_DAEMON_MATCH based on configured resource manager.
-    if [[ "$NHC_RM" == "pbs" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
-    elif [[ "$NHC_RM" == "slurm" ]]; then
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
-    elif [[ "$NHC_RM" == "sge" ]]; then
-        # If you limit this to execd, you lose when it's been restarted,
-        # and the shepherd is detached.  Even if execd is safe because of
-        # system uids, it can spawn mail commands as the job owner, at
-        # least.  (The shepherd process name is normally
-        # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
-    else
-        dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
-    fi
-    if [[ ! "test" =~ \btest\b ]]; then
-        # Workaround for lack of \b support in regexp library.
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
-        RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
-    fi
-        
     # Create array $LINES[] by splitting "ps" output on newlines.
     IFS=$'\n'
-    LINES=( $(ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
+    LINES=( $(COLUMNS=1024 ps axo 'user:32,uid,pid,ppid,pcpu,pmem,rss,vsz,bsdtime,args') )
     IFS=$' \t\n'
 
     # Iterate through $LINES[] array to gather process data.
     for ((i=0; i<${#LINES[*]}; i++)); do
         # Split each line on whitespace to create $LINE[] array.
-        LINE=( ${LINES[$i]//\*/\\\*} )
+        # The below escaping should no longer be needed now that globbing is disabled.
+        LINE=( ${LINES[$i]} )
         if [[ "${LINE[0]}" = "USER" ]]; then
             continue
         fi
@@ -80,8 +59,6 @@ function nhc_ps_gather_data() {
         PS_VSZ[$THIS_PID]=${LINE[7]}
         PS_TIME[$THIS_PID]=${LINE[8]}
         PS_ARGS[$THIS_PID]="${LINE[*]:9}"
-        # NOTE:  We want to leave the *'s backslash-escaped for future expansion safety!
-        #PS_ARGS[$THIS_PID]="${PS_ARGS[$THIS_PID]//\\\*/*}"
         if [[ "${PS_USER[$THIS_PID]}" == "${PS_UID[$THIS_PID]}" ]]; then
             nhc_common_get_userid "${PS_UID[$THIS_PID]}" "PS_USER[$THIS_PID]"
         fi
@@ -116,6 +93,9 @@ function nhc_ps_pid_lineage() {
         nhc_ps_gather_data
     fi
 
+    if [[ -z "$PROCNAME" ]]; then
+        return 1
+    fi
     while [[ -n "$THIS_PID" && $THIS_PID -ne 1 ]]; do
         THIS_PID=${PS_PPID[$THIS_PID]}
         mcheck "${PS_ARGS[$THIS_PID]}" "$PROCNAME" && return 0
@@ -638,8 +618,22 @@ function check_ps_time() {
 # to be running on the node (i.e., root, and owners of current PBS jobs).
 # Arguments to function are actions to take (ignore, log, syslog, die, kill).
 function check_ps_unauth_users() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_CMD IGNORE_UID IGNORE_USER IGNORE_PID
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -658,6 +652,14 @@ function check_ps_unauth_users() {
         THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         nhc_job_user_auth "$THIS_USER" "$THIS_UID"
         IS_AUTH=$?
         if [[ $IS_AUTH -eq 0 ]]; then
@@ -684,8 +686,22 @@ function check_ps_unauth_users() {
 # Check the lineage for all non-system processes to make sure they're children
 # of torque (i.e., pbs_mom).  Arguments are actions (same as above).
 function check_ps_userproc_lineage() {
-    local ACTIONS="$@"
     local i THIS_PID THIS_USER THIS_UID THIS_CMD IS_AUTH UNAUTH_MSG
+    local ACTIONS IGNORE_USER
+
+    OPTIND=1
+    while getopts ":c:u:n:p:" OPTION ; do
+        case "$OPTION" in
+            c) IGNORE_CMD="$IGNORE_CMD $OPTARG" ; dbg "Ignoring Command $OPTARG" ;;
+            u) IGNORE_UID="$IGNORE_UID $OPTARG" ; dbg "Ignoring UID $OPTARG" ;;
+            n) IGNORE_USER="$IGNORE_USER $OPTARG" ; dbg "Ignoring User $OPTARG" ;;
+            p) IGNORE_PID="$IGNORE_PID $OPTARG" ; dbg "Ignoring PID $OPTARG" ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    local ACTIONS="$@"
 
     if [[ -z "$ACTIONS" ]]; then
         ACTIONS="die"
@@ -699,11 +715,47 @@ function check_ps_userproc_lineage() {
         nhc_common_load_passwd
     fi
 
+    if [[ -z "$NHC_RM" || "$NHC_RM" == "none" ]]; then
+        die 1 "$FUNCNAME:  This check requires a supported resource manager (e.g., Slurm, TORQUE, SGE, LSF)"
+        return 1
+    elif [[ -z "$RM_DAEMON_MATCH" ]]; then
+        # Set default for $RM_DAEMON_MATCH based on configured resource manager.
+        if [[ "$NHC_RM" == "pbs" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bpbs_mom\b/}"
+        elif [[ "$NHC_RM" == "slurm" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bslurmstepd\b/}"
+        elif [[ "$NHC_RM" == "sge" ]]; then
+            # If you limit this to execd, you lose when it's been restarted,
+            # and the shepherd is detached.  Even if execd is safe because of
+            # system uids, it can spawn mail commands as the job owner, at
+            # least.  (The shepherd process name is normally
+            # sge_shepherd-<jobnum>, but maybe not if you change shepherd_cmd.)
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bsge_(execd|shepherd)\b/}"
+        elif [[ "$NHC_RM" == "lsf" ]]; then
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH:-/\bres\b/}"
+        else
+            dbg "Unsupported RM detected in ${FUNCNAME}():  \"$NHC_RM\""
+        fi
+        if [[ ! "test" =~ \btest\b ]]; then
+            # Workaround for lack of \b support in regexp library.
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//#\\b/(^|[^A-Za-z0-9])}"
+            RM_DAEMON_MATCH="${RM_DAEMON_MATCH//%\\b/(\$|[^A-Za-z0-9])}"
+        fi
+    fi
+
     for ((i=0; i < ${#PS_PROCS[*]}; i++)); do
         THIS_PID=${PS_PROCS[$i]}
         THIS_UID="${PS_UID[$THIS_PID]}"
         THIS_USER="${PS_USER[$THIS_PID]:-${PWUID_USER[$THIS_UID]:-$THIS_UID}}"
         THIS_CMD="${PS_ARGS[$THIS_PID]/% *}"
+
+        if [[ $IGNORE_CMD == *"$THIS_CMD"* ]] ||
+           [[ $IGNORE_UID == *"$THIS_UID"* ]] ||
+           [[ $IGNORE_USER == *"$THIS_USER"* ]] ||
+           [[ $IGNORE_PID == *"$THIS_PID"* ]]; then
+           # This process should be ignored
+           continue
+        fi
         if [[ ${THIS_UID:-0} -le $MAX_SYS_UID ]]; then
             continue
         fi

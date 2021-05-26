@@ -1,0 +1,67 @@
+# NHC - nVidia GPU Checks
+#
+# Johan Guldmyr <jguldmyr@csc.fi>
+# 17 Dec 2015
+#
+
+NVIDIA_SMI_HEALTHMON="${NVIDIA_SMI_HEALTHMON:-nvidia-smi}"
+NVIDIA_SMI_HEALTHMON_ARGS="${NVIDIA_SMI_HEALTHMON_ARGS}"
+
+NVSMI_HEALTHMON_LINES=( )
+NVSMI_HEALTHMON_OUTPUT=""
+NVSMI_HEALTHMON_RC=""
+
+export NVSMI_HEALTHMON_LINES NVSMI_HEALTHMON_OUTPUT NVSMI_HEALTHMON_RC
+
+function nhc_nvsmi_gather_data() {
+    local IFS
+
+    NVSMI_HEALTHMON_OUTPUT=$($NVIDIA_SMI_HEALTHMON $NVIDIA_SMI_HEALTHMON_ARGS 2>/dev/null)
+    NVSMI_HEALTHMON_RC=$?
+    IFS=$'\n'
+    NVSMI_HEALTHMON_LINES=( $NVSMI_HEALTHMON_OUTPUT )
+}
+
+# Run the nvidia-smi utility and verify that all GPUs
+# are functioning properly.
+function check_nvsmi_healthmon() {
+    if [[ -z "$NVSMI_HEALTHMON_RC" ]]; then
+        nhc_nvsmi_gather_data
+    fi
+
+    if [[ $NVSMI_HEALTHMON_RC -eq 0 ]]; then
+        dbg "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON completed successfully"
+        return 0
+    elif [[ $NVSMI_HEALTHMON_RC -eq 4 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Permission denied"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 8 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Power cables not attached"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 2 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Invalid argument or flag"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 9 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  NVIDIA driver not loaded"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 10 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Interrupt issue with a GPU"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 12 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  NVML shared library could not be found"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 14 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  InfoROM is corrupted"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -eq 15 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  The GPU has fallen off the bus or has otherwise become inaccessible"
+        return 1
+    elif [[ $NVSMI_HEALTHMON_RC -gt 127 ]]; then
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Caught fatal signal $((NVSMI_HEALTHMON_RC&0x7f))"
+        return 1
+    else
+        log "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  \"$NVSMI_HEALTHMON_OUTPUT\""
+        die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  Returned failure code $NVSMI_HEALTHMON_RC"
+        return 1
+    fi
+}

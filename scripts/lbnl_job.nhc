@@ -9,7 +9,7 @@ NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local IFS JOBFILE JOBUSER STAT_OUT LINE PBS_XML
+    local IFS JOBFILE JOBUSER SQUEUE_OUT LINE PBS_XML
     local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
@@ -17,12 +17,16 @@ function nhc_job_find_users() {
     if [[ "$NHC_RM" == "pbs" ]]; then
         PBS_SERVER_HOME="${PBS_SERVER_HOME:-/var/spool/torque}"
         JOBFILE_PATH="${JOBFILE_PATH:-$PBS_SERVER_HOME/mom_priv/jobs}"
+        set +f
+        IFS=''
         JOBLIST=( $JOBFILE_PATH/*.JB )
         dbg "Found ${#JOBLIST[*]} job files in $JOBFILE_PATH"
         if [[ ${#JOBLIST[*]} -eq 1 && ! -f "${JOBLIST[0]}" && -d $PWD/jobs ]]; then
             JOBLIST=( $PWD/jobs/*.JB )
             dbg "Found ${#JOBLIST[*]} job files in $PWD/jobs"
         fi
+        IFS=$' \t\n'
+        set -f
         for JOBFILE in "${JOBLIST[@]}" ; do
             PBS_XML=0
             if [[ ! -f "$JOBFILE" ]]; then
@@ -52,13 +56,11 @@ function nhc_job_find_users() {
             ### Remove the redirection from the next line if needed for debugging the parsing loop above.
         done 2>/dev/null || :
     elif [[ "$NHC_RM" == "slurm" ]]; then
-        SLURM_SERVER_HOME="${SLURM_SERVER_HOME:-/var/spool/slurmd}"
-        JOBFILE_PATH="${JOBFILE_PATH:-$SLURM_SERVER_HOME}"
-        STAT_OUT=$(${STAT_CMD:-/usr/bin/stat} ${STAT_FMT_ARGS:--c} %U $JOBFILE_PATH/job*/slurm_script)
+	SQUEUE_OUT=$(${SQUEUE_CMD:-/usr/bin/squeue} ${SQUEUE_NODE:--w ${HOSTNAME_S}} ${SQUEUE_FMT_ARGS:---noheader -o %u})
         IFS=$'\n'
-        USERLIST=( $STAT_OUT )
+        USERLIST=( $SQUEUE_OUT )
         IFS=$' \t\n'
-        dbg "Found ${#USERLIST[*]} job files in $JOBFILE_PATH"
+        dbg "Found ${#USERLIST[*]} users running jobs on ${HOSTNAME_S}"
         for JOBUSER in "${USERLIST[@]}" ; do
             if [[ "${JOBUSERS[*]//$JOBUSER}" = "${JOBUSERS[*]}" ]]; then
                 JOBUSERS[${#JOBUSERS[*]}]="$JOBUSER"

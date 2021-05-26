@@ -14,6 +14,88 @@ Though many sites have created their own scripts to serve this function, the vas
 In a typical scenario, the NHC driver script is run periodically on each compute node by the resource manager client daemon (e.g., `pbs_mom`).  It loads its configuration file to determine which checks are to be run on the current node (based on its hostname).  Each matching check is run, and if a failure is encountered, NHC will exit with an error message describing the problem.  It can also be configured to mark nodes offline so that the scheduler will not assign jobs to bad nodes, reducing the risk of system-induced job failures.  NHC can also log errors to the syslog (which is often forwarded to the master node).  Some resource managers are even able to use NHC as a pre-job validation tool, keeping scheduled jobs from running on a newly-failed node, and/or a post-job cleanup/checkup utility to remove nodes from the scheduler which may have been adversely affected by the just-completed job.
 
 
+## Table of Contents (by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
+
+<!--ts-->
+   * [Getting Started](#getting-started)
+      * [Installation](#installation)
+      * [Sample Configuration](#sample-configuration)
+         * [Config File Auto-Generation](#config-file-auto-generation)
+      * [Testing](#testing)
+      * [Implementation](#implementation)
+         * [Slurm Integration](#slurm-integration)
+         * [TORQUE Integration](#torque-integration)
+         * [Grid Engine Integration](#grid-engine-integration)
+         * [Periodic Execution](#periodic-execution)
+   * [Configuration](#configuration)
+      * [Command-Line Invocation](#command-line-invocation)
+         * [Options](#options)
+         * [Variable/Value Arguments](#variablevalue-arguments)
+         * [Example Invocations](#example-invocations)
+      * [Configuration File Syntax](#configuration-file-syntax)
+      * [Match Strings](#match-strings)
+      * [Supported Variables](#supported-variables)
+      * [Detached Mode](#detached-mode)
+      * [Built-in Checks](#built-in-checks)
+            * [check_cmd_output](#check_cmd_output)
+            * [check_cmd_status](#check_cmd_status)
+            * [check_dmi_data_match](#check_dmi_data_match)
+            * [check_dmi_raw_data_match](#check_dmi_raw_data_match)
+            * [check_file_contents](#check_file_contents)
+            * [check_file_stat](#check_file_stat)
+            * [check_file_test](#check_file_test)
+            * [check_fs_inodes](#check_fs_inodes)
+            * [check_fs_ifree](#check_fs_ifree)
+            * [check_fs_iused](#check_fs_iused)
+            * [check_fs_mount](#check_fs_mount)
+            * [check_fs_mount_ro](#check_fs_mount_ro)
+            * [check_fs_mount_rw](#check_fs_mount_rw)
+            * [check_fs_free](#check_fs_free)
+            * [check_fs_size](#check_fs_size)
+            * [check_fs_used](#check_fs_used)
+            * [check_hw_cpuinfo](#check_hw_cpuinfo)
+            * [check_hw_eth](#check_hw_eth)
+            * [check_hw_gm](#check_hw_gm)
+            * [check_hw_ib](#check_hw_ib)
+            * [check_hw_mcelog](#check_hw_mcelog)
+            * [check_hw_mem](#check_hw_mem)
+            * [check_hw_mem_free](#check_hw_mem_free)
+            * [check_hw_physmem](#check_hw_physmem)
+            * [check_hw_physmem_free](#check_hw_physmem_free)
+            * [check_hw_swap](#check_hw_swap)
+            * [check_hw_swap_free](#check_hw_swap_free)
+            * [check_moab_sched](#check_moab_sched)
+            * [check_moab_rm](#check_moab_rm)
+            * [check_moab_torque](#check_moab_torque)
+            * [check_net_ping](#check_net_ping)
+            * [check_net_socket](#check_net_socket)
+            * [check_nv_healthmon](#check_nv_healthmon)
+            * [check_ps_blacklist](#check_ps_blacklist)
+            * [check_ps_cpu](#check_ps_cpu)
+            * [check_ps_daemon](#check_ps_daemon)
+            * [check_ps_kswapd](#check_ps_kswapd)
+            * [check_ps_loadavg](#check_ps_loadavg)
+            * [check_ps_mem](#check_ps_mem)
+            * [check_ps_physmem](#check_ps_physmem)
+            * [check_ps_service](#check_ps_service)
+            * [check_ps_time](#check_ps_time)
+            * [check_ps_unauth_users](#check_ps_unauth_users)
+            * [check_ps_userproc_lineage](#check_ps_userproc_lineage)
+   * [Customization](#customization)
+      * [Writing Checks](#writing-checks)
+      * [Tips and Best Practices for Checks](#tips-and-best-practices-for-checks)
+         * [Arrays](#arrays)
+         * [File I/O](#file-io)
+         * [Line Parsing and Loops](#line-parsing-and-loops)
+         * [Text Transformations](#text-transformations)
+         * [Matching](#matching)
+   * [Footnotes](#footnotes)
+
+<!-- Added by: mej, at: 2019-01-01T03:03-0700 -->
+
+<!--te-->
+
+
 ## Getting Started
 
 The following instructions will walk you through downloading and installing LBNL NHC, configuring it for your system, testing the configuration, and implementing it for use with the TORQUE resource manager.
@@ -21,11 +103,15 @@ The following instructions will walk you through downloading and installing LBNL
 
 ### Installation
 
-Pre-built RPM packages for Red Hat Enterprise Linux versions 4, 5, 6, and 7 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes (e.g., [lbnl-nhc-1.4.2-1.el7.noarch.rpm](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2-1.el7.noarch.rpm)) and install it into your compute node VNFS.
+Pre-built RPM packages for Red Hat Enterprise Linux versions 6, 7, and 8 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes' RHEL/OEL/AlmaLinux/Rocky version.
 
-The NHC Yum repository is currently unavailable, but we hope to provide one in the very near future!
+The previous NHC Yum repository was supplied by LBNL, mostly to make the task of reporting download counts up to DOE easier, and is thus no longer available to us (obviously).  If you have a suggestion for an alternative or could host one yourself, please [let the team know](mailto:nhc-devel@lbl.gov)!
 
-The [source tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
+OpenSUSE/SLES packages are available through the [Open Build Service](https://build.opensuse.org/package/show/network:cluster/warewulf-nhc).
+
+If you prefer to install from source, or if you aren't using one of the above platforms, the [tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.3/lbnl-nhc-1.4.3.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  **_WARNING_:  DO NOT** use the "Source code (zip)" or "Source code (tar.gz)" links at the bottom of the release's Assets list!  Those are archives of the Git repository generated by GitHub, not the NHC team, and they lack the required contents to build (without requiring additional developer tools)!
+
+To install NHC from the source tarball linked above, untar it, change into the directory it created, and run:
 
 ```
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec

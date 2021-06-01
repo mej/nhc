@@ -3,9 +3,9 @@
 %global release %{rel}%{?dist}
 
 %global gitrelease @GITRELEASE@
-%{expand:%%global gd_rel_delta %(git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 | cut -d- -f 2- | tr '-' '.')}
-%{expand:%%global rel_pre_post %(git describe --tags HEAD | grep -Eq '^%{version}' >&/dev/null && echo 1. || echo 0.)}
-%{expand:%%global spec_rel %{rel_pre_post}%{gd_rel_delta}}
+%{expand:%%global gd_rel_delta %(GD1=`git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 2>/dev/null` ; test -n "${GD1}" && echo "${GD1}" | cut -d- -f 2- | tr '-' '.')%%{nil}}
+%{expand:%%global rel_pre_post %(GD2=`git describe --tags HEAD 2>/dev/null` ; if test -n "${GD2}" ; then echo "${GD2}" | grep -Eq '^%{version}' >&/dev/null && echo 1. || echo 0. ; fi)%%{nil}}
+%{expand:%%global spec_rel %{?rel_pre_post}%{?gd_rel_delta}%%{nil}}
 %{!?rel:%{expand:%%global rel %(if test -z "%{spec_rel}" ; then echo "%{gitrelease}" ; else echo "%{spec_rel}" ; fi)}}
 
 %{!?sname:%global sname nhc}

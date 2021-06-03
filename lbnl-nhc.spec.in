@@ -2,11 +2,38 @@
 %global version @VERSION@
 %global release %{rel}%{?dist}
 
+### Macros to populate RPM %{RELEASE} field with useful info
+# {gitrelease} holds the ./configure-generated version of the same
+# info that's calculated for {spec_rel} below.  This allows us to
+# build out-of-tree with the same Git info.
 %global gitrelease @GITRELEASE@
+# {gd_rel_delta} uses "git describe" to return a string in the form
+# "<commits>.g<hash>[.1]?" to be used in {spec_rel} below.
 %{expand:%%global gd_rel_delta %(GD1=`git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 2>/dev/null` ; test -n "${GD1}" && echo "${GD1}" | cut -d- -f 2- | tr '-' '.')%%{nil}}
+# {rel_pre_post} gets set to either "1." or "0." based on whether the
+# source was built from a commit before ("0.") or after ("1.") the
+# tagged release specified by {version} above.
 %{expand:%%global rel_pre_post %(GD2=`git describe --tags HEAD 2>/dev/null` ; if test -n "${GD2}" ; then echo "${GD2}" | grep -Eq '^%{version}' >&/dev/null && echo 1. || echo 0. ; fi)%%{nil}}
+# {spec_rel} combines the two values above into a single string for
+# use in the "Release:" field.  The resulting string, when used at the
+# beginning of the "Release:" header value, not only guarantees
+# correct RPM NEVR ordering (i.e., newer packages will always upgrade
+# older ones) but also shows how many <commits> were made since the
+# last tagged release, the Git commit <hash> from which the source
+# tarball ("Source:" below) was built, and whether the tarball also
+# contains some uncommitted changes from a "dirty" working tree (".1"
+# on the end).
 %{expand:%%global spec_rel %{?rel_pre_post}%{?gd_rel_delta}%%{nil}}
-%{!?rel:%{expand:%%global rel %(if test -z "%{spec_rel}" ; then echo "%{gitrelease}" ; else echo "%{spec_rel}" ; fi)}}
+# {rel} ultimately determines what the release string will be; only
+# the disttag gets appended to it.  If the user specifies their own
+# value (e.g., "rpmbuild --define 'rel 1'"), that value is used
+# instead.  If not, the string described above is pulled either from
+# {spec_rel} (if building from Git repo) or {gitrelease} (if building
+# from SRPM or source tarball).
+# As a special case, if the commit being built exactly matches the Git
+# tag for the specified version, {rel} is set to either "1" (clean
+# working directory) or "1.1" (dirty working directory).
+%{!?rel:%{expand:%%global rel %(REL="%{?spec_rel}%{!?spec_rel:%{gitrelease}}" ; if (echo "${REL:-nope}" | grep -Fq "1.0.g" 2>/dev/null) ; then if (echo "${REL:-nope}" | grep -q '\.1$' 2>/dev/null) ; then echo "1.1" ; else echo 1 ; fi ; elif test -z "%{spec_rel}" ; then echo "%{gitrelease}" ; else echo "%{spec_rel}" ; fi)%{nil}}}
 
 %{!?sname:%global sname nhc}
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}

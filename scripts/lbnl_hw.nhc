@@ -47,7 +47,7 @@ function nhc_hw_gather_data() {
                 MHZ="${FIELD[3]}"
                 MHZ="${MHZ/%.*}"
             fi
-        done < /proc/cpuinfo
+        done < <(/usr/bin/grep "processor\|physical id\|siblings\|cpu cores\|cpu MHz" /proc/cpuinfo)
     fi
     if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
         HW_SOCKETS=$((PROCESSOR+1))

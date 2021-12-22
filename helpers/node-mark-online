@@ -60,7 +60,7 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     # Slurm does not run the HealthCheckProgram on nodes in the DOWN state,
     # but if someone runs NHC by hand, we want to be able to do the right thing.
     case "$STATUS" in
-        *'@'*|*'#'*|boot*)
+        *'@'*|*'#'*|boot*|*-*|plnd*)
             # These states aren't handled yet.
             echo "$0:  State \"$STATUS\" not yet handled; ignoring."
             exit 0

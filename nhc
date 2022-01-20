@@ -165,7 +165,8 @@ function syslog() {
 
 function syslog_flush() {
     if [[ -n "$LOGGER_TEXT" ]]; then
-        echo "$LOGGER_TEXT" | logger -p daemon.err -t "$NAME[${BASHPID:-$$}]"
+        SYSLOG_ARGS="${SYSLOG_ARGS:--p ${SYSLOG_FAC:-daemon}.${SYSLOG_SEV:-err} -t \"${SYSLOG_TAG:-${NAME}[${BASHPID:-$$}]}\"}"
+        echo "$LOGGER_TEXT" | ${SYSLOG_CMD:-logger} $SYSLOG_ARGS
     fi
     LOGGER_TEXT=""
 }
@@ -682,6 +683,10 @@ function nhcmain_run_checks() {
         syslog_flush
         kill_watchdog
         exit $FAIL_CNT
+    elif [[ $LOG_SUCCESS -eq 1 ]]; then
+        SYSLOG_SEV="info"
+        syslog "no health checks failed."
+        syslog_flush
     fi
 }
 

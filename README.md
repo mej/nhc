@@ -28,6 +28,7 @@ The NHC Yum repository is currently unavailable, but we hope to provide one in t
 The [source tarball for the latest release](https://github.com/mej/nhc/releases/download/1.4.2/lbnl-nhc-1.4.2.tar.xz) is also available via the [NHC Project on GitHub](https://github.com/mej/nhc/).  If you prefer to install from source, or aren't using one of the distributions shown above, use the commands shown here:
 
 ```
+# yum install automake
 # ./autogen.sh
 # ./configure --prefix=/usr --sysconfdir=/etc --libexecdir=/usr/libexec
 # make test

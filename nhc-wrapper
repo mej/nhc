@@ -105,9 +105,12 @@ function nhcwrap_init_env() {
     RET=0
     export PATH SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET
 
-    # Set name of wrapped script/program based on invocation.
-    SUBPROG=${0/#*\/}
-    SUBPROG=${SUBPROG/%-wrapper}
+    # Set name of wrapped script/program based on invocation, and update PATH as needed.
+    if [[ "$0" == */* && -n "${0%/*}" ]]; then
+        PATH="${0%/*}:$PATH"
+    fi
+    SUBPROG=${0##*/}
+    SUBPROG=${SUBPROG%-wrapper}
     export SUBPROG
 
     unset ARGS STATEDIR MAILTO SUBJECT EXPIRE VERBOSE LOOP_TS PREV_RESULTS
@@ -188,6 +191,12 @@ function nhcwrap_parse_cmdline() {
 function nhcwrap_finalize_env() {
     local TMPDIR
 
+    # If designated subprogram has changed, we may need to update PATH again.
+    if [[ "${0##*/}" != "$SUBPROG" && "$SUBPROG" == */* && -n "${SUBPROG%/*}" ]]; then
+        PATH="${SUBPROG%/*}:$PATH"
+    fi
+    SUBPROG=${SUBPROG##*/}
+
     NW_DATEFMT="${NW_DATEFMT:-(%F %T)}"
     STATEDIR="${STATEDIR:-/tmp/${SUBPROG}-${EUID}}"
     SUBJECT="${SUBJECT:-NHC Report for ${HOSTNAME_S}}"
@@ -211,11 +220,6 @@ function nhcwrap_finalize_env() {
     if [[ -h "$STATEDIR" || ! -d "$STATEDIR" || ! -O "$STATEDIR" || ! -w "$STATEDIR" ]]; then
         echo "ERROR:  State directory \"$STATEDIR\" create/chown/chmod failed for uid $EUID.  Aborting."
         exit -1
-    fi
-
-    if [[ "${SUBPROG#*/}" != "${SUBPROG}" ]]; then
-        PATH="${SUBPROG%/*}:$PATH"
-        SUBPROG="${SUBPROG##*/}"
     fi
 
     if [[ -n "$EXPIRE" ]]; then

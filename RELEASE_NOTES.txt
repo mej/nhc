@@ -1,3 +1,45 @@
+1.4.3
+=====
+
+Please note:  As with future releases in the 1.4.x series, this
+release has largely been limited to bugfixes and incremental
+improvements of existing code.  Active feature development has already
+started (and has been going on for awhile now, truthfully) on what
+will eventually be the development branch for a future 1.5 release.
+
+There will, however, be a 1.4.4 release coming up in the very near
+future (hopefully) to address some of the still-outstanding
+bugs/issues in the 1.4.x tree.  1.4.3 is being released largely
+"as-is" due to the massive volume of real-world production testing the
+current codebase has received, making it as "rock-solid" reliable as
+one could hope!
+
+New Features:
+ - Toggle BASH tracing or NHC debugging via SIGUSR1/SIGUSR2,
+   respectively
+ - check_nvsmi_healthmon():  New check from CSC for GPU health
+   monitoring via "nvidia-smi"
+
+Fixes/Improvements:
+ - Corrections/cleanups of SGE integration support
+ - Provide added detail to tracing info ("-x" mode)
+ - Based on feedback from Moe Jette of SchedMD, pull node job data
+   directly from Slurm via "squeue" instead of the previous method
+   that only worked for single-node jobs.
+ - Support for recent additions to the Slurm node states (e.g.,
+   "planned")
+ - Pathname expansion has been disabled on startup, and re-enabled
+   only when being actively used, to avoid "unintended" expansions of
+   wildcards at random points throughout the code.
+ - Correct clobbering of BASH built-in variables and add tests to
+   prevent future recurrence
+ - Switch "system UID" boundary handling to a more accurate source of
+   truth, and ensure that the code matches the math, naming, and
+   intent.
+ - Reorder resource manager detection to improve accurate detection,
+   especially with respect to Slurm vs. PBS (all variants)
+
+
 1.4.2
 =====
 New features:

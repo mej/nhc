@@ -25,7 +25,7 @@ NOTE="$*"
 if [[ "$NHC_RM" == "slurm" ]]; then
     SLURM_SINFO="${SLURM_SINFO:-sinfo}"
     SLURM_SCONTROL="${SLURM_SCONTROL:-scontrol}"
-    SLURM_SC_REBOOT_ARGS="${SLURM_SC_REBOOT_ARGS:-reboot ASAP NextState=RESUME}"
+    SLURM_SC_REBOOT_ARGS="${SLURM_SC_REBOOT_ARGS:-reboot ASAP NextState=DOWN}"
 
     LINE=( $($SLURM_SINFO -o '%t %E' -hn $HOSTNAME) )
     STATUS="${LINE[0]}"
@@ -47,7 +47,6 @@ if [[ "$NHC_RM" == "slurm" ]]; then
             if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
-                SLURM_SC_REBOOT_ARGS="reboot ASAP NextState=DOWN"
             fi
             echo "$0:  Marking $STATUS $HOSTNAME for reboot:  $LEADER $NOTE"
             exec $SLURM_SCONTROL $SLURM_SC_REBOOT_ARGS Reason="$LEADER $NOTE" $HOSTNAME

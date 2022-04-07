@@ -152,7 +152,7 @@ function check_gpfs_verbs_status() {
     dbg "$MMFSADM test verbs status: \"$OUTPUT\""
     
     if [[ "$OUTPUT" == *": started" ]]; then
-        continue
+        return 0
     else
         MSG="$FUNCNAME: GPFS verbs is not started"
     fi

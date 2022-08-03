@@ -406,7 +406,7 @@ function nhc_common_parse_passwd_entry() {
     local THIS_UID
     local -a LINE
 
-    read -a LINE <<< "$PASSWD_ENTRY
+    read -a LINE <<< "$PASSWD_ENTRY"
     THIS_UID=${LINE[2]}
     PWDATA_UIDS[${#PWDATA_UIDS[*]}]=$THIS_UID
     PWUID_USER[$THIS_UID]="${LINE[0]}"

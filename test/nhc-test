@@ -109,11 +109,11 @@ function test_nhc_driver() {
     HELPERDIR="$LIBEXECDIR"
     LOGFILE=" "
     NHC_RM="pbs"
-    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR HELPERDIR LOGFILE NHC_RM
+    SYSLOG_TAG="the-cow-goes-moo"
 
     # Finalize environment.  Make sure we get what we expect.
     nhcmain_finalize_env
-    plan 14 "nhcmain_finalize_env" && {
+    plan 27 "nhcmain_finalize_env" && {
         is $SYSCONFIGDIR $TOP_SRCDIR '$SYSCONFIGDIR unchanged'
         is $LIBEXECDIR "$TOP_SRCDIR/helpers" '$LIBEXECDIR unchanged'
         is $HELPERDIR $LIBEXECDIR '$HELPERDIR unchanged'
@@ -128,6 +128,19 @@ function test_nhc_driver() {
         is $VERBOSE 0 'Verbose mode off by default'
         is $MARK_OFFLINE 1 'Nodes marked offline by default'
         cmp_ok ${TIMEOUT:-999999} "-le" 300 'Reasonable default script timeout'
+        isnt "$SYSLOG_IDENT" "$NAME" '$SYSLOG_IDENT default correct'
+        like "$SYSLOG_IDENT" "*$NAME*" '$SYSLOG_IDENT default should contain the context'
+        like "$SYSLOG_IDENT" "*nhc*" '$SYSLOG_IDENT default should contain "nhc"'
+        like "$SYSLOG_IDENT" "*\[[0-9]*\]" '$SYSLOG_IDENT default should contain the PID ($NHC_PID == '"$NHC_PID"')'
+        is "$SYSLOG_IDENT" "nhc(nhc-test)[$NHC_PID]" '$SYSLOG_IDENT exact content matches'
+        is "$SYSLOG_FAC" 'daemon' '$SYSLOG_FAC (facility) default correct'
+        is "$SYSLOG_LEVEL" 'err' '$SYSLOG_LEVEL default correct'
+        is "$SYSLOG_PRIO" "$SYSLOG_FAC.$SYSLOG_LEVEL" '$SYSLOG_PRIO default correct (priority is "facility.level")'
+        cmp_ok ${SYSLOG_SIZE:-9999999999} "-ge" 1024 'Reasonable message size limit default (1)'
+        cmp_ok ${SYSLOG_SIZE:-9999999999} "-lt" $((1024*1024*1024)) 'Reasonable message size limit default (2)'
+        is "$SYSLOG_CMD" "logger -p ${SYSLOG_PRIO} -S ${SYSLOG_SIZE} -t" '$SYSLOG_CMD was correctly composed'
+        is "$SYSLOG_TAG" 'the-cow-goes-moo' '$SYSLOG_TAG remains unmodified as set prior to function call'
+        unlike "$SYSLOG_CMD" "/$SYSLOG_TAG/" '$SYSLOG_CMD does not yet contain $SYSLOG_TAG'
     } ; unplan
 
     plan 1 "nhcmain_check_conffile" && {

@@ -164,9 +164,8 @@ function syslog() {
 }
 
 function syslog_flush() {
-    if [[ -n "$LOGGER_TEXT" ]]; then
-        SYSLOG_ARGS="${SYSLOG_ARGS:--p ${SYSLOG_FAC:-daemon}.${SYSLOG_SEV:-err} -t \"${SYSLOG_TAG:-${NAME}[${BASHPID:-$$}]}\"}"
-        echo "$LOGGER_TEXT" | ${SYSLOG_CMD:-logger} $SYSLOG_ARGS
+    if (( ${#LOGGER_TEXT} > 0 )); then
+        $SYSLOG_CMD "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" <<< "$LOGGER_TEXT"
     fi
     LOGGER_TEXT=""
 }
@@ -261,6 +260,7 @@ function nhcmain_init_env() {
     # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
     unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
     unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED EVAL_LINE
+    unset SYSLOG_CMD SYSLOG_FAC SYSLOG_IDENT SYSLOG_LEVEL SYSLOG_PRIO SYSLOG_SIZE
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -384,6 +384,18 @@ function nhcmain_finalize_env() {
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
     export NHC_SID=0
+
+    # Configure syslog() logging.
+    SYSLOG_FAC="${SYSLOG_FAC:-daemon}"
+    SYSLOG_LEVEL="${SYSLOG_LVL:-err}"
+    SYSLOG_PRIO="${SYSLOG_PRIO:-${SYSLOG_FAC}.${SYSLOG_LEVEL}}"
+    SYSLOG_SIZE="${SYSLOG_SIZE-$((1024*16))}"
+    if [[ "$NAME" == "nhc" ]]; then
+        SYSLOG_IDENT="${SYSLOG_IDENT:-${NAME}[${NHC_PID}]}"
+    else
+        SYSLOG_IDENT="${SYSLOG_IDENT:-nhc(${NAME})[${NHC_PID}]}"
+    fi
+    SYSLOG_CMD="${SYSLOG_CMD:-logger ${SYSLOG_PRIO:+-p ${SYSLOG_PRIO} }${SYSLOG_SIZE:+-S ${SYSLOG_SIZE} }-t}"
 
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
@@ -683,10 +695,6 @@ function nhcmain_run_checks() {
         syslog_flush
         kill_watchdog
         exit $FAIL_CNT
-    elif [[ $LOG_SUCCESS -eq 1 ]]; then
-        SYSLOG_SEV="info"
-        syslog "no health checks failed."
-        syslog_flush
     fi
 }
 
@@ -697,11 +705,13 @@ function nhcmain_mark_online() {
 }
 
 function nhcmain_finish() {
-    local ELAPSED
+    local -i ELAPSED=$((SECONDS-NHC_START_TS))
+    local MSG
 
+    MSG="Node Health Check completed successfully; ${#CHECKS[*]} passed in $ELAPSED second(s)."
+    vlog "$MSG"
+    syslog "$MSG"
     syslog_flush
-    ELAPSED=$((SECONDS-NHC_START_TS))
-    vlog "Node Health Check completed successfully (${ELAPSED}s)."
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:true" >&$NHC_FD_OUT

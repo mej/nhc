@@ -108,7 +108,7 @@ function nhc_ps_pid_lineage() {
 # name and the type of resource to look at.
 function nhc_ps_check_res() {
     local ALLPROC=0 ALLUSERS=0 FULLMATCH=0 KILL=0 KILL_PARENT=0 LOG=0 NONFATAL=0 SYSLOG=0
-    local ACTION="" MATCH="" OWNER="" RENICE=""
+    local ACTION="" MATCH="" OWNER="" OWNER_UID="" RENICE=""
     local CHECK="$1" COL="$2" THRESHOLD
     local LIM MSG NUM THIS_PID THIS_PROG T_MIN T_SEC i
 
@@ -180,9 +180,21 @@ function nhc_ps_check_res() {
     if [[ -z "$MATCH" ]]; then
         MATCH="*"
     fi
-    if [[ -n "$OWNER" && "${OWNER//[0-9]}" == "" ]]; then
-        # Owner is a numeric UID, so resolve it to a userid.
-        nhc_common_get_userid $OWNER OWNER
+    if [[ -n "$OWNER" ]]; then
+        if [[ "${OWNER//[0-9]}" == "" ]]; then
+            # Owner is a numeric UID, so resolve it to a userid.
+            OWNER_UID=$OWNER
+            nhc_common_get_userid $OWNER_UID OWNER
+        else
+            nhc_common_get_uid $OWNER OWNER_UID
+        fi
+        dbg "Resolved owner argument to user \"$OWNER\" (UID $OWNER_UID)."
+        if [[ $OWNER_UID -le $MAX_SYS_UID ]]; then
+            MSG="WARNING:  Parameter conflict:  Requested process owner ($OWNER) is a system user; force-enabling -A (ALL users) flag."
+            vlog "$MSG"
+            syslog "$MSG"
+            ALLUSERS=1
+        fi
     fi
 
     dbg "Looking for processes matching \"$MATCH\"${OWNER:+ owned by ${OWNER}}"

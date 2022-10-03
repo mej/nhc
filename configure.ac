@@ -1,5 +1,5 @@
 m4_define([nhc_pkgname], [lbnl-nhc])
-m4_define([nhc_version], [1.4.3])
+m4_define([nhc_version], [1.5])
 m4_define([nhc_address], [nhc-devel@lbl.gov])
 
 AC_PREREQ(2.59)

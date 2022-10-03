@@ -238,7 +238,7 @@ plan $((12+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
     if [[ $- == *x* ]]; then
         # There seems to be a bash bug.  It doesn't handle process substitution
         # correctly (i.e., <(...) constructs) when debugging (set -x).  Skip.
-        skip 7
+        skip 8
         export MAX_SYS_UID=499
     else
         LOGIN_DEFS_SRC=<(echo -e "SYS_UID_MAX\t\t\t  199") nhc_common_get_max_sys_uid

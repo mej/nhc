@@ -1,6 +1,13 @@
 # Tests for common.nhc
 
-plan $((12+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
+plan $((19+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
+    is "`type -t array_push 2>&1`" 'function' 'array_push() loaded properly'
+    is "`type -t array_pop 2>&1`" 'function' 'array_pop() loaded properly'
+    is "`type -t array_unshift 2>&1`" 'function' 'array_unshift() loaded properly'
+    is "`type -t array_shift 2>&1`" 'function' 'array_shift() loaded properly'
+    is "`type -t array_split 2>&1`" 'function' 'array_split() loaded properly'
+    is "`type -t array_join 2>&1`" 'function' 'array_join() loaded properly'
+    is "`type -t str_clean 2>&1`" 'function' 'str_clean() loaded properly'
     is "`type -t mcheck_regexp 2>&1`" 'function' 'mcheck_regexp() loaded properly'
     is "`type -t mcheck_range 2>&1`" 'function' 'mcheck_range() loaded properly'
     is "`type -t mcheck_external 2>&1`" 'function' 'mcheck_external() loaded properly'
@@ -13,6 +20,123 @@ plan $((12+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
     is "`type -t nhc_common_unparse_size 2>&1`" 'function' 'nhc_common_unparse_size() loaded properly'
     is "`type -t nhc_common_get_unix_time 2>&1`" 'function' 'nhc_common_get_unix_time() loaded properly'
     is "`type -t nhc_common_get_max_sys_uid 2>&1`" 'function' 'nhc_common_get_max_sys_uid() loaded properly'
+
+    typeset -a TA=( ) A1=( ) A2=( ) A3=( )
+    array_push 'TA' '0100' '0010' '0000' '0001' '1000' '0110'
+    is $? 0 "array_push() succeeds"
+    is ${#TA[*]} 6 "Test array \$TA contains 6 elements"
+    is "${TA[0]}" '0100' "Spot-checking contents of test array, element 0"
+    is "${TA[2]}" '0000' "Spot-checking contents of test array, element 2"
+    is "${TA[5]}" '0110' "Spot-checking contents of test array, element 5"
+    array_push 'TA' '0111' '1111'
+    is $? 0 "array_push() succeeds"
+    is ${#TA[*]} 8 "Test array \$TA now contains 8 elements"
+    is "${TA[2]}" '0000' "Spot-checking contents of test array, element 2"
+    is "${TA[4]}" '1000' "Spot-checking contents of test array, element 4"
+    is "${TA[6]}" '0111' "Spot-checking contents of test array, element 6"
+    is "${TA[7]}" '1111' "Spot-checking contents of test array, element 7"
+
+    array_pop 'TA'
+    is $? 0 "array_pop() succeeds"
+    is ${#TA[*]} 7 "Test array \$TA now contains 7 elements after popping 1"
+    is "${TA[0]}" '0100' "First element of \$TA should remain unchanged"
+    is "${TA[6]}" '0111' "Last element of \$TA should now be element 6 (above)"
+    is ${#A1[*]} 0 "Result array \$A1 should still be empty"
+    array_pop 'TA' 3 A1
+    is ${#TA[*]} 4 "Test array \$TA now contains 4 elements after popping 3"
+    is "${TA[0]}" '0100' "First element of \$TA should remain unchanged"
+    is "${TA[3]}" '0001' "Last element of \$TA should now be element 3"
+    is ${#A1[*]} 3 "Result array \$A1 should now have the 3 popped elements"
+    is "${A1[0]}" '1000' "First element of \$A1 should now be former \$TA[4]"
+    is "${A1[2]}" '0111' "Last element of \$A1 should now be the former \$TA[6]"
+
+    TA=( a b c d e f g )
+    array_shift 'TA'
+    is $? 0 "array_shift() with no count should default to 1 and succeed"
+    #(IFS='|' printf '\n\n%s\n\n' "${TA[*]}")
+    is "${TA[0]}" 'b' "First element of \$TA is the former 2nd element"
+    is "${#TA[*]}" 6 "Test array \$TA now contains 6 elements after shifting 1"
+    array_shift 'TA' 3
+    is $? 0 "array_shift() succeeds"
+    is "${TA[0]}" 'e' "First element of \$TA is now 'e'"
+    is "${#TA[*]}" 3 "Test array \$TA now contains 3 elements after shifting 3"
+    array_shift 'TA' 12
+    is $? 0 "array_shift() succeeds even if the count is too large"
+    is "${#TA[*]}" 0 "Test array \$TA is now empty"
+    TA=( a b c d e f g )
+    array_shift 'TA' -3 'A2'
+    is $? 0 "array_shift() succeeds even if the count is negative (flips sign)"
+    is "${TA[0]}" 'd' "Test array \$TA should now be ( d e f g ) and not ( a b c d )"
+    is "${#TA[*]}" 4 "Test array \$TA should now contain 3 fewer elements"
+    is "${A2[0]}" 'a' "Test array \$A2 should now contain the 3 shifted values"
+    is "${#A2[*]}" 3 "Test array \$A2 should now have 3 entries"
+
+    TA=( g h i j ) A3=( a b c d )
+    array_unshift 'TA' e f
+    is $? 0 "array_shift() succeeds"
+    is "${#TA[*]}" 6 "Test array \$TA now contains 6 elements after unshifting 2"
+    is "${TA[0]}" 'e' "First element of \$TA is now 'e'"
+    is "${TA[2]}" 'g' "Third element of \$TA is now 'g'"
+    is "${TA[5]}" 'j' "Last element of \$TA is now 'j'"
+    array_unshift 'TA' "${A3[@]}"
+    is $? 0 "array_unshift() succeeds"
+    is "${#TA[*]}" 10 "Test array \$TA now contains 10 elements after unshifting ${#A3[*]}"
+    is "${TA[0]}" 'a' "First element of \$TA is now 'a'"
+    is "${TA[3]}" 'd' "Fourth element of \$TA is now 'd'"
+    is "${TA[6]}" 'g' "Seventh element of \$TA is now 'g'"
+    is "${TA[9]}" 'j' "Last element of \$TA is now 'j'"
+
+    TA=(  ) TS="0:1:2:3:4:5:" S1="" S2="" S3=""
+    array_split ':' "$TS" 'TA'
+    is $? 0 "array_split() succeeds on colon-delimited string"
+    is "${#TA[*]}" 6 "Test array \$TA should now contain 6 elements"
+    is "${TA[0]}" '0' "First element of \$TA is now '0'"
+    is "${TA[2]}" '2' "Third element of \$TA is now '2'"
+    is "${TA[4]}" '4' "Fifth element of \$TA is now '4'"
+    printf -v S1 '%s\n%s\n%s\n' " a b c d " "e f g h" "i j   k l"
+    array_split $'\n' "$S1" 'TA'
+    is $? 0 "array_split() succeeds on a string with newlines"
+    is "${#TA[*]}" 3 "Test array \$TA should be repopulated with 3 new strings"
+    is "${TA[0]}" ' a b c d ' "First string after splitting on newlines"
+    is "${TA[1]}" 'e f g h' "Second string after splitting on newlines"
+    is "${TA[2]}" 'i j   k l' "Third string after splitting on newlines"
+    S1="${TA[0]}" S2="${TA[1]}" S3="${TA[2]}"
+    array_split ' ' "$S1" 'TA'
+    is $? 0 "array_split() succeeds on the previous 1st line string"
+    is "${#TA[*]}" 4 "Test array \$TA should now comprise the 4 single-letter strings of the 1st line"
+    is "${TA[0]}" 'a' "First 1-letter string after splitting \"$S1\" on spaces"
+    is "${TA[1]}" 'b' "Second 1-letter string after splitting \"$S1\" on spaces"
+    is "${TA[2]}" 'c' "Third 1-letter string after splitting \"$S1\" on spaces"
+    is "${TA[3]}" 'd' "Fourth 1-letter string after splitting \"$S1\" on spaces"
+    array_split ' ' "$S2" 'TA'
+    is $? 0 "array_split() succeeds on the previous 2nd line string"
+    is "${#TA[*]}" 4 "Test array \$TA should now comprise the 4 single-letter strings of the 2nd line"
+    is "${TA[0]}" 'e' "First 1-letter string after splitting \"$S2\" on spaces"
+    is "${TA[1]}" 'f' "Second 1-letter string after splitting \"$S2\" on spaces"
+    is "${TA[2]}" 'g' "Third 1-letter string after splitting \"$S2\" on spaces"
+    is "${TA[3]}" 'h' "Fourth 1-letter string after splitting \"$S2\" on spaces"
+    array_split ' ' "$S3" 'TA'
+    is $? 0 "array_split() succeeds on the previous 3rd line string"
+    is "${#TA[*]}" 4 "Test array \$TA should now comprise the 4 single-letter strings of the 3rd line"
+    is "${TA[0]}" 'i' "First 1-letter string after splitting \"$S3\" on spaces"
+    is "${TA[1]}" 'j' "Second 1-letter string after splitting \"$S3\" on spaces"
+    is "${TA[2]}" 'k' "Third 1-letter string after splitting \"$S3\" on spaces"
+    is "${TA[3]}" 'l' "Fourth 1-letter string after splitting \"$S3\" on spaces"
+
+    TA=( {0..5} ) S1="" S2="" S3=""
+    array_join ',' 'TA' 'S1'
+    is $? 0 "array_join() succeeds on a small, simple numeric array"
+    is "${#S1}" 11 "Joining elements of test array \$TA with commas should make an 11-byte string (6 numbers, 5 commas)"
+    is "$S1" "0,1,2,3,4,5" "Resulting string value for comma-delimited joined array"
+    TA+=( 6 7 )
+    array_join '' 'TA' 'S2'
+    is $? 0 "array_join() succeeds with an empty delimiter string"
+    is "${#S2}" 8 "Joining elements of test array \$TA (0-7) with no delimiter should make an 8-byte string"
+    is "$S2" "01234567" "Resulting string value for concatenated array"
+    array_join ' || ' 'TA' 'S3'
+    is $? 0 "array_join() succeeds with a spaces-and-double-pipe delimiter"
+    is "${#S3}" 36 "Joining \$TA's 8 elements with ' || ' should make a 36-byte string (8 numbers, 7 4-char delimiters)"
+    is "$S3" '0 || 1 || 2 || 3 || 4 || 5 || 6 || 7' "Resulting string value for comma-delimited joined array"
 
     mcheck "This is a test." '/test/'
     is $? 0 "Basic regexp match via mcheck()"

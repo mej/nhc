@@ -28,29 +28,30 @@ function array_push() {
     local ANAME="$1"
     #local SAVEIFS="$IFS"
 
-    shift
     #IFS='|'
     #dprint "Appending to array $ANAME:  <<$*>>"
     #IFS="$SAVEIFS"
-    eval "$ANAME"'=( "${'"$ANAME"'[@]}" "$@" )'
+    eval "$ANAME"'+=( '"${@:2}"' )'
 }
 
 ### Remove $2 elements (default 1) from the end of array $1 and
 ### optionally assign to variable $3
 ### Example:  array_pop SOMEARRAY 3 SOMEVAR
 function array_pop() {
-    local ANAME="$1" COUNT="$2" VARNAME="$3" END i j
-    local -a NEWARRAY
+    local ANAME="$1" COUNT="${2:-1}" VARNAME="$3" #END i j
+    #local -a NEWARRAY=( )
 
-    eval END='$((${#'"$ANAME"'[*]}-1))'
-    for ((i=0; i < ${COUNT:-1}; i++)); do
-        j=$((END-i))
-        eval 'NEWARRAY[$j]="${'"$ANAME"'[$j]}"'
-        eval unset "$ANAME"'['"$j"']'
-    done
+    #eval END='$((${#'"$ANAME"'[*]}-1))'
+    #for ((i=0; i < ${COUNT:-1}; i++)); do
+    #    j=$((END-i))
+    #    eval 'NEWARRAY+=( "${'"$ANAME"'[$j]}" )'
+    #    eval unset "$ANAME"'['"$j"']'
+    #done
     if [[ -n "$VARNAME" ]]; then
-        eval "$VARNAME"'="${NEWARRAY[*]}"'
+        #eval "$VARNAME"'=( "${NEWARRAY[@]}" )'
+        eval "$VARNAME"'=( ${'"$ANAME"'[@]: -'"$COUNT"'} )'
     fi
+    eval 'COUNT=$(( ${#'"$ANAME"'[*]} - '"$COUNT"' )) ; '"$ANAME"'=( ${'"$ANAME"'[@]:0:$COUNT} )'
 }
 
 ### Add one or more elements to the beginning of array $1
@@ -66,36 +67,55 @@ function array_unshift() {
     eval "$ANAME"'=( "$@" "${'"$ANAME"'[@]}" )'
 }
 
-### Remove $2 elements (default 1) from the beginning of array $1
-### Example:  array_shift SOMEARRAY 2
+### Remove $2 elements (default 1) from the beginning of array $1 and
+### optionally assign to a new array variable ($3)
+### Example:  array_shift SOMEARRAY 2 NEWARRAY
 function array_shift() {
-    local ANAME="$1" COUNT="$2" i
+    local ANAME="$1" VARNAME="$3"
+    local -i COUNT=$(( ((${2:-1} < 0) ? (0-${2:-1}) : (${2:-1})) ))
 
-    for ((i=0; i < ${COUNT:-1}; i++)); do
-        eval unset "$ANAME"'['"$i"']'
-    done
-    eval "$ANAME"'=( "${'"$ANAME"'[@]}" )'
+    #for ((i=0; i < ${COUNT:-1}; i++)); do
+    #    eval unset "$ANAME"'['"$i"']'
+    #done
+    if [[ -n "$VARNAME" ]]; then
+        eval "$VARNAME"'=( "${'"$ANAME"'[@]:0:$COUNT}" )' || return 1
+    fi
+    eval "$ANAME"'=( "${'"$ANAME"'[@]:$COUNT}" )' || return 1
+    return 0
 }
 
-### Splits the string $2 on separator character $1 and stores in array $3
+### Splits the string $2 on separator character $1.  If $3 is
+### provided, the resulting array is stored there; otherwise, it is
+### displayed on STDOUT.
 ### Example:  array_split $'\n' "$FILE" LINES
 function array_split() {
-    local SEP="$1" STR="$2" ANAME="$3"
+    local SEP="$1" STR="$2" ANAME="${3:-TMP}"
     local SAVEIFS="$IFS"
+    local -a TMP
 
-    IFS="$SEP"
-    eval "$ANAME"'=( '"$STR"' )'
-    IFS="$SAVEIFS"
+    if [[ ${#SEP} -le 1 ]]; then
+        IFS="$SEP"
+        eval "$ANAME"'=( $STR )'
+        RC=$? IFS="$SAVEIFS"
+        if [[ -z "$3" ]]; then
+            echo "${TMP[@]}"
+        fi
+    else
+        : TODO - Not yet implemented
+        return 1
+    fi
+    return $RC
 }
 
-### Joins the contents of array $2 using separator character $1
-### into optional output variable variable $3
-### Example:  array_join ',' FIELDS RESULT
+### Joins the contents of array $2 using separator character(s) $1
+### into either output variable $3 or, if empty, STDOUT.
+### Example:  array_join ',' SOMEARRAY SOMEVAR
 function array_join() {
     local SEP="$1" ANAME="$2" OUTVAR="$3"
-    local SAVEIFS="$IFS" i TMP CNT
+    local SAVEIFS="$IFS" TMP=""
+    local -i i CNT
 
-    if [[ ${#SEP} -eq 1 ]]; then
+    if [[ ${#SEP} -le 1 ]]; then
         IFS="$SEP"
         if [[ -n "$OUTVAR" ]]; then
             eval "$OUTVAR"'="${'"$ANAME"'[*]}"'
@@ -106,7 +126,7 @@ function array_join() {
     else
         eval 'TMP="${'"$ANAME"'[0]}" CNT="${#'"$ANAME"'[*]}"'
         for ((i=1; i < CNT; i++)); do
-            eval 'TMP="$TMP$SEP${'"$ANAME"'[$i]}"'
+            eval 'TMP+="$SEP${'"$ANAME"'[$i]}"'
         done
         if [[ -n "$OUTVAR" ]]; then
             eval "$OUTVAR"'="$TMP"'
@@ -114,6 +134,69 @@ function array_join() {
             echo "$TMP"
         fi
     fi
+}
+
+### Cleanup/trim/normalize the contents of a string/char buffer
+function str_clean() {
+    local CCHAR='#' OUTVAR="" SNAME="" STR="" WS=$' \t\f\n\r\v'
+    local -i OUT=0 RM_COMMENTS=0 MERGE_WS=0 SAVE_EG=0 TRIM_LEAD=0 TRIM_TRAIL=0
+
+    # Turn on extended globbing, but save its prior value
+    shopt -q extglob
+    SAVE_EG=$?
+    shopt -s extglob
+
+    OPTIND=1
+    while getopts ":12C:OW:clmo:s:tw" OPTION ; do
+        case "$OPTION" in
+            1) WS=' ' ;;
+            2) WS=$' \t' ;;
+            C) CCHAR="$OPTARG" ;;
+            O) OUT=1 ;;
+            W) WS="$OPTARG" ;;
+            c) RM_COMMENTS=1 ;;
+            l) TRIM_LEAD=1 ;;
+            m) MERGE_WS=1 ;;
+            o) OUTVAR="$OPTARG" ;;
+            s) SNAME="$OPTARG" ;;
+            t) TRIM_TRAIL=1 ;;
+            w) TRIM_LEAD=1 TRIM_TRAIL=1 ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    if [[ -n "$SNAME" ]]; then
+        STR="${!SNAME}"
+        OUTVAR="$SNAME"
+    else
+        STR="$1"
+    fi
+
+    if [[ $TRIM_LEAD -eq 1 ]]; then
+        STR="${STR##[$WS]}"
+    fi
+    if [[ $TRIM_TRAIL -eq 1 ]]; then
+        STR="${STR%%[$WS]}"
+    fi
+    if [[ $RM_COMMENTS -eq 1 ]]; then
+        STR="${STR%%\#*}"
+    fi
+    if [[ $MERGE_WS -eq 1 ]]; then
+        STR="${STR//+([$WS])/ }"
+    fi
+
+    if [[ $OUT -eq 1 ]]; then
+        echo "$STR"
+    fi
+    if [[ -n "$OUTVAR" ]]; then
+        eval "$OUTVAR"'="$STR"'
+    fi
+
+    if [[ $SAVE_EG -ne 0 ]]; then
+        shopt -u extglob
+    fi
+    return 0
 }
 
 ### Show a stack trace of bash functions and file locations

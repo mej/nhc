@@ -14,7 +14,7 @@ nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc		\
                         scripts/lbnl_fs.nhc  scripts/lbnl_hw.nhc	\
                         scripts/lbnl_job.nhc scripts/lbnl_moab.nhc	\
                         scripts/lbnl_net.nhc scripts/lbnl_nv.nhc	\
-                        scripts/lbnl_ps.nhc
+                        scripts/lbnl_ps.nhc  scripts/csc_nvidia_smi.nhc
 
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
 DISTCLEANFILES = 

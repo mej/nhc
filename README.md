@@ -1333,7 +1333,7 @@ function check_stuff_works() {
         die 1 "Stuff is not working"
         return 1
     fi
-    
+
     # check passed
     return 0
 }
@@ -1534,6 +1534,6 @@ See the earlier section on [Match Strings](#match-strings) for details.
 
 [2]:  Previously, _any_ file in that directory got loaded __regardless__ of extension.  **This is no longer the case**, so use of the `.nhc` extension is now **required**.  This change was made to avoid loading `*.nhc.rpmnew` files, for example.
 
-[3]:  If you don't specify otherwise, all checks made available publicly or directly to the NHC development team at [LBNL](http://www.lbl.gov/) are copyrighted by the author and licensed as specified in the [LBNL-BSD license](https://github.com/mej/nhc/LICENSE) used by NHC.
+[3]:  If you don't specify otherwise, all checks made available publicly or directly to the NHC development team are copyrighted by the author and licensed as specified in the [BSD-3/LBNL-BSD license](https://github.com/mej/nhc/LICENSE) used by NHC.
 
 [4]:  Well, okay...  If you're running enough of Linux that it can function as a compute node.  Bootstrap images and other embedded/super-minimal cases aren't really applicable to NHC anyway.

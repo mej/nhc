@@ -122,6 +122,9 @@ function nhc_hw_gather_data() {
     # Check if user-leved mad driver loaded and IB diag tools will succeed to run
     if [[ -f /sys/class/infiniband_mad/abi_version ]]; then
 	read HW_IB_UMAD_ABI_VER < /sys/class/infiniband_mad/abi_version
+    elif [[ ! -d /sys/class/infiniband_mad ]]; then
+	# No Infiniband device was found
+	HW_IB_UMAD_ABI_VER=-1
     else
 	HW_IB_UMAD_ABI_VER=0
     fi
@@ -342,6 +345,9 @@ function check_hw_ib() {
 
     if [[ $HW_IB_UMAD_ABI_VER -eq 0 ]]; then
 	die 1 "$FUNCNAME:  Version mismatch between kernel OFED drivers and userspace OFED libraries."
+	return 1
+    elif [[ $HW_IB_UMAD_ABI_VER -eq -1 ]]; then
+	die 1 "$FUNCNAME:  No Infiniband device was found."
 	return 1
     fi
 

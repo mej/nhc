@@ -1,4 +1,6 @@
 # LBNL NHC - Hardware Checks
+### -*- Mode: Shell-script; fill-column: 120; comment-fill-column: 120; comment-auto-fill-only-comments: t; \
+### -*- tab-width: 4; eval: (local-set-key "\C-i" 'indent-according-to-mode); eval: (auto-fill-mode 1); -*-
 #
 # Michael Jennings <mej@lbl.gov>
 # 15 December 2010
@@ -21,34 +23,70 @@ MCELOG="${MCELOG:-mcelog}"
 MCELOG_ARGS="${MCELOG_ARGS:---client}"
 MCELOG_MAX_CORRECTED_RATE="${MCELOG_MAX_CORRECTED_RATE:-9}"
 MCELOG_MAX_UNCORRECTED_RATE="${MCELOG_MAX_UNCORRECTED_RATE:-0}"
+### FIXME:  Convert all these, and much of the above, to hashmaps
+CPUINFO_FILE_DEFAULT="/proc/cpuinfo"
+CPUINFO_FILE=""
+MEMINFO_FILE_DEFAULT="/proc/meminfo"
+MEMINFO_FILE=""
+KMOD_FILE_DEFAULT="/proc/modules"
+KMOD_FILE=""
+NETDEV_FILE_DEFAULT="/proc/net/dev"
+NETDEV_FILE=""
 
-# Read hardware information from /proc and /sys files.
-function nhc_hw_gather_data() {
-    local IFS LINE CORES SIBLINGS MHZ PROCESSOR PHYS_ID PORT INDEX DEV
-    local -a FIELD PHYS_IDS IB_PORTS
+# Read CPU information from the specified source
+function nhc_hw_cpu_gather_data() {
+    local CORES CPUDATA ERR MHZ PROCESSOR SIBLINGS
+    local -a FIELD PHYS_IDS
+    local -i RC=0
 
     # Gather CPU info
     PROCESSOR=-1
-    if [[ -e /proc/cpuinfo ]]; then
-        while read -a FIELD ; do
-            if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
-                : $((PROCESSOR++))
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
-                PHYS_ID=${FIELD[3]}
-                if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
-                    PHYS_IDS[$PHYS_ID]=1
-                    : $((HW_SOCKETS++))
-                fi
-            elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
-                SIBLINGS=${FIELD[2]}
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
-                CORES=${FIELD[3]}
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
-                MHZ="${FIELD[3]}"
-                MHZ="${MHZ/%.*}"
-            fi
-        done < /proc/cpuinfo
+    if [[ -n "$1" ]]; then
+        CPUINFO_FILE="$1"
     fi
+    # Set one or both of the below variables to `/proc/cpuinfo` if empty.
+    if [[ ! -e "${CPUINFO_FILE:=${CPUINFO_FILE_DEFAULT:=/proc/cpuinfo}}" ]]; then
+        # If the file doesn't exist, check and see if we should create and fill it.
+        if [[ "${CPUINFO_FILE}" != "${CPUINFO_FILE_DEFAULT}" && -d "${CPUINFO_FILE%/*}" ]]; then
+            # If it doesn't exist and isn't set to the default location, but its `dirname` *does* exist, it's meant to
+            # be a cache file but still needs to be created and populated.
+            ### FIXME: Should NHC be auto-populating this file?
+            ERR=$(cat "${CPUINFO_FILE_DEFAULT}" 2>&1 > "${CPUINFO_FILE}" && chmod 0644 "${CPUINFO_FILE}" 2>&1)
+            RC=$?
+        fi
+    fi
+
+    if [[ -e "${CPUINFO_FILE}" && -r "${CPUINFO_FILE}" ]]; then
+        CPUDATA=$(< "$CPUINFO_FILE")
+        RC=$?
+    else
+        RC=1
+    fi
+    if [[ $RC -ne 0 || -n "${ERR}" ]]; then
+        ### FIXME:  Should this cause a die() or just return bogus values like before (see below)?
+        die 1 "Unable to read CPU data; specified file \"$CPUINFO_FILE\" is missing/unreadable/invalid."
+        return 1
+    fi
+
+    while read -a FIELD ; do
+        if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
+            ((PROCESSOR++))
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
+            PHYS_ID=${FIELD[3]}
+            if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
+                PHYS_IDS[$PHYS_ID]=1
+                ((HW_SOCKETS++))
+            fi
+        elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
+            SIBLINGS=${FIELD[2]}
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
+            CORES=${FIELD[3]}
+        elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
+            MHZ="${FIELD[3]}"
+            MHZ="${MHZ/%.*}"
+        fi
+    done <<< "${CPUDATA}"
+
     if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
         HW_SOCKETS=$((PROCESSOR+1))
         HW_CORES=$HW_SOCKETS
@@ -59,45 +97,92 @@ function nhc_hw_gather_data() {
             HW_THREADS=$((HW_SOCKETS*SIBLINGS))
         fi
     else
+        # Fill with bogus (albeit sane) values.
         HW_SOCKETS=1
         HW_CORES=1
         HW_THREADS=1
         MHZ=0
     fi
     dbg "Got $HW_SOCKETS $MHZ MHz processors ($HW_CORES cores, $HW_THREADS threads)"
+}
 
-    # Gather memory info
-    if [[ -e /proc/meminfo ]]; then
-        while read -a FIELD ; do
-            if [[ "${FIELD[0]}" = "MemTotal:" ]]; then
-                HW_RAM_TOTAL=${FIELD[1]}
-            elif [[ "${FIELD[0]}" = "MemFree:" ]]; then
-                : $((HW_RAM_FREE += ${FIELD[1]}))
-            elif [[ "${FIELD[0]}" = "Buffers:" ]]; then
-                : $((HW_RAM_FREE += ${FIELD[1]}))
-            elif [[ "${FIELD[0]}" = "Cached:" ]]; then
-                : $((HW_RAM_FREE += ${FIELD[1]}))
-            elif [[ "${FIELD[0]}" = "SwapTotal:" ]]; then
-                HW_SWAP_TOTAL=${FIELD[1]}
-            elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
-                HW_SWAP_FREE=${FIELD[1]}
-            fi
-        done < /proc/meminfo
+# Read memory hardware details from specified location (e.g., `/proc/meminfo`)
+function nhc_hw_mem_gather_data() {
+    local ERR IFS LINE
+    local -a FIELD LINES MEMDATA
+    local -i RC=0
+
+    if [[ -n "$1" ]]; then
+        MEMINFO_FILE="$1"
+    fi
+    # Set one or both of the below variables to `/proc/meminfo` if empty.
+    if [[ ! -e "${MEMINFO_FILE:=${MEMINFO_FILE_DEFAULT:=/proc/meminfo}}" ]]; then
+        # If the file doesn't exist, check and see if we should create and fill it.
+        if [[ "${MEMINFO_FILE}" != "${MEMINFO_FILE_DEFAULT}" && -d "${MEMINFO_FILE%/*}" ]]; then
+            # If it doesn't exist and isn't set to the default location, but its `dirname` *does* exist, it's meant to
+            # be a cache file but still needs to be created and populated.
+            ### FIXME: Should NHC be auto-populating this file?
+            ERR=$(cat "${MEMINFO_FILE_DEFAULT}" 2>&1 > "${MEMINFO_FILE}" && chmod 0644 "${MEMINFO_FILE}" 2>&1)
+            RC=$?
+        fi
+    fi
+
+    if [[ -e "${MEMINFO_FILE}" && -r "${MEMINFO_FILE}" ]]; then
+        MEMDATA=$(< "$MEMINFO_FILE")
+        RC=$?
     else
+        RC=1
+    fi
+    if [[ $RC -ne 0 || -n "${ERR}" ]]; then
+        # FIXME:  Should this cause a die() or just return bogus values like before?
+        die 1 "Unable to read memory data; specified file \"$MEMINFO_FILE\" is missing/unreadable/invalid."
+        return 1
+        # Populate with bogus info
         HW_RAM_TOTAL=1024
         HW_RAM_FREE=1
         HW_SWAP_TOTAL=0
         HW_SWAP_FREE=0
     fi
+
+    while read -a FIELD ; do
+        if [[ "${FIELD[0]}" = "MemTotal:" ]]; then
+            HW_RAM_TOTAL=${FIELD[1]}
+        elif [[ "${FIELD[0]}" = "MemFree:" ]]; then
+            ((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "Buffers:" ]]; then
+            ((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "Cached:" ]]; then
+            ((HW_RAM_FREE += ${FIELD[1]}))
+        elif [[ "${FIELD[0]}" = "SwapTotal:" ]]; then
+            HW_SWAP_TOTAL=${FIELD[1]}
+        elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
+            HW_SWAP_FREE=${FIELD[1]}
+        fi
+    done <<< "$MEMDATA"
+
     dbg "Found $HW_RAM_TOTAL kB RAM ($HW_RAM_FREE kB free)"
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
+}
 
-    # Gather IB info
+# Load HSN (currently just IB) hardware information
+function nhc_hw_hsn_gather_data() {
+    local IFS INDEX LINE PORT
+    local -a FIELD IB_PORTS
+
+    # If the top-level IB info directory isn't there, punt early.
+    if [[ ! -d /sys/class/infiniband ]]; then
+        return 0
+    fi
+
+    # Turn globbing back on so we can internally generate the list of
+    # IB ports.
     set +f
     IFS=''
     IB_PORTS=( /sys/class/infiniband/*/ports/* )
     IFS=$' \t\n'
     set -f
+
+    # Gather data from each IB port found.
     for PORT in "${IB_PORTS[@]}" ; do
         test -e "$PORT" || break
         INDEX=${#HW_IB_STATE[*]}
@@ -112,41 +197,103 @@ function nhc_hw_gather_data() {
         FIELD=( $LINE )
         HW_IB_RATE[$INDEX]=${FIELD[0]}
         IFS=' /'
-        arr=( $PORT )
-        HW_IB_DEV[$INDEX]="${arr[4]}:${arr[6]}"
+        FIELD=( $PORT )
+        HW_IB_DEV[$INDEX]="${FIELD[4]}:${FIELD[6]}"
         IFS=$' \t\n'
         dbg "Found ${HW_IB_STATE[$INDEX]} (${HW_IB_PHYS_STATE[$INDEX]}) IB Port ${HW_IB_DEV[$INDEX]} (${HW_IB_RATE[$INDEX]} Gb/sec)"
     done
     export HW_IB_STATE HW_IB_PHYS_STATE HW_IB_RATE
 
-    # Check if user-leved mad driver loaded and IB diag tools will succeed to run
+    # Check if user-level mad driver is loaded so that IB diag tools will be usable.
     if [[ -f /sys/class/infiniband_mad/abi_version ]]; then
-	read HW_IB_UMAD_ABI_VER < /sys/class/infiniband_mad/abi_version
+        read HW_IB_UMAD_ABI_VER < /sys/class/infiniband_mad/abi_version
     else
-	HW_IB_UMAD_ABI_VER=0
+        HW_IB_UMAD_ABI_VER=0
     fi
     export HW_IB_UMAD_ABI_VER
+}
 
-    # Gather kernel modules
-    if [[ -e /proc/modules ]]; then
-        while read -a FIELD ; do
-            HW_MODULES[${#HW_MODULES[*]}]=${FIELD[0]}
-            dbg "Found kernel module ${FIELD[0]}"
-        done < /proc/modules
+# Load kernel module list from /proc/modules
+function nhc_hw_kmod_gather_data() {
+    local MODDATA=""
+    local -a FIELD
+    local -i RC
+
+    if [[ -n "$1" ]]; then
+        KMOD_FILE="$1"
     fi
+    if [[ -e "${KMOD_FILE}" && -r "${KMOD_FILE}" ]]; then
+        MODDATA=$(< "$KMOD_FILE")
+        RC=$?
+    else
+        RC=1
+    fi
+    if [[ $RC -ne 0 ]]; then
+        # FIXME:  Should this cause a die()?
+        die 1 "Unable to read kernel module data; specified file \"$KMOD_FILE\" is missing/unreadable/invalid."
+        return 1
+    fi
+
+    while read -a FIELD ; do
+        HW_MODULES+=( "${FIELD[0]}" )
+    done <<< "$MODDATA"
+
     export HW_MODULES
+    dbg "Found kernel modules:  ${HW_MODULES[*]}"
+}
 
-    # Gather Ethernet info
-    if [[ -e /proc/net/dev ]]; then
-        while read -a FIELD ; do
-            if [[ ${FIELD[0]} == *:* ]]; then
-                DEV=${FIELD[0]%%:*}
-                HW_ETH_DEV[${#HW_ETH_DEV[*]}]=$DEV
-                dbg "Found Ethernet device $DEV"
-            fi
-        done < /proc/net/dev
+# Load Ethernet hardware information
+function nhc_hw_eth_gather_data() {
+    local DEV DEVDATA ERR
+    local -a FIELD
+
+    if [[ -n "$1" ]]; then
+        NETDEV_FILE="$1"
     fi
+    # Set one or both of the below variables to `/proc/net/dev` if empty.
+    if [[ ! -e "${NETDEV_FILE:=${NETDEV_FILE_DEFAULT:=/proc/net/dev}}" ]]; then
+        # If the file doesn't exist, check and see if we should create and fill it.
+        if [[ "${NETDEV_FILE}" != "${NETDEV_FILE_DEFAULT}" && -d "${NETDEV_FILE%/*}" ]]; then
+            # If it doesn't exist and isn't set to the default location, but its `dirname` *does* exist, it's meant to
+            # be a cache file but still needs to be created and populated.
+            ### FIXME: Should NHC be auto-populating this file?
+            ERR=$(cat "${NETDEV_FILE_DEFAULT}" 2>&1 > "${NETDEV_FILE}" && chmod 0644 "${NETDEV_FILE}" 2>&1)
+            RC=$?
+        fi
+    fi
+
+    if [[ -e "${NETDEV_FILE}" && -r "${NETDEV_FILE}" ]]; then
+        DEVDATA=$(< "$NETDEV_FILE")
+        RC=$?
+    else
+        RC=1
+    fi
+    if [[ $RC -ne 0 || -n "${ERR}" ]]; then
+        # FIXME:  Should this cause a die()?
+        die 1 "Unable to read network interface data; specified file \"$NETDEV_FILE\" is missing/unreadable/invalid."
+        return 1
+    fi
+
+    # Gather network interface names
+    while read -a FIELD ; do
+        if [[ ${FIELD[0]} == *:* ]]; then
+            DEV=${FIELD[0]%%:*}
+            HW_ETH_DEV+=( "${DEV}" )
+        fi
+    done <<< "${DEVDATA}"
     export HW_ETH_DEV
+    dbg "Found network devices:  ${HW_ETH_DEV[*]}"
+}
+
+# Call all of the above functions to load all hardware info
+function nhc_hw_gather_data() {
+    # Call each `_gather_data()` sub-function in order.
+    # FIXME:  How to pass data source as $1 to each function?
+    nhc_hw_cpu_gather_data "$@"
+    nhc_hw_mem_gather_data "$@"
+    nhc_hw_hsn_gather_data "$@"
+    nhc_hw_kmod_gather_data "$@"
+    nhc_hw_eth_gather_data "$@"
 }
 
 # Check that the socket ($1), core ($2), and thread ($3) counts all match.
@@ -156,7 +303,7 @@ function check_hw_cpuinfo() {
     local THREADS=$3
 
     if [[ $HW_SOCKETS -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_cpu_gather_data
     fi
 
     if [[ -n "$SOCKETS" && $SOCKETS -ne $HW_SOCKETS ]]; then
@@ -181,7 +328,7 @@ function check_hw_physmem() {
     local RAM_MIN="$1" RAM_MAX="$2" FUDGE="$3"
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$RAM_MIN" RAM_MIN
@@ -214,7 +361,7 @@ function check_hw_swap() {
     local SWAP_MIN="$1" SWAP_MAX="$2" FUDGE="$3"
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$SWAP_MIN" SWAP_MIN
@@ -248,7 +395,7 @@ function check_hw_mem() {
     local MEM_TOTAL
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$MEM_MIN" MEM_MIN
@@ -280,7 +427,7 @@ function check_hw_physmem_free() {
     local RAM_MINFREE=$1
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$RAM_MINFREE" RAM_MINFREE
@@ -297,7 +444,7 @@ function check_hw_swap_free() {
     local SWAP_MINFREE=$1
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$SWAP_MINFREE" SWAP_MINFREE
@@ -315,7 +462,7 @@ function check_hw_mem_free() {
     local MEM_FREE
 
     if [[ $HW_RAM_TOTAL -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_mem_gather_data
     fi
 
     nhc_common_parse_size "$MEM_MINFREE" MEM_MINFREE
@@ -337,12 +484,12 @@ function check_hw_ib() {
     local i
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_hsn_gather_data
     fi
 
     if [[ $HW_IB_UMAD_ABI_VER -eq 0 ]]; then
-	die 1 "$FUNCNAME:  Version mismatch between kernel OFED drivers and userspace OFED libraries."
-	return 1
+        die 1 "$FUNCNAME:  Version mismatch between kernel OFED drivers and userspace OFED libraries."
+        return 1
     fi
 
     for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
@@ -372,11 +519,10 @@ function check_hw_gm() {
     local i j
 
     if [[ ${#HW_MODULES[*]} -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_kmod_gather_data
     fi
-
     if [[ ${#HW_ETH_DEV[*]} -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_eth_gather_data
     fi
 
     for ((i=0; i < ${#HW_ETH_DEV[*]}; i++)); do
@@ -399,7 +545,7 @@ function check_hw_eth() {
     local i
 
     if [[ ${#HW_ETH_DEV[*]} -eq 0 ]]; then
-        nhc_hw_gather_data
+        nhc_hw_eth_gather_data
     fi
 
     for ((i=0; i < ${#HW_ETH_DEV[*]}; i++)); do
@@ -467,7 +613,7 @@ function check_hw_mcelog() {
             die 1 "$MSG"
             return 1
         fi
-        
+
         # If none of the above thresholds was met, return success.
         return 0
     else

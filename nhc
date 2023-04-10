@@ -58,10 +58,10 @@ function die() {
     if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         if [[ "${CHECK:0:4}" == "die " ]]; then
             CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
-            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+            ($OFFLINE_NODE "$HOSTNAME" "$@")
             CHECK="$FUNCNAME $*"
         else
-            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+            ($OFFLINE_NODE "$HOSTNAME" "$@")
         fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -700,7 +700,7 @@ function nhcmain_run_checks() {
 
 function nhcmain_mark_online() {
     if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 ]]; then
-        eval $ONLINE_NODE "'$HOSTNAME'"
+        ($ONLINE_NODE "$HOSTNAME")
     fi
 }
 

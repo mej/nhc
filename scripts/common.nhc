@@ -230,7 +230,9 @@ function bash_stack_trace() {
 ###########################################################
 
 # Define regexp match check conditionally based on bash version.
-if [[ "${BASH_VERSINFO[0]}" != "" && ${BASH_VERSINFO[0]} -ge 3 ]]; then
+# FIXME:  BASH 3.x and earlier are no longer supported for NHC, so this `if`
+#         statement can probably be removed.
+if (( BASHVER >= 30 )); then
     # Check to see if parameter ($1) matches regexp ($2)
     function mcheck_regexp() {
         if [[ "$1" =~ $2 ]]; then
@@ -711,7 +713,7 @@ function nhc_common_get_unix_time() {
 
 # Run a subcommand with a timeout
 function nhc_cmd_with_timeout() {
-    local -i NHC_TO=0 RC=0
+    local -i NHC_TO=0 RC=0 RETPID=0 SUBPID=0 WDTPID=0
 
     if [[ "$1" == +([0-9]) ]]; then
         export NHC_TO=$1
@@ -720,8 +722,17 @@ function nhc_cmd_with_timeout() {
         export NHC_TO=$TIMEOUT
     fi
     dbg "$FUNCNAME():  Executing \"$*\" with $NHC_TO-second timeout."
-    $SHELL -c '( for ((s=NHC_TO; s>0; s--)); do sleep 1 ; kill -0 $$ || exit 0 ; done ; kill -s SIGTERM $$ && kill -0 $$ || exit 0 ; sleep 1 ; kill -s SIGKILL $$ ) >&/dev/null & exec "$@"' $1 "$@"
+    "$@" &
+    SUBPID=$!
+    nhcmain_watchdog_timer "$NHC_TO" "$SUBPID" "$1" &
+    WDTPID=$!
+    dbg "$FUNCNAME():  Waiting on subprocess $SUBPID (\"$1\") and watchdog timer $WDTPID..."
+    wait -fn -p RETPID $SUBPID $WDTPID
     RC=$?
+    dbg "$FUNCNAME():  Process $RETPID exited with return code $RC."
+    if (( RETPID != WDTPID )); then
+        kill_watchdog $WDTPID
+    fi
     dbg "$FUNCNAME():  Command \"$*\" returned $RC."
     return $RC
 }

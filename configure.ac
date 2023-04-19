@@ -5,16 +5,21 @@ m4_define([nhc_address], [nhc-devel@lbl.gov])
 AC_PREREQ(2.59)
 AC_INIT(defn([nhc_pkgname]), defn([nhc_version]), defn([nhc_address]))
 AC_CONFIG_SRCDIR([.])
+AM_INIT_AUTOMAKE([foreign tar-pax])
+
+dnl# AC_CANONICAL_HOST
+#case $host_os in
+#  *cygwin* ) CYGWIN=yes;;
+#         * ) CYGWIN=no;;
+#esac
 
 AC_PROG_INSTALL
-AM_INIT_AUTOMAKE([foreign])
-
 m4_ifdef([AC_PROG_MKDIR_P], [
-  AC_PROG_MKDIR_P
+    AC_PROG_MKDIR_P
 ], [
-  AM_PROG_MKDIR_P
-  MKDIR_P=${mkdir_p}
-  AC_SUBST([MKDIR_P])
+    AM_PROG_MKDIR_P
+    MKDIR_P=${mkdir_p}
+    AC_SUBST([MKDIR_P])
 ])#m4_ifdef
 
 dnl# The following uses m4's esyscmd macro so that the command below runs at

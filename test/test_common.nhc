@@ -1,6 +1,6 @@
 # Tests for common.nhc
 
-plan $((19+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
+plan $((22+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+8)) "common.nhc" && {
     is "`type -t array_push 2>&1`" 'function' 'array_push() loaded properly'
     is "`type -t array_pop 2>&1`" 'function' 'array_pop() loaded properly'
     is "`type -t array_unshift 2>&1`" 'function' 'array_unshift() loaded properly'
@@ -18,7 +18,10 @@ plan $((19+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
     is "`type -t nhc_common_get_uid 2>&1`" 'function' 'nhc_common_get_uid() loaded properly'
     is "`type -t nhc_common_parse_size 2>&1`" 'function' 'nhc_common_parse_size() loaded properly'
     is "`type -t nhc_common_unparse_size 2>&1`" 'function' 'nhc_common_unparse_size() loaded properly'
+    is "`type -t nhc_common_parse_count 2>&1`" 'function' 'nhc_common_parse_count() loaded properly'
+    is "`type -t nhc_common_unparse_count 2>&1`" 'function' 'nhc_common_unparse_count() loaded properly'
     is "`type -t nhc_common_get_unix_time 2>&1`" 'function' 'nhc_common_get_unix_time() loaded properly'
+    is "`type -t nhc_cmd_with_timeout 2>&1`" 'function' 'nhc_cmd_with_timeout() loaded properly'
     is "`type -t nhc_common_get_max_sys_uid 2>&1`" 'function' 'nhc_common_get_max_sys_uid() loaded properly'
 
     typeset -a TA=( ) A1=( ) A2=( ) A3=( )
@@ -358,6 +361,14 @@ plan $((19+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+8)) "common.nhc" && {
     nhc_common_unparse_count $OSIZE NSIZE 1000 ERR
     is "$NSIZE" "2T" "nhc_common_unparse_count():  $OSIZE -> 2T (1.90G) with 100G error (size)"
     is "$ERR" "100" "nhc_common_unparse_count():  $OSIZE -> 2T (1.90G) with 100G error (error)"
+
+    # Quick-and-simple sanity check for the timekeeping transform
+    UNIXTIME=$(date '+%s')
+    OLDSECS=$SECONDS
+    cmp_ok "$SECONDS" "-lt" "60" 'Initial $SECONDS value should be small (sub-1min)'
+    nhc_common_get_unix_time
+    ok '(( (SECONDS == UNIXTIME+OLDSECS) || (SECONDS == UNIXTIME+OLDSECS+1) ))' \
+        "\$SECONDS ($SECONDS) should now reflect \`time_t\` value (roughly $UNIXTIME +/- $OLDSECS)"
 
     if [[ $- == *x* ]]; then
         # There seems to be a bash bug.  It doesn't handle process substitution

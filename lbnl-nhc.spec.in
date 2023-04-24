@@ -39,6 +39,10 @@
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}
 %{!?nhc_helper_dir:%global nhc_helper_dir %{_libexecdir}/%{sname}}
 
+### Build conditional(s)
+# Should NHC be accessible for normal users' use?
+%bcond_without useraccess
+
 
 Summary: LBNL Node Health Check
 Name: %{name}
@@ -79,7 +83,7 @@ project home page at https://github.com/mej/nhc
 
 
 %install
-umask 0077
+umask %{?with_useraccess:0022}%{!?with_useraccess:0077}
 %{__make} install DESTDIR=$RPM_BUILD_ROOT %{?mflags_install}
 
 

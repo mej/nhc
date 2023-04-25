@@ -726,11 +726,11 @@ function nhc_cmd_with_timeout() {
     SUBPID=$!
     nhcmain_watchdog_timer "$NHC_TO" "$SUBPID" "$1" &
     WDTPID=$!
-    dbg "$FUNCNAME():  Waiting on subprocess $SUBPID (\"$1\") and watchdog timer $WDTPID..."
-    wait -fn -p RETPID $SUBPID $WDTPID
+    dbg "$FUNCNAME():  Waiting on subprocess $SUBPID (\"$1\"); watchdog timer is $WDTPID...."
+    wait $SUBPID
     RC=$?
-    dbg "$FUNCNAME():  Process $RETPID exited with return code $RC."
-    if (( RETPID != WDTPID )); then
+    dbg "$FUNCNAME():  Process $SUBPID exited with return code $RC."
+    if kill -s 0 $WDTPID >&/dev/null ; then
         kill_watchdog $WDTPID
     fi
     dbg "$FUNCNAME():  Command \"$*\" returned $RC."

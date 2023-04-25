@@ -177,9 +177,10 @@ function test_nhc_driver() {
         is $? 0 'Simulated NHC process exists'
         kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
         is $? 0 'Watchdog timer is running'
-        #sleep 2
+        sleep 2
         ## We set the watchdog timer for 1s, so it should be dead after 2s
-        wait -fn $NHC_PID $WATCHDOG_PID >&/dev/null
+        ###FIXME: Requires newer Bash### wait -fn $NHC_PID $WATCHDOG_PID >&/dev/null
+        wait $NHC_PID $WATCHDOG_PID
         kill -s 0 $NHC_PID >/dev/null 2>&1
         isnt $? 0 "Simulated NHC process $NHC_PID has been killed"
         kill -s 0 $WATCHDOG_PID >/dev/null 2>&1

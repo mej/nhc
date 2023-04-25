@@ -241,7 +241,7 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
+    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
     if [[ -f "/etc/debian_version" ]]; then
         SYSCONFIGDIR="/etc/default"
         LIBEXECDIR="/usr/lib"

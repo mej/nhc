@@ -42,6 +42,13 @@
 # or script).  Failure of any check will result in the node being
 # flagged as "unhealthy" and the termination of further checks.
 
+### Global variable declarations
+
+# The following line gets updated automagically
+NHC_VERSION="1.5-0.34.g551f.1"
+export NHC_VERSION
+
+
 ### Library functions
 
 # Declare a print-error-and-exit function.

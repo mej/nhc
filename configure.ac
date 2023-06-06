@@ -22,6 +22,9 @@ m4_ifdef([AC_PROG_MKDIR_P], [
     AC_SUBST([MKDIR_P])
 ])#m4_ifdef
 
+# Set the version string for `nhc -V` to report
+NHC_VERSION="${VERSION}"
+
 dnl# The following uses m4's esyscmd macro so that the command below runs at
 dnl# "autoconf" time, when we're sure to have a Git repo, rather than configure
 dnl# time.  We have to change the m4 quote characters due to the regex we use.
@@ -32,11 +35,13 @@ changequote([, ])dnl
 
 if test -n "$GITRELEASE" ; then
     AC_MSG_RESULT([$GITRELEASE])
+    NHC_VERSION="${NHC_VERSION}-${GITRELEASE}"
 else
     GITRELEASE=0.g0000
     AC_MSG_RESULT([unknown, using default $GITRELEASE])
 fi
 AC_SUBST([GITRELEASE])
+AC_SUBST([NHC_VERSION])
 
 AC_OUTPUT([
    Makefile

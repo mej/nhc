@@ -1,5 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = bench test
+#SHELL = /bin/bash -x
 
 helperdir = $(libexecdir)/nhc
 confdir = $(sysconfdir)/nhc
@@ -30,6 +31,11 @@ install-data-local:
 uninstall-local:
 	-( cd '$(DESTDIR)$(logrotatedir)' && rm -f nhc )
 	-rmdir '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
+
+install-exec-hook:
+	if test -n '@NHC_VERSION@' && ! grep -q '^NHC_VERSION="@NHC_VERSION@"' nhc; then \
+	    sed -i -e 's,^NHC_VERSION=".*$$,NHC_VERSION="@NHC_VERSION@",' $(DESTDIR)$(sbindir)/nhc ; \
+	fi
 
 test:
 	$(MAKE) -C test test

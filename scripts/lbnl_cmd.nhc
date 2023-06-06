@@ -164,10 +164,11 @@ function check_cmd_status() {
         return 1
     fi
 
-    "$@" </dev/null >&/dev/null &
-    PID=$!
-    nhcmain_watchdog_timer "$CMD_TIMEOUT" "$PID" </dev/null >&/dev/null &
-    wait $PID
+    #"$@" </dev/null >&/dev/null &
+    #PID=$!
+    #nhcmain_watchdog_timer "$CMD_TIMEOUT" "$PID" </dev/null >&/dev/null &
+    #wait $PID
+    nhc_cmd_with_timeout "$CMD_TIMEOUT" "$@" </dev/null >&/dev/null
     RET=$?
 
     if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then

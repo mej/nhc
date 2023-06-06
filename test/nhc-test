@@ -163,7 +163,7 @@ function test_nhc_driver() {
     TIMEOUT=0
     plan 1 "nhcmain_set_watchdog" && {
         nhcmain_set_watchdog
-        is $WATCHDOG_PID 0 'Watchdog should be disabled'
+        is $NHC_WATCHDOG 0 'Watchdog should be disabled'
     } ; unplan
 
     # Test watchdog timer.
@@ -172,14 +172,19 @@ function test_nhc_driver() {
     disown $NHC_PID
     nhcmain_watchdog_timer 1 $NHC_PID &
     WATCHDOG_PID=$!
-    plan 3 "nhcmain_watchdog_timer" && {
+    plan 4 "nhcmain_watchdog_timer" && {
         kill -s 0 $NHC_PID >/dev/null 2>&1
         is $? 0 'Simulated NHC process exists'
         kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
         is $? 0 'Watchdog timer is running'
         sleep 2
+        ## We set the watchdog timer for 1s, so it should be dead after 2s
+        ###FIXME: Requires newer Bash### wait -fn $NHC_PID $WATCHDOG_PID >&/dev/null
+        wait $NHC_PID $WATCHDOG_PID
         kill -s 0 $NHC_PID >/dev/null 2>&1
-        isnt $? 0 'Simulated NHC process has been killed'
+        isnt $? 0 "Simulated NHC process $NHC_PID has been killed"
+        kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
+        isnt $? 0 "NHC watchdog timer process $WATCHDOG_PID has exited"
     } ; unplan
 
     # Empty config file should result in no checks.

@@ -170,19 +170,48 @@ function syslog_flush() {
     LOGGER_TEXT=""
 }
 
+    # Sleep some number of seconds, 100ms at a time, aborting if the PID dies
+function sleep_wait() {
+    local -i TLIM=$((${1:-1} * 10)) WPID="${2:-$NHC_PID}" KSIG="${3:-0}"
+    local -i i=0
+
+    while kill -s "$KSIG" -- ${WPID#-} 2>/dev/null && (( i < TLIM )); do
+        if ! sleep 0.1; then
+            # It's unlikely we'll encounter a `sleep` that can't take
+            # non-integer time values, but just in case, handle it.
+            sleep $1    # Best effort - sleep the original amount
+            return $?
+        fi
+        (( i++ ))
+    done
+    # Return 1 (failure) if the PID is still there after full sleep time
+    return $(( (i == TLIM) ? (1) : (0) ))
+}
+
 function kill_watchdog() {
+    local KPID=${1:-${NHC_WATCHDOG:-0}}
     local i
 
-    dbg "$FUNCNAME:  Watchdog PID is $WATCHDOG_PID."
-    if [[ $WATCHDOG_PID -ne 0 ]]; then
+    if [[ $KPID -ne 0 ]]; then
+        dbg "$FUNCNAME($*):  Terminating watchdog timer $KPID; main NHC watchdog PID is $NHC_WATCHDOG."
         for i in 1 2 3 4 ; do
-            dbg "Killing watchdog timer $WATCHDOG_PID -- Attempt #$i"
-            kill -s INT -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
-            sleep 0.01 || sleep 1
+            dbg "Killing watchdog timer $KPID -- Attempt #$i"
+            kill -s INT -- -$KPID $KPID 2>/dev/null || return 0
+            sleep_wait 1 "$KPID"
         done
-        kill -s KILL -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null
+        kill -s KILL -- -$KPID $KPID 2>/dev/null
+    else
+        dbg "$FUNCNAME($*):  Invalid watchdog PID $KPID; main NHC watchdog PID is $NHC_WATCHDOG."
+        return 2
     fi
-    return 0
+
+    if sleep_wait 2 $KPID; then
+        dbg "$FUNCNAME($*):  Successfully terminated watchdog timer $KPID."
+        return 0
+    else
+        dbg "$FUNCNAME($*):  Unable to terminate defunct watchdog timer $KPID (survived SIGKILL)."
+        return 1
+    fi
 }
 
 function toggle_bash_tracing() {
@@ -212,7 +241,7 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
+    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
     if [[ -f "/etc/debian_version" ]]; then
         SYSCONFIGDIR="/etc/default"
         LIBEXECDIR="/usr/lib"
@@ -246,13 +275,13 @@ function nhcmain_init_env() {
         unset BASHPID
     fi
     NHC_START_TS=0
-    WATCHDOG_PID=0
+    NHC_WATCHDOG=0
     FAIL_CNT=0
     FORCE_SETSID=1
     NHC_FD_OUT=1
     NHC_FD_ERR=2
     export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
-    export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
+    export NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
@@ -447,7 +476,13 @@ function nhcmain_finalize_env() {
 
     # If timestamps are desired, initialize them here.
     if [[ $TS -ne 0 ]]; then
-        TS=$(date '+%s')
+        if (( BASHVER >= 42 )); then
+            # BASH 4.2 and higher don't require executing the `date` command.
+            # FIXME:  Remove this "if" once 4.2 becomes required.
+            printf -v TS '%{%s}T' -1
+        else
+            TS=$(date '+%s')
+        fi
         ELAPSED_SECONDS=$SECONDS
         SECONDS=$((ELAPSED_SECONDS+TS))
         NHC_START_TS=$((TS-ELAPSED_SECONDS))
@@ -547,45 +582,62 @@ function nhcmain_load_scripts() {
 }
 
 function nhcmain_watchdog_timer() {
-    local TIMEOUT="$1" NHC_PID="$2"
-    local SLEEP_PID MAIN_NHC_HUNG=0
+    local TASK_TIMEOUT="$1" TASK_PID="$2" TASK="$3"
+    local SLEEP_PID=0 MAIN_NHC_HUNG=0
+
+    # Sanity checks
+    if [[ "$TASK_TIMEOUT" -eq 0 ]]; then
+        # If there's no timeout, there's no need for a watchdog timer.
+        return 0
+    elif ! kill -0 "${TASK_PID#-}" 2>/dev/null; then
+        # If the watched process has already ended, our process should
+        # already be dead, but obviously it's still going.  Bail.
+        return 0
+    elif [[ -n "$TASK" && "$TASK" != "NHC"* ]]; then
+        TASK="NHC subprocess ($TASK)"
+    else
+        TASK="NHC"
+    fi
 
     # Start sleep process in background first so we can obtain its PID and set traps to handle signals.
-    sleep $TIMEOUT &
+    sleep $TASK_TIMEOUT &
     SLEEP_PID=$!
+    #trap 'set +x' RETURN    # As needed for debugging
     trap '' ALRM TERM
     trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
-    # Now we wait for the sleep to finish or for our process to be killed by the main NHC process.
-    wait
+    # Now we wait for the sleep to finish or for this watchdog process to be killed by the task process.
+    wait ${SLEEP_PID}
 
     # If we get here, the watchdog timer has expired, and we need to kill the NHC process (group).  Start gently.
-    log "NHC watchdog timer ${BASHPID:-$$} ($TIMEOUT secs) has expired.  Signaling NHC:  kill -s ALRM -- $NHC_PID"
-    kill -s ALRM -- $NHC_PID || return 0
-    sleep 1
+    log "$TASK watchdog timer ${BASHPID:-$$} ($TASK_TIMEOUT secs) has expired.  Signaling $TASK:  kill -s ALRM -- $TASK_PID"
+    kill -s ALRM -- $TASK_PID || return 0
+    sleep_wait 1 $TASK_PID
 
     # Send a stronger signal this time.  If there's nothing left to receive our signal, we're done.
-    log "NHC watchdog timer ${BASHPID:-$$} terminating NHC:  kill -s TERM -- $NHC_PID"
-    kill -s TERM -- $NHC_PID 2>/dev/null || return 0
-    sleep 3
+    log "$TASK watchdog timer ${BASHPID:-$$} terminating $TASK:  kill -s TERM -- $TASK_PID"
+    kill -s TERM -- $TASK_PID 2>/dev/null || return 0
+    sleep_wait 3 $TASK_PID
 
     # If we still had things to kill, check one last time and kill by force.
-    log "NHC watchdog timer ${BASHPID:-$$} terminating NHC with extreme prejudice:  kill -s KILL -- $NHC_PID"
-    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
-        # Setting this to true means it's the main NHC that's still around, not merely a hung child process.  That
-        # means the main NHC process hasn't been able to terminate gracefully and write the appropriate message to
-        # stdout or the status file.  Thus the watchdog has to be the one to call die().  If it's just a hung child,
-        # we don't want to call die() again and overwrite the status message.
-        MAIN_NHC_HUNG=1
+    log "$TASK watchdog timer ${BASHPID:-$$} terminating $TASK_PID with extreme prejudice:  kill -s KILL -- $TASK_PID"
+    if [[ "$NHC_PID" == "$TASK_PID" ]]; then
+        if kill -0 ${TASK_PID#-} 2>/dev/null ; then
+            # Setting this to true means it's the main NHC that's still around, not merely a hung child process.  That
+            # means the main NHC process hasn't been able to terminate gracefully and write the appropriate message to
+            # stdout or the status file.  Thus the watchdog has to be the one to call die().  If it's just a hung child,
+            # we don't want to call die() again and overwrite the status message.
+            MAIN_NHC_HUNG=1
+        fi
     fi
-    kill -s KILL -- $NHC_PID 2>/dev/null
-    sleep 1
-    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
+    kill -s KILL -- $TASK_PID 2>/dev/null
+    sleep_wait 1 $TASK_PID
+    if kill -0 ${TASK_PID#-} 2>/dev/null ; then
         # If the main NHC survived a "kill -9" it must be defunct.  Assume it called die() and exited cleanly.
-        log "NHC process ${NHC_PID#-} is defunct.  Considering it terminated."
+        log "$TASK process ${TASK_PID#-} is defunct.  Considering it terminated."
     elif [[ $MAIN_NHC_HUNG -eq 1 ]]; then
         # If the main NHC process survived SIGTERM but not SIGKILL, it likely didn't exit cleanly.  Call die().
-        WATCHDOG_PID=0
-        die 142 "Watchdog timer unable to terminate hung NHC process ${NHC_PID#-}."
+        NHC_WATCHDOG=0
+        die 142 "Watchdog timer unable to terminate hung $TASK process ${TASK_PID#-}."
     fi
     return 0
 }
@@ -595,12 +647,12 @@ function nhcmain_set_watchdog() {
     if [[ $TIMEOUT -gt 0 ]]; then
         # Start watchdog timer process in its own session.
         set -m
-        eval nhcmain_watchdog_timer $TIMEOUT $((NHC_SID==0?NHC_PID:NHC_SID)) &
-        WATCHDOG_PID=$!
-        export WATCHDOG_PID
+        nhcmain_watchdog_timer $TIMEOUT $((NHC_SID==0?NHC_PID:NHC_SID)) &
+        export NHC_WATCHDOG=$!
         set +m
-        dbg "In ${BASHPID:-$$}:  Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
+        dbg "In ${BASHPID:-$$}:  Watchdog PID is $NHC_WATCHDOG, NHC PID is $NHC_PID"
     else
+        export NHC_WATCHDOG=0
         dbg "In ${BASHPID:-$$}:  No watchdog, NHC PID is $NHC_PID"
     fi
 }
@@ -726,7 +778,8 @@ function nhcmain_finish() {
 }
 
 ### Script guts begin here.
-NHC_ARGS_LIST=( "$@" )
+declare -irx BASHVER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"
+declare -a NHC_ARGS_LIST=( "$@" )
 if [[ -n "$NHC_LOAD_ONLY" ]]; then
     # We're only supposed to define functions, not actually run anything.
     return 0 || exit 0
@@ -740,7 +793,7 @@ trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
 trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 142' 14
 
 nhcmain_init_env
-nhcmain_parse_cmdline "$@" || exit 10
+nhcmain_parse_cmdline "${NHC_ARGS_LIST[@]}" || exit 10
 nhcmain_load_sysconfig
 nhcmain_finalize_env
 if [[ -n "$EVAL_LINE" ]]; then
@@ -763,10 +816,10 @@ if [[ "$NHC_RM" == "sge" ]]; then
     if nhcmain_run_checks ; then
         nhcmain_finish
     fi
-    if [[ "$*" == *NHC_RM=sge* ]]; then
-        exec $0 "$@"
+    if [[ "${NHC_ARGS_LIST[*]}" == *NHC_RM=sge* ]]; then
+        exec $0 "${NHC_ARGS_LIST[@]}"
     else
-        exec $0 "$@" NHC_RM=sge
+        exec $0 "${NHC_ARGS_LIST[@]}" NHC_RM=sge
     fi
 else
     nhcmain_load_scripts

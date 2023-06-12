@@ -1,0 +1,200 @@
+# NHC Configuration File (sample)
+#
+# Lines are in the form "<hostmask>||<check>"
+# Hostmask is a glob, /regexp/, or {noderange}
+# Comments begin with '#'
+#
+
+## Nice example:
+## https://hpc-syspros-basics.github.io/HPC_Basics_menu/Node_Health_Check/Configuring_NHC.html
+
+#######################################################################
+###
+### NHC Configuration Variables
+###
+# Moved all of these settings to /etc/sysconfig/nhc
+
+#######################################################################
+###
+### Hardware checks
+###
+# Set these to your correct socket, core, and thread counts.
+   {c0[150-201]} || check_hw_cpuinfo 2 48 48
+   {c0[202-235]} || check_hw_cpuinfo 2 128 128
+
+# Set these to the amount of physical RAM you have (leave the fudge factor).
+   {c0[150-201]} || check_hw_physmem 768gb 768gb 5%
+   {c0[202-235]} || check_hw_physmem 512gb 512gb 5%
+
+# Set these to the amount of swap you have (leave the fudge factor).
+#   * || check_hw_swap 8g 8g 3%
+
+# If you prefer to use this instead of the previous two, you can.
+#   * || check_hw_mem 40g 40g 5%
+
+# Check specifically for free physical memory.
+#   * || check_hw_physmem_free 1MB
+
+# Same, but for swap space.
+#   * || check_hw_swap_free 1MB
+
+# Check for some sort of free memory of either type.
+   * || check_hw_mem_free 1g
+
+# Checks that there's a QDR IB interface that's ACTIVE and shows LinkUp.
+   {c0[150-235]} || check_hw_ib 100
+
+# Checks for an active Myrinet interface named "myri0."
+#   * || check_hw_gm myri0
+
+# Checks for an active ethernet interface named "eth1."
+##MJH##   {c0[150-201]} || check_hw_eth eth0
+##MJH##   {c0[202-235]} || check_hw_eth eth2
+##MJH##   {c0[150-201]} || check_hw_eth eth0.2050
+##MJH##   {c0[202-235]} || check_hw_eth eth2.2050
+##MJH##   * || check_hw_eth ib0
+
+# Make sure we're running the correct BIOS version on all nodes.
+##MJH##   {c0[150-201]} || check_dmi_data_match "BIOS Information: Version: 2.17.1"
+##MJH##   {c0[202-235]} || check_dmi_data_match "BIOS Information: Version: 2.10.2"
+
+# Make sure our RAM is running at the correct bus rate.
+#   * || check_dmi_data_match -t "Memory Device" "*Speed: 1866 MHz"
+
+# Check the mcelog daemon for any pending errors.
+   * || check_hw_mcelog
+
+
+#######################################################################
+###
+### Filesystem checks
+###
+# All nodes should have their root filesystem mounted read/write.
+# / FS
+   * || check_fs_mount_rw -f /
+   * || check_fs_free / 10%
+   * || check_fs_ifree / 1k
+# /local FS
+   * || check_fs_mount_rw -f /local
+   * || check_fs_free /local 10%
+# /tmp FS
+   * || check_fs_mount_rw -f /tmp
+   * || check_fs_free /tmp 20%
+# /var FS
+   * || check_fs_mount_rw -f /var
+   * || check_fs_free /var 10%
+# /data FS
+   * || check_fs_mount_rw -t gpfs -f /data
+   * || check_file_test -r -e -f /data/.nhc-test
+   * || check_file_test -r -e -f /scratch/.nhc-test
+
+# /scratch FS
+   * || check_fs_mount_rw -t gpfs -f /scratch
+# /rstore/share FS
+##MJH##   * || check_fs_mount -s 192.168.200.19:6789,192.168.200.20:6789,192.168.200.21:6789:/share -t ceph -f /rstore/share
+# /cm/shared
+   * || check_fs_mount -s gpfs.rc.uab.edu:/data/cm/shared-8.2 -t nfs -f /cm/shared
+
+# Assert that /tmp is a mounted filesystem of type "tmpfs."
+#   * || check_fs_mount_rw -t tmpfs -f /tmp
+
+# Controlling TTYs are a good thing!
+#   * || check_fs_mount_rw -t devpts -s '/(none|devpts)/' -f /dev/pts
+
+# Make sure the root filesystem doesn't get too full.
+#   * || check_fs_free / 3%
+
+# Free inodes are also important.
+#   * || check_fs_ifree / 1k
+
+# The following illustrates how to assert an NFSv3 mount (or any other specific mount option).
+#   * || check_fs_mount -s bluearc0:/home -t nfs -o '/(^|,)vers=3(,|$)/' -f /home
+
+
+#######################################################################
+###
+### File/metadata checks
+###
+# These should always be directories and always be read/write/execute and sticky.
+   * || check_file_test -r -w -x -d -k /tmp /var/tmp
+
+# These should always be readable and should never be empty.
+   * || check_file_test -r -s /etc/passwd /etc/group
+
+# Assert common properties for /dev/null (which occasionally gets clobbered).
+   * || check_file_test -c -r -w /dev/null /dev/zero
+#   * || check_file_stat -m 0666 -u 0 -g 0 -t 1 -T 3 /dev/null
+
+# Make sure there's relatively recent activity from the syslog.
+#   * || check_file_stat -n 7200 /var/log/messages
+
+# Validate a couple important accounts in the passwd file.
+#   * || check_file_contents /etc/passwd "/^root:x:0:0:/" "sshd:*"
+
+
+# Check that LDAP is resolving correctly on the node
+    * || check_cmd_status -t 5 -r 0 getent group atlab
+
+#######################################################################
+###
+### Process checks
+###
+# Everybody needs sshd running, right?  But don't use -r (restart)!
+   * || check_ps_service -u root -S sshd
+
+# The following should be running
+   * || check_ps_service -u root -S slurmd
+
+## This isn't working, succeeds even if I fatfinger the mount name
+#   * || check_ps_service -d mmfsd data.mount
+#   * || check_ps_service -d mmfsd scratch.mount
+
+# Check for wulfd but don't manage it.
+#   * || check_ps_daemon wulfd root
+
+# Make sure no users are SSH'd in, but don't kill them.
+#   * || check_ps_blacklist sshd '!root'
+
+# Flag and kill any processes which are owned by unauthorized users.
+#   * || check_ps_unauth_users log syslog kill
+
+# Flag any user processes not properly parented.
+##MJH## ## Disabling for now as this check is false flagging processes(?) by users who
+##MJH## ## have an active job on the node
+##MJH## ## Need to investigate how this check works
+##MJH##   * || check_ps_userproc_lineage log syslog
+
+# Most systems also need NFS locking services.
+   * || check_ps_service -d rpc.statd -r nfslock
+
+# The audit daemon can sometimes disappear if things get hairy.
+#   * || check_ps_service -r auditd
+
+# This is only valid for RHEL6 and similar/newer systems.
+   * || check_ps_service -d rsyslogd -r rsyslog
+
+# In the case of MySQL, it's typically better to cycle.
+#   * || check_ps_service -c mysqld
+
+# Double your core count is a good rule of thumb for load average max.
+#   * || check_ps_loadavg 24
+# This should work if you place it after one of the check_hw_*() checks.
+#   * || check_ps_loadavg $((2*HW_CORES))
+   * || check_ps_loadavg $((1*HW_CORES))
+
+# Ensure that NTP is synchronized
+ * || check_cmd_output -t 2 -m 'NTP synchronized: yes' -e 'timedatectl'
+
+#######################################################################
+###
+### Other checks
+###
+# Check to verify that SELinux is disabled.  (Remove the "-r 1" to verify it's enabled.)
+#   * || check_cmd_status -t 1 -r 1 selinuxenabled
+
+# Verify settings for an Ethernet interface.
+#   * || check_cmd_output -m '/addr:10\.0\.0\.1/' -m '/Bcast:10\.0\.0\.255/' -m '/Mask:255\.255\.255\.0/' -m '/^[[:space:]]*UP /' /sbin/ifconfig eth3
+
+# nVidia HealthMon GPU health checks (requires Tesla Development Kit)
+#   * || check_nv_healthmon
+

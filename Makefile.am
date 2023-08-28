@@ -33,7 +33,7 @@ uninstall-local:
 	-rmdir '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
 
 install-exec-hook:
-	if test -n '@NHC_VERSION@' && ! grep -q '^NHC_VERSION="@NHC_VERSION@"' nhc; then \
+	if test -n '@NHC_VERSION@' && ! grep -q '^NHC_VERSION="@NHC_VERSION@"' $(DESTDIR)$(sbindir)/nhc; then \
 	    sed -i -e 's,^NHC_VERSION=".*$$,NHC_VERSION="@NHC_VERSION@",' $(DESTDIR)$(sbindir)/nhc ; \
 	fi
 

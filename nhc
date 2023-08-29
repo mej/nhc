@@ -486,7 +486,7 @@ function nhcmain_finalize_env() {
         if (( BASHVER >= 42 )); then
             # BASH 4.2 and higher don't require executing the `date` command.
             # FIXME:  Remove this "if" once 4.2 becomes required.
-            printf -v TS '%{%s}T' -1
+            printf -v TS '%(%s)T' -1
         else
             TS=$(date '+%s')
         fi

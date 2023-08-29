@@ -45,7 +45,7 @@
 ### Global variable declarations
 
 # The following line gets updated automagically
-NHC_VERSION="1.5-0.34.g551f.1"
+NHC_VERSION="1.5"
 export NHC_VERSION
 
 

@@ -25,6 +25,12 @@ m4_ifdef([AC_PROG_MKDIR_P], [
 # Set the version string for `nhc -V` to report
 NHC_VERSION="${VERSION}"
 
+dnl# Make sure the version setting in the `nhc` script in Git matches the above
+dnl# canonical (i.e., short) version, not the `GITRELEASE` below.
+if ! grep -q '^NHC_VERSION="'${VERSION}'"' nhc >/dev/null 2>&1 ; then \
+    sed -i -e 's,^NHC_VERSION=".*$,NHC_VERSION="'${VERSION}'",' nhc
+fi
+
 dnl# The following uses m4's esyscmd macro so that the command below runs at
 dnl# "autoconf" time, when we're sure to have a Git repo, rather than configure
 dnl# time.  We have to change the m4 quote characters due to the regex we use.

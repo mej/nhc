@@ -43,7 +43,7 @@
 Summary: LBNL Node Health Check
 Name: %{name}
 Version: %{version}
-Release: %{release}%{?dist}.ug
+Release: %{release}.ug.1
 #Release: 1%{?dist}
 # LBNL Open Source License:  https://opensource.org/BSD-3-Clause-LBNL
 License: BSD-3-Clause-LBNL

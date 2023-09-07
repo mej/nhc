@@ -79,7 +79,13 @@ function check_nvmsi_number() {
         return 1
     fi
 
-    unkn=$(echo "$NVSMI_HEALTHMON_OUTPUT" | grep -i 'Unknown Error' | wc -l)
+    filter="NOMATCH"
+    if ! $(systemd-detect-virt 2>/dev/null); then
+        filter="Host Max"
+    fi
+
+    unkn=$(echo "$NVSMI_HEALTHMON_OUTPUT" | grep -i 'Unknown Error' | grep -v "$filter" | wc -l)
+
     if [[ "$unkn" -gt 0 ]]; then
         log "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  $unkn Unknown Errors found"
         die 1 "$FUNCNAME:  $NVIDIA_SMI_HEALTHMON:  $unkn Unknown Errors found"

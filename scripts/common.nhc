@@ -705,9 +705,7 @@ function nhc_common_get_unix_time() {
 
     if [[ $SECONDS -lt 946684800 ]]; then
         NOW=$(date '+%s')
-        ELAPSED_SECONDS=$SECONDS
-        SECONDS=$((ELAPSED_SECONDS+NOW))
-        NHC_START_TS=$((NOW-ELAPSED_SECONDS))
+        (( ELAPSED_SECONDS=$SECONDS, SECONDS+=NOW, NHC_START_TS=NOW-ELAPSED_SECONDS ))
     fi
 }
 

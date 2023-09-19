@@ -464,6 +464,22 @@ function nhcmain_finalize_env() {
         unset LOGFILE
     fi
 
+    # No need to use a PID file if we're doing a one-off test...
+    if [[ -z "$EVAL_LINE" ]]; then
+        # We need a place to store PID files (per-context)
+        for RUNDIR in $RUNDIR $XDG_RUNTIME_DIR "/run/user/$EUID" "/var/run" "/var/lock/subsys" "/var/tmp"; do
+            if [[ -d "$RUNDIR" && -w "$RUNDIR" && -x "$RUNDIR" ]]; then
+                break
+            fi
+        done
+        NHC_RUNDIR="$RUNDIR/nhc"
+        mkdir -p -m 0755 "$NHC_RUNDIR" >&/dev/null
+        if [[ ! -d "$NHC_RUNDIR" || ! -w "$NHC_RUNDIR" ]]; then
+            log "WARNING:  Unable to detect usable location for PID files ($NHC_RUNDIR); concurrency check disabled"
+            unset NHC_RUNDIR
+        fi
+    fi
+
     if [[ -z "$NHC_RM" ]]; then
         if ! nhcmain_find_rm ; then
             ONLINE_NODE=:
@@ -558,6 +574,62 @@ function nhcmain_redirect_output() {
     fi
 }
 
+function nhcmain_check_concurrency() {
+    local DIR="${1:-$NHC_RUNDIR}" CONTEXT="${2:-$NAME}"
+    local MSG="" PIDFILE="$DIR/NHC.$CONTEXT.pid" PID=0
+
+    if [[ -z "$DIR" || -z "$CONTEXT" ]]; then
+        vlog "${FUNCNAME[0]}():  Skipping concurrency check (\"$DIR\" / \"$CONTEXT\")"
+        return 1
+    fi
+
+    # First, does the PID file even exist?  If not, we can skip all the checking
+    NHC_PIDFILE="$PIDFILE"
+    if [[ -s "$PIDFILE" ]]; then
+        read PID < "$PIDFILE"
+        if [[ $PID =~ ^[[:digit:]]+$ ]]; then
+            if kill -s 0 $PID >& /dev/null ; then
+                # The NHC process still exists.  Not good.
+                # FIXME - Option to kill old NHC?
+                eecho "ERROR:  Prior NHC instance is still running (PID #$PID); is it hung?"
+                exit 145
+            else
+                dbg "Got process ID $PID from \"$PIDFILE,\" but it no longer exists."
+                > "$PIDFILE"
+            fi
+        else
+            dbg "PID file \"$PIDFILE\" exists with invalid contents ($PID)"
+        fi
+    elif [[ -e "$PIDFILE" ]]; then
+        dbg "PID file \"$PIDFILE\" exists but is empty: " "$(ls -Flaid "$PIDFILE")"
+    else
+        dbg "PID file \"$PIDFILE\" does not exist."
+    fi
+
+    # At this point we're going to proceed, so write our PID to the PID file
+    >> "$PIDFILE"
+    if [[ -f "$PIDFILE" && -r "$PIDFILE" && -w "$PIDFILE" && -O "$PIDFILE" && -G "$PIDFILE" && !( -s "$PIDFILE" || -h "$PIDFILE" ) ]]; then
+        # We used `>>` to avoid accidentally truncating something, but if all went correctly,
+        # the PID file *should* be an empty file newly created with effective UID/GID.
+        dbg "All sanity checks on \"$PIDFILE\" passed."
+    else
+        MSG="Unable to record PID ($NHC_PID) due to sanity check failure for PID file \"$PIDFILE\" -- $(ls -Flaid "$PIDFILE")"
+        log "$MSG"
+        syslog "$MSG"
+        unset NHC_PIDFILE
+        return 1
+    fi
+    printf '%d\n' "$NHC_PID" > "$PIDFILE"
+    read PID < "$PIDFILE"
+    if [[ "$PID" != "$NHC_PID" ]]; then
+        MSG="WARNING:  Wrote PID $NHC_PID to $PIDFILE but read back $PID.  Probably gremlins."
+        log "$MSG"
+        syslog "$MSG"
+        unset NHC_PIDFILE
+    fi
+    return 0
+}
+
 function nhcmain_check_conffile() {
     # Check for config file before we do too much work.
     if [[ ! -f "$CONFFILE" ]]; then
@@ -611,7 +683,8 @@ function nhcmain_watchdog_timer() {
     SLEEP_PID=$!
     #trap 'set +x' RETURN    # As needed for debugging
     trap '' ALRM TERM
-    trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
+    trap "kill -9 $SLEEP_PID >&/dev/null ; test -n "$NHC_PIDFILE" && rm -f "$NHC_PIDFILE" ; exit 0" \
+        EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
     # Now we wait for the sleep to finish or for this watchdog process to be killed by the task process.
     wait ${SLEEP_PID}
 
@@ -778,6 +851,10 @@ function nhcmain_finish() {
         echo "end" >&$NHC_FD_OUT
         return 0
     fi
+    if [[ -n "$NHC_PIDFILE" ]]; then
+        dbg "Removing PID file \"$NHC_PIDFILE\""
+        rm -f "$NHC_PIDFILE" && unset NHC_PIDFILE
+    fi
     kill_watchdog
     [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
     #[[ $DEBUG -eq 1 ]] && times >&2
@@ -808,6 +885,7 @@ if [[ -n "$EVAL_LINE" ]]; then
     eval $EVAL_LINE
     exit $?
 fi
+nhcmain_check_concurrency
 nhcmain_redirect_output
 nhcmain_check_conffile || exit 0
 if [[ "$NHC_RM" == "sge" ]]; then

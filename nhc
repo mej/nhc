@@ -785,21 +785,30 @@ function nhcmain_detach() {
 }
 
 function nhcmain_run_checks() {
+    local CHECK_STR=""
+    local -i NC=0 W=1
+
     CHECKS=( )
     nhc_load_conf "$CONFFILE"
-    for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
+
+    NC=${#CHECKS[*]}
+    for ((CNUM=0; CNUM<NC; CNUM++)); do
         CHECK="${CHECKS[$CNUM]}"
         CHECK_DIED=0
 
+        # Compute the field width and "check number" string
+        W=${#NC}
+        printf -v CHECK_STR "%0${W}d of %0${W}d" $((CNUM+1)) "$NC"
+
         # Run the check.
         if [[ "$NHC_CHECK_FORKED" == 0 ]] || mcheck "$CHECK" '/( |^)(export )?[A-Za-z_][A-Za-z0-9_]*=[^ =]/'; then
-            vlog "Running check:  \"$CHECK\""
+            vlog "Running check $CHECK_STR:  \"$CHECK\""
             eval $CHECK
             RET=$?
         else
             # Run the check in a separate forked process.
             eval $CHECK &
-            vlog "Running check:  \"$CHECK\" (forked PID $!)"
+            vlog "Running check $CHECK_STR:  \"$CHECK\" (forked PID $!)"
             wait $! >/dev/null 2>&1
             RET=$?
         fi
@@ -811,7 +820,7 @@ function nhcmain_run_checks() {
                 exit $((RET-100))
             elif [[ "$CHECK_DIED" == "0" ]]; then
                 # If the check failed but didn't call die(), use this fallback.
-                log "Node Health Check failed.  Check $CHECK returned $RET"
+                log "Node Health Check failed.  Check $CHECK_STR ($CHECK) returned $RET"
                 die $RET "Check $CHECK returned $RET"
             fi
             return $RET

@@ -196,8 +196,12 @@ function test_nhc_driver() {
 }
 
 function test_checks() {
-    local CHECKTEST
+    local CHECKTEST DIE_MSG="" DIE_RC=""
     local -a TEST_SCRIPTS
+
+    # Instead of die() being empty, have it save the message and return code
+    # into global variables that can be referenced by our unit tests.
+    function die() { DIE_RC="$1"; DIE_MSG="${*:2}"; return $DIE_RC; }
 
     set +f
     TEST_SCRIPTS=( $SRCDIR/test_*.nhc )

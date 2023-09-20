@@ -1,34 +1,75 @@
 # Tests for lbnl_cmd.nhc
 
-plan $((2+9+2)) "lbnl_cmd.nhc" && {
+plan $((3+14+14+2)) "lbnl_cmd.nhc" && {
     is "`type -t check_cmd_output 2>&1`" 'function' 'check_cmd_output() loaded properly'
     is "`type -t check_cmd_status 2>&1`" 'function' 'check_cmd_status() loaded properly'
+    is "`type -t check_cmd_dmesg 2>&1`" 'function' 'check_cmd_dmesg() loaded properly'
 
     # Needed to bypass sanity check on timeout values.
     export TIMEOUT=99999
 
     # Bash 3.0 (RHEL4) apparently has a bug in handling "${ARRAY[@]}" expansion, so we have to skip these.
     if [[ "${BASH_VERSINFO[0]}" == "3" && "${BASH_VERSINFO[1]}" -lt 1 ]]; then
-        skip 9
+        skip $((13+14))
     else
         check_cmd_output -t 1 -m "/Test/" echo Test
-        is $? 0 "Simple command output match"
+        is $? 0 "Simple command output match [$DIE_MSG]"
         check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-        is $? 0 "Multiple command output match, 3 positive (success)"
+        is $? 0 "Multiple command output match, 3 positive (success) [$DIE_MSG]"
         check_cmd_output -t 1 -m "/line1/" -m "/line2/" -m "/line3/" echo -e "line4\nline5\nline6"
-        is $? 1 "Multiple command output match, 3 positive (failure)"
+        is $? 1 "Multiple command output match, 3 positive (failure) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line4/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-        is $? 0 "Multiple command output match, 2 positive, 1 negative (success)"
+        is $? 0 "Multiple command output match, 2 positive, 1 negative (success) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line1/" -m "/line2/" -m "/line3/" echo -e "line1\nline2\nline3"
-        is $? 1 "Multiple command output match, 2 positive, 1 negative (negative failure)"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (negative failure) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line4/" -m "/line5/" -m "/line3/" echo -e "line1\nline2\nline3"
-        is $? 1 "Multiple command output match, 2 positive, 1 negative (positive failure)"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (positive failure) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line1/" -m "/line5/" -m "/line6/" echo -e "line1\nline2\nline3"
-        is $? 1 "Multiple command output match, 2 positive, 1 negative (failure)"
+        is $? 1 "Multiple command output match, 2 positive, 1 negative (failure) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line4/" -m "!/line5/" -m "!/line6/" echo -e "line1\nline2\nline3"
-        is $? 0 "Multiple command output match, 3 negative (success)"
+        is $? 0 "Multiple command output match, 3 negative (success) [$DIE_MSG]"
         check_cmd_output -t 1 -m "!/line1/" -m "!/line2/" -m "!/line3/" echo -e "line1\nline2\nline3"
-        is $? 1 "Multiple command output match, 3 negative (failure)"
+        is $? 1 "Multiple command output match, 3 negative (failure) [$DIE_MSG]"
+
+        # Make sure certain error conditions are kicked out informatively
+        check_cmd_output -m '*' -m '!*'
+        is $? 1 "Missing command should fail (early)"
+        like "$DIE_MSG" '*Syntax error*No command*' "No commands?  No dice!"
+
+        check_cmd_output -t 9999999 -m '/bogus/' -m 'nope' -e 'moo --moo=moo moo_moo_mcmoo'
+        is $? 1 'Timeout exceeding that of `nhc` itself should barf'
+        like "$DIE_MSG" '*Command timeout * exceeds NHC timeout *'
+
+        check_cmd_output -M 'Messages without match strings' -M 'should not work!' -e bob
+        like "$DIE_MSG" '*Message count * must not * match string *' "Messages without match strings are not valid input"
+
+        ### check_cmd_dmesg() wraps check_cmd_output(), so we don't need to retest the above.
+        export TESTDATA=$'\n\ncheck_cmd_dmesg() Test Data\n\n  dmesg-good1\ndmesg-b@d2 blah blah blah yadda yadda yadda\n\n\t\tmoomoodmesg-bad1moomoo\n'
+        check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2' echo "$TESTDATA"
+        is $? 1 "dmesg data containing 1 good and 1 bad string"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should match default since none was provided"
+
+        check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2' /bin/sh -c 'cat <<< "$TESTDATA"'
+        is $? 1 "dmesg data containing 1 good and 1 bad string"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should match default since none was provided"
+
+        # Make sure that "no messages overridden" cases are handled correctly
+        check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/' echo "$TESTDATA"
+        is $? 1 "dmesg data -- positive presence check fails"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg output failed to match *" "die() message should always match default when none are overridden (#3)"
+        check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '*dmesg-bad1*' -m '!/dmesg-bad2/' echo "$TESTDATA"
+        is $? 1 "dmesg data -- negative presence check fails"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should always match default when none are overridden (#1)"
+
+        # Make sure that "all messages overridden" cases work, even when passed differently
+        check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2' echo "$TESTDATA"
+        is $? 1 "dmesg data -- positive presence check fails"
+        unlike "$DIE_MSG" "check_cmd_dmesg:  dmesg output failed to match *" "die() message should never match default when all are overridden (#3)"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg is BAD2." "die() message should match supplied override value"
+        check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '!*dmesg-bad1*' -m '!/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2' echo "$TESTDATA"
+        is $? 1 "dmesg data -- negative presence check fails"
+        unlike "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should never match default when all are overridden (#1)"
+        like "$DIE_MSG" "check_cmd_dmesg:  dmesg is not GOOD1." "die() message should match supplied override value"
     fi
 
     check_cmd_status -t 1 true

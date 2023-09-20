@@ -17,9 +17,9 @@ function check_cmd_output() {
         case "$OPTION" in
             C) CHECKNAME="$OPTARG" ;;  # Used for writing wrapper checks
             O) OUTPUT_VAR="$OPTARG" ;;  # Used for writing wrapper checks
-            M) MSGS[${#MSGS[*]}]="$OPTARG" ;;  # Used for writing wrapper checks
+            M) MSGS+=( "$OPTARG" ) ;;  # Used for writing wrapper checks
             e) CMD="$OPTARG" ;;
-            m) MATCHES[${#MATCHES[*]}]="$OPTARG" ;;
+            m) MATCHES+=( "$OPTARG" ) ;;
             r) CMD_RETVAL="$OPTARG" ;;
             t) CMD_TIMEOUT="$OPTARG" ;;
             :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
@@ -41,11 +41,14 @@ function check_cmd_output() {
     elif [[ -n "$CMD_TIMEOUT" && $CMD_TIMEOUT -gt $TIMEOUT ]]; then
         die 1 "$CHECKNAME:  Command timeout $CMD_TIMEOUT exceeds NHC timeout $TIMEOUT"
         return 1
+    elif (( ${#MATCHES[*]} < ${#MSGS[*]} )); then
+        die 1 "$CHECKNAME:  Message count ($(( ${#MSGS[*]} / 2 ))) must not exceed match string count ($(( ${#MATCHES[*]} / 2 )))."
+        return 1
     fi
 
     # Initialize a parallel array for tracking which matches have been found.
     for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-        if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
+        if [[ "${MATCHES[$i]:0:1}" == '!' ]]; then
             MATCHED[$i]=1
             ((NEG_MATCH_CNT++))
         else
@@ -74,7 +77,7 @@ function check_cmd_output() {
         # Iterate through $LINES[] array to gather process data.
         for ((LINENUM = 0; LINENUM <= ${#LINES[*]}; LINENUM++)); do
             for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-                if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
+                if [[ "${MATCHES[$i]:0:1}" == '!' ]]; then
                     # Match expression is negated.  Fail if the line matches this expression.
                     if mcheck "${LINES[$LINENUM]}" "${MATCHES[$i]:1}" ; then
                         MSG=${MSGS[$i]:-\"%m\" matched at line %l of \"%c\"}
@@ -85,7 +88,7 @@ function check_cmd_output() {
                         die 1 "$CHECKNAME:  $MSG."
                         return 1
                     fi
-                elif [ ${MATCHED[$i]} -eq 0 ] && mcheck "${LINES[$LINENUM]}" "${MATCHES[$i]}" ; then
+                elif [[ ${MATCHED[$i]} -eq 0 ]] && mcheck "${LINES[$LINENUM]}" "${MATCHES[$i]}" ; then
                     MATCHED[$i]=1
                     ((MATCH_CNT++))
                     if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
@@ -186,15 +189,17 @@ function check_cmd_status() {
 
 # Check dmesg output for matching lines.  Fairly simple wrapper for check_cmd_output() (above).
 function check_cmd_dmesg() {
-    local CMD_TIMEOUT CMD_RETVAL CMD="dmesg"
+    local CMD="" CMD_TIMEOUT CMD_RETVAL OUTVAR
     local -a MATCHES MSGS
+    local -i i
 
     OPTIND=1
-    while getopts ":M:e:m:r:t:" OPTION ; do
+    while getopts ":M:O:e:m:r:t:" OPTION ; do
         case "$OPTION" in
-            M) MSGS[${#MSGS[*]}]=-M ; MSGS[${#MSGS[*]}]="$OPTARG" ;;
+            M) MSGS+=( '-M' "$OPTARG" ) ;;
+            O) OUTVAR="$OPTARG" ;;
             e) CMD="$OPTARG" ;;
-            m) MATCHES[${#MATCHES[*]}]=-m ; MATCHES[${#MATCHES[*]}]="$OPTARG" ;;
+            m) MATCHES+=( '-m' "$OPTARG" ) ;;
             r) CMD_RETVAL="$OPTARG" ;;
             t) CMD_TIMEOUT="$OPTARG" ;;
             :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
@@ -202,6 +207,23 @@ function check_cmd_dmesg() {
         esac
     done
     shift $((OPTIND-1))
+    if [[ -z "$CMD" && $# -eq 0 ]]; then
+        CMD="dmesg"
+    fi
+    if (( (${#MATCHES[*]} % 2 != 0) || (${#MSGS[*]} % 2 != 0)  )); then
+        die 1 "$FUNCNAME:  Internal failure -- Both match string (${#MATCHES[*]}) and message (${#MSGS[*]}) list sizes must be even."
+        return 1
+    fi
 
-    check_cmd_output -C $FUNCNAME ${CMD_RETVAL:+-r $CMD_RETVAL} ${CMD_TIMEOUT:+-t $CMD_TIMEOUT} -e "$CMD" "${MSGS[@]}" "${MATCHES[@]}"
+    for (( i = 1; i < ${#MATCHES[*]}; i += 2 )); do
+        if [[ -z "${MSGS[i]}" ]]; then
+            MSGS[i-1]='-M'
+            if [[ "${MATCHES[$i]:0:1}" == '!' ]]; then
+                MSGS[i]="dmesg output matched \"${MATCHES[$i]:1}\""
+            else
+                MSGS[i]="dmesg output failed to match \"${MATCHES[$i]}\""
+            fi
+        fi
+    done
+    check_cmd_output -C "$FUNCNAME" ${OUTVAR:+-O $OUTVAR} ${CMD_RETVAL:+-r $CMD_RETVAL} ${CMD_TIMEOUT:+-t $CMD_TIMEOUT} ${CMD:+-e "$CMD"} "${MSGS[@]}" "${MATCHES[@]}" "$@"
 }

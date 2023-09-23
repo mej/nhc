@@ -1,0 +1,86 @@
+#!/bin/bash
+##
+# SLURM health check program
+# ulf.tigerstedt@csc.fi 2012
+# johan.guldmyr@csc.fi 2014 # Removed health check stuff and kept only reboot/resume node depending on node state. So that this script can be used with NHC https://github.com/mej/nhc
+#
+# Usage:
+# scontrol update node=ae5 state=drain reason=reboot
+# What happens:
+# When the node is drained slurm reason field is changed to "rebooting" and then it is rebooted.
+# When slurm on the node is back online nhc will on the next run resume the node.
+
+FAILED=0
+ERROR=""
+HOSTNAME=`hostname -s`
+DEBUG=""
+
+STATELINE=`scontrol -o show node $HOSTNAME`
+# Check if this is a SLURM worker node at all
+if [ $? = 1 ] ; then
+	#echo Not a slurm node
+	exit
+fi
+if [ "$1" = "-d" ]; then
+	DEBUG="1"
+fi
+
+check_reboot_slurm() {
+# The name of this function is defined in nhc.conf as a check.
+
+# Mangle the scontrol output into $LABEL=$PARAMETER values
+# Available parameters:
+# NodeName=ae5 Arch=x86_64 CoresPerSocket=6 CPUAlloc=0 CPUErr=0 CPUTot=12 Features=(null) Gres=(null) OS=Linux RealMemory=23000 Sockets=2 State=IDLE ThreadsPerCore=1 TmpDisk=0 Weight=1 BootTime=2012-01-31T17:10:45 SlurmdStartTime=2012-01-31T17:11:23 Reason=(null)
+
+for a in $STATELINE; do
+	LABEL=`echo $a | cut -d = -f 1`
+	PARAMETER=`echo $a | cut -d = -f 2`
+	
+	if [ $LABEL = "Reason" ]; then 
+		REASON=$PARAMETER
+	fi
+	if [ $LABEL = "State" ]; then 
+		STATE=$PARAMETER
+	fi
+done
+if [ -n "$DEBUG" ]; then echo Slurm thinks $HOSTNAME has STATE=$STATE and REASON=$REASON; fi
+
+
+if [ "$REASON" = "rebooting" ]; then
+	if [ "$STATE" = "DOWN+DRAIN" -o "$STATE" = "IDLE+DRAIN" ]; then
+		if [ -n "$DEBUG" ]; then echo Resuming after reboot ; fi
+		scontrol update NodeName=$HOSTNAME state=RESUME
+	fi
+fi
+
+
+if [ "$REASON" = "reboot" -a "$STATE" = "IDLE+DRAIN" ]; then
+	if [ -n "$DEBUG" ]; then echo Rebooting ; fi
+	scontrol update NodeName=$HOSTNAME state=DOWN reason=rebooting
+	sleep 2
+	# stop slurm just in case
+	service slurm stop
+	sleep 2
+	/sbin/reboot 
+	exit
+fi
+if [ "$REASON" = "shutdown" -a "$STATE" = "IDLE+DRAIN" ]; then
+	if [ -n "$DEBUG" ]; then echo Shutting down; fi
+	scontrol update NodeName=$HOSTNAME state=DOWN reason=shutteddown
+	sleep 2
+	# stop slurm just in case
+	service slurm stop
+	sleep 2
+	/sbin/shutdown -h now
+	exit
+fi
+if [ "$REASON" = "shutteddown" ]; then
+	if [ "$STATE" = "DOWN+DRAIN" -o "$STATE" = "IDLE+DRAIN" ]; then
+		if [ -n "$DEBUG" ]; then echo Resuming after shutdown; fi
+		scontrol update NodeName=$HOSTNAME state=RESUME
+	fi
+fi
+
+if [ -n "$DEBUG" ]; then echo Health check done; fi
+
+}

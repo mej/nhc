@@ -48,8 +48,11 @@
 NHC_VERSION="1.5"
 export NHC_VERSION
 
+# TSS (TimeStampSeconds) will remain empty unless TS is activated.
+# See the _out*() functions below for usage.
+TSS=''
 
-### Library functions
+### Output Functions
 
 # Declare a print-error-and-exit function.
 function die() {
@@ -101,72 +104,12 @@ function die() {
     exit $RET
 }
 
-# Quick-and-dirty debugging output
-function dbg() {
-    local PREFIX=""
-
-    if [[ "$DEBUG" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "${PREFIX}DEBUG:  $*"
-    fi
-}
-
-# Quick-and-dirty log output
-function log() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Log output only in VERBOSE mode
-function vlog() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Send information to previous stdout
-function oecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
-# Send information to previous stderr
-function eecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_ERR
-    fi
-}
-
-# Echo only if VERBOSE
-function vecho() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
 # Store syslog output, send at end of script execution.
 function syslog() {
     if [[ -z "$LOGGER_TEXT" ]]; then
         LOGGER_TEXT="$*"
     else
-        LOGGER_TEXT="$LOGGER_TEXT"$'\n'"$*"
+        LOGGER_TEXT+=$'\n'"$*"
     fi
 }
 
@@ -177,7 +120,36 @@ function syslog_flush() {
     LOGGER_TEXT=""
 }
 
-    # Sleep some number of seconds, 100ms at a time, aborting if the PID dies
+function tsup()  { TSS=''; (( TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
+function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >& $2; }
+function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" $'\n' >& $2; }
+function dbg()   { _out  $((DEBUG))    2   "DEBUG:  $@"; }
+function dbgf()  { _outf $((DEBUG))    2   "DEBUG:  $@"; }
+function log()   { _out  $((!SILENT))  1           "$@"; }
+function logf()  { _outf $((!SILENT))  1           "$@"; }
+function vlog()  { _out  $((VERBOSE))  1           "$@"; }
+function vlogf() { _outf $((VERBOSE))  1           "$@"; }
+function out()   { _out  $((!SILENT))  $NHC_FD_OUT "$@"; }
+function outf()  { _outf $((!SILENT))  $NHC_FD_OUT "$@"; }
+function eout()  { _out  $((!SILENT))  $NHC_FD_ERR "$@"; }
+function eoutf() { _outf $((!SILENT))  $NHC_FD_ERR "$@"; }
+function vout()  { _out  $((VERBOSE))  $NHC_FD_OUT "$@"; }
+function voutf() { _outf $((VERBOSE))  $NHC_FD_OUT "$@"; }
+
+# "Aliases" for the original functions that got renamed.
+function oecho() { out "$@"; }
+function eecho() { eout "$@"; }
+function vecho() { vout "$@"; }
+
+# For future use, maybe?
+function err()   { echo "ERROR:  $*" ; } >&2
+function errf()  { printf "ERROR:  $1\n" "${@:2}" ; } >&2
+function warn()  { echo "WARNING:  $*" ; } >&2
+function warnf() { printf "WARNING:  $1\n" "${@:2}" ; } >&2
+
+### Timer utility functions
+
+# Sleep some number of seconds, 100ms at a time, aborting if the PID dies
 function sleep_wait() {
     local -i TLIM=$((${1:-1} * 10)) WPID="${2:-$NHC_PID}" KSIG="${3:-0}"
     local -i i=0

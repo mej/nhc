@@ -89,8 +89,8 @@ plan $((22+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+8)) "common.nhc" && {
     is "${TA[6]}" 'g' "Seventh element of \$TA is now 'g'"
     is "${TA[9]}" 'j' "Last element of \$TA is now 'j'"
 
-    TA=(  ) TS="0:1:2:3:4:5:" S1="" S2="" S3=""
-    array_split ':' "$TS" 'TA'
+    TA=(  ) LST="0:1:2:3:4:5:" S1="" S2="" S3=""
+    array_split ':' "$LST" 'TA'
     is $? 0 "array_split() succeeds on colon-delimited string"
     is "${#TA[*]}" 6 "Test array \$TA should now contain 6 elements"
     is "${TA[0]}" '0' "First element of \$TA is now '0'"

@@ -48,7 +48,7 @@
 NHC_VERSION="1.5"
 export NHC_VERSION
 
-# TSS (TimeStampSeconds) will remain empty unless TS is activated.
+# TSS (TimeStampSeconds) will remain empty unless NHC_TS is activated.
 # See the _out*() functions below for usage.
 TSS=''
 
@@ -178,7 +178,7 @@ function syslog() {
 # "Temporary" wrapper/alias for backward compatibility/just-in-case
 function syslog_flush() { syslog -f "$@"; }
 
-function tsup()  { TSS=''; (( TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
+function tsup()  { TSS=''; (( NHC_TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
 function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >& $2; }
 function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" $'\n' >& $2; }
 function dbg()   { _out  $((DEBUG))    2   "DEBUG:  $@"; }
@@ -440,7 +440,7 @@ function nhcmain_finalize_env() {
     LOGFILE="${LOGFILE:->>/var/log/$NAME.log 2>&1}"
     RESULTFILE="${RESULTFILE:-/var/run/nhc/$NAME.status}"
     DEBUG=${DEBUG:-0}
-    TS=${TS:-$DEBUG}
+    NHC_TS=${NHC_TS:-$DEBUG}
     SILENT=${SILENT:-0}
     VERBOSE=${VERBOSE:-0}
     MARK_OFFLINE=${MARK_OFFLINE:-1}
@@ -528,17 +528,19 @@ function nhcmain_finalize_env() {
     fi
 
     # If timestamps are desired, initialize them here.
-    if [[ $TS -ne 0 ]]; then
+    if [[ $NHC_TS -ne 0 ]]; then
         if (( BASHVER >= 42 )); then
             # BASH 4.2 and higher don't require executing the `date` command.
             # FIXME:  Remove this "if" once 4.2 becomes required.
-            printf -v TS '%(%s)T' -1
+            printf -v NHC_TS '%(%s)T' -1
         else
-            TS=$(date '+%s')
+            NHC_TS=$(date '+%s')
         fi
         ELAPSED_SECONDS=$SECONDS
-        SECONDS=$((ELAPSED_SECONDS+TS))
-        NHC_START_TS=$((TS-ELAPSED_SECONDS))
+        SECONDS=$((ELAPSED_SECONDS+NHC_TS))
+        NHC_START_TS=$((NHC_TS-ELAPSED_SECONDS))
+    else
+        NHC_TS=''
     fi
 
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -549,7 +551,7 @@ function nhcmain_finalize_env() {
         return
     fi
 
-    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG TS SILENT TIMEOUT NHC_RM
+    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG NHC_TS SILENT TIMEOUT NHC_RM
 }
 
 function nhcmain_find_rm() {

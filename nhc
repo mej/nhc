@@ -54,40 +54,84 @@ TSS=''
 
 ### Output Functions
 
+# Convert standard `die()` message to JSON object
+function jsonify() {
+    local VARNAME="$1" MSG="${*:3}"
+    local -a BOOL=( [0]='true' [1]='false' )
+    local -i RC=$2
+
+    # CURRENT SCHEMA:
+    # { "progname": "nhc", "context": "$NAME", "tag": "$SYSLOG_TAG",
+    #   "exitcode": $RC, "healthy": <true/false>, "message": "$MSG" }
+
+    # Objectify the current NHC data we need to log.
+    printf -v "$VARNAME" '{"progname":"%s","context":"%s","tag":"%s","exitcode":"%d","healthy":"%s","message":"%s"}' \
+                          'nhc' "$NAME" "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" \
+                          $RC ${BOOL[(RC == 0) ? (0) : (1)]} "$MSG"
+}
 # Declare a print-error-and-exit function.
 function die() {
-    IFS=$' \t\n'
-    local RET="$1"
-    shift
+    local BASE MSG RET
+    local LEADER='Health check failed: '     # FIXME:  Config variable?
 
+    IFS=$' \t\n'
+    if [[ -n "$1" && "$1" == +([0-9]) ]]; then
+        RET="$1"
+        shift
+    else
+        RET=1
+    fi
     CHECK_DIED=1
-    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $*"
-    log "ERROR:  $NAME:  Health check failed:  $*"
-    syslog -f "Health check failed:  $*"
-    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
+
+    # Perform log and syslog output, in either plaintext or JSON, juggling the message appropriately(?)
+    # FIXME:  This'll be a hell of a lot cleaner after the "output overhaul"
+    if [[ $# -gt 0 ]]; then
+        BASE="$*"
+    else
+        BASE="'${CHECK:-${FUNCNAME[1]:-${FUNCNAME[0]}}}' ${1:+'$*' }"
+    fi
+    MSG="$LEADER $BASE"
+    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $MSG"
+
+    if (( NHC_FMT_JSON )); then
+        jsonify 'MSG' "$RET" "$MSG"
+    fi
+    syslog -f "$MSG"
+    MSG="ERROR:  $NAME:  $MSG"
+    if (( NHC_FMT_JSON )); then
+        jsonify 'MSG' "$RET" "$MSG"
+    fi
+    log "$MSG"
+
+    # Reset message
+    MSG="$LEADER $BASE"
+
+    # If the configuration settings and node status warrant it, offline the node.
+    if [[ -n "$NHC_RM" && "$NHC_RM" != 'none' && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         if [[ "${CHECK:0:4}" == "die " ]]; then
-            CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
-            ($OFFLINE_NODE "$HOSTNAME" "$@")
-            CHECK="$FUNCNAME $*"
+            CHECK="$OFFLINE_NODE '$HOSTNAME' '$MSG'"
+            ($OFFLINE_NODE "$HOSTNAME" "$MSG")
+            CHECK="$FUNCNAME $MSG"
         else
-            ($OFFLINE_NODE "$HOSTNAME" "$@")
+            ($OFFLINE_NODE "$HOSTNAME" "$MSG")
         fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         if [[ -w "$RESULTFILE" || (! -e "$RESULTFILE" && -w "${RESULTFILE%/*}") ]] && echo "$RET $*" > $RESULTFILE ; then
             dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
-            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            syslog -f "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            MSG="ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            log "$MSG"
+            syslog -f "$MSG"
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:false" >&$NHC_FD_OUT
-        echo "$HOSTNAME:diagnosis:NHC: $*" >&$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:NHC: $MSG" >&$NHC_FD_OUT
         echo "end" >&$NHC_FD_OUT
         return 77
     elif [[ -n "$LOGFILE" ]]; then
-        oecho "ERROR:  $NAME:  Health check failed:  $*"
+        oecho "ERROR:  $NAME:  $MSG"
     fi
     if [[ "$NHC_CHECK_ALL" == "1" ]]; then
         ((FAIL_CNT++))
@@ -131,7 +175,7 @@ function syslog() {
     fi
     return $RC
 }
-# "Temporary" wrapper/alias for backward compatibility
+# "Temporary" wrapper/alias for backward compatibility/just-in-case
 function syslog_flush() { syslog -f "$@"; }
 
 function tsup()  { TSS=''; (( TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
@@ -150,7 +194,7 @@ function eoutf() { _outf $((!SILENT))  $NHC_FD_ERR "$@"; }
 function vout()  { _out  $((VERBOSE))  $NHC_FD_OUT "$@"; }
 function voutf() { _outf $((VERBOSE))  $NHC_FD_OUT "$@"; }
 
-# "Aliases" for the original functions that got renamed.
+# "Aliases" (wrappers) for the original functions that got renamed.
 function oecho() { out "$@"; }
 function eecho() { eout "$@"; }
 function vecho() { vout "$@"; }

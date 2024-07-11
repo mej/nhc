@@ -379,8 +379,8 @@ function nhcmain_load_sysconfig() {
     # Load settings from system-wide location.  NOTE:  To change value of $NAME
     # here, the driver script must be renamed to something other than "nhc"
     # or "-n foo" or "NAME=foo" must be passed on the command line.
-    if [[ -f $SYSCONFIGDIR/$NAME ]]; then
-        . $SYSCONFIGDIR/$NAME
+    if [[ -f $SYSCONFIGDIR/nhc ]]; then
+        . $SYSCONFIGDIR/nhc
     fi
 }
 
@@ -869,8 +869,8 @@ trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
 trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 142' 14
 
 nhcmain_init_env
-nhcmain_parse_cmdline "${NHC_ARGS_LIST[@]}" || exit 10
 nhcmain_load_sysconfig
+nhcmain_parse_cmdline "${NHC_ARGS_LIST[@]}" || exit 10
 nhcmain_finalize_env
 if [[ -n "$EVAL_LINE" ]]; then
     nhcmain_load_scripts

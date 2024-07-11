@@ -48,8 +48,11 @@
 NHC_VERSION="1.5"
 export NHC_VERSION
 
+# TSS (TimeStampSeconds) will remain empty unless TS is activated.
+# See the _out*() functions below for usage.
+TSS=''
 
-### Library functions
+### Output Functions
 
 # Declare a print-error-and-exit function.
 function die() {
@@ -60,8 +63,7 @@ function die() {
     CHECK_DIED=1
     [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $*"
     log "ERROR:  $NAME:  Health check failed:  $*"
-    syslog "Health check failed:  $*"
-    syslog_flush
+    syslog -f "Health check failed:  $*"
     if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         if [[ "${CHECK:0:4}" == "die " ]]; then
             CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
@@ -76,8 +78,7 @@ function die() {
             dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
             log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            syslog_flush
+            syslog -f "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
@@ -101,83 +102,68 @@ function die() {
     exit $RET
 }
 
-# Quick-and-dirty debugging output
-function dbg() {
-    local PREFIX=""
-
-    if [[ "$DEBUG" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "${PREFIX}DEBUG:  $*"
-    fi
-}
-
-# Quick-and-dirty log output
-function log() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Log output only in VERBOSE mode
-function vlog() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Send information to previous stdout
-function oecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
-# Send information to previous stderr
-function eecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_ERR
-    fi
-}
-
-# Echo only if VERBOSE
-function vecho() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
 # Store syslog output, send at end of script execution.
 function syslog() {
-    if [[ -z "$LOGGER_TEXT" ]]; then
-        LOGGER_TEXT="$*"
-    else
-        LOGGER_TEXT="$LOGGER_TEXT"$'\n'"$*"
-    fi
-}
+    local MSG="$*"
+    local -i FLUSH=0 RC=0
 
-function syslog_flush() {
-    if (( ${#LOGGER_TEXT} > 0 )); then
-        $SYSLOG_CMD "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" <<< "$LOGGER_TEXT"
+    # For now, there's no point using `getopts`; this is far simpler!
+    if [[ "$1" == "-f" ]]; then
+        (( FLUSH++ ))
+        shift
+        MSG="$*"
     fi
-    LOGGER_TEXT=""
-}
 
-    # Sleep some number of seconds, 100ms at a time, aborting if the PID dies
+    if [[ $# -gt 0 ]]; then
+        # Only output something if there's something to output.
+        if [[ -z "$LOGGER_TEXT" ]]; then
+            LOGGER_TEXT="$*"
+        else
+            LOGGER_TEXT+=$'\n'"$*"
+        fi
+    fi
+    if (( FLUSH )); then
+        if (( ${#LOGGER_TEXT} > 0 )); then
+            $SYSLOG_CMD "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" <<< "$LOGGER_TEXT"
+            RC=$?
+        fi
+        LOGGER_TEXT=''
+    fi
+    return $RC
+}
+# "Temporary" wrapper/alias for backward compatibility
+function syslog_flush() { syslog -f "$@"; }
+
+function tsup()  { TSS=''; (( TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
+function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >& $2; }
+function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" $'\n' >& $2; }
+function dbg()   { _out  $((DEBUG))    2   "DEBUG:  $@"; }
+function dbgf()  { _outf $((DEBUG))    2   "DEBUG:  $@"; }
+function log()   { _out  $((!SILENT))  1           "$@"; }
+function logf()  { _outf $((!SILENT))  1           "$@"; }
+function vlog()  { _out  $((VERBOSE))  1           "$@"; }
+function vlogf() { _outf $((VERBOSE))  1           "$@"; }
+function out()   { _out  $((!SILENT))  $NHC_FD_OUT "$@"; }
+function outf()  { _outf $((!SILENT))  $NHC_FD_OUT "$@"; }
+function eout()  { _out  $((!SILENT))  $NHC_FD_ERR "$@"; }
+function eoutf() { _outf $((!SILENT))  $NHC_FD_ERR "$@"; }
+function vout()  { _out  $((VERBOSE))  $NHC_FD_OUT "$@"; }
+function voutf() { _outf $((VERBOSE))  $NHC_FD_OUT "$@"; }
+
+# "Aliases" for the original functions that got renamed.
+function oecho() { out "$@"; }
+function eecho() { eout "$@"; }
+function vecho() { vout "$@"; }
+
+# For future use, maybe?
+function err()   { echo "ERROR:  $*" ; } >&2
+function errf()  { printf "ERROR:  $1\n" "${@:2}" ; } >&2
+function warn()  { echo "WARNING:  $*" ; } >&2
+function warnf() { printf "WARNING:  $1\n" "${@:2}" ; } >&2
+
+### Timer utility functions
+
+# Sleep some number of seconds, 100ms at a time, aborting if the PID dies
 function sleep_wait() {
     local -i TLIM=$((${1:-1} * 10)) WPID="${2:-$NHC_PID}" KSIG="${3:-0}"
     local -i i=0
@@ -563,8 +549,7 @@ function nhcmain_redirect_output() {
         if [[ $? -ne 0 ]]; then
             exec 1>&3- 2>&4-
             echo "ERROR NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
-            syslog "NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
-            syslog_flush
+            syslog -f "NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
             exit 1
         else
             dbg "Output redirected per LOGFILE variable $LOGFILE"
@@ -770,7 +755,7 @@ function nhcmain_detach() {
         set +m
     fi
 
-    syslog_flush
+    syslog -f
     if [[ "$RC" != "0" ]]; then
         echo "ERROR Health check failed:  $MSG"
         exit $RC
@@ -831,9 +816,8 @@ function nhcmain_run_checks() {
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
         log "ERROR:  $NAME:  $FAIL_CNT health checks failed."
-        syslog "$FAIL_CNT health checks failed."
+        syslog -f "$FAIL_CNT health checks failed."
         [[ -n "$LOGFILE" ]] && oecho "ERROR:  $NAME:  $FAIL_CNT health checks failed."
-        syslog_flush
         kill_watchdog
         exit $FAIL_CNT
     fi
@@ -851,8 +835,7 @@ function nhcmain_finish() {
 
     MSG="Node Health Check completed successfully; ${#CHECKS[*]} passed in $ELAPSED second(s)."
     vlog "$MSG"
-    syslog "$MSG"
-    syslog_flush
+    syslog -f "$MSG"
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:true" >&$NHC_FD_OUT

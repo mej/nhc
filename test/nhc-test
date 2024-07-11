@@ -24,7 +24,6 @@ function test_nhc_driver() {
     function dbg() { :; }
     function log() { :; }
     function syslog() { :; }
-    function syslog_flush() { :; }
 
     # Initialize standard environment.
     nhcmain_init_env

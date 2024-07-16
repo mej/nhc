@@ -208,11 +208,11 @@ function test_checks() {
     for CHECKTEST in "${TEST_SCRIPTS[@]}" ; do
         if [[ ! -s "$CHECKTEST" ]]; then
             continue
-        elif [[ $- == *x* ]]; then
-            ### FIXME:  Should this be more generic?  Look for *[<>]'('* maybe?
-            if [[ "$CHECKTEST" == *'test_lbnl_file'* ]]; then
-                continue
-            fi
+        ### FIXME:  Should this be removed altogether?
+        #elif [[ $- == *x* ]]; then
+        #    if [[ "$CHECKTEST" == *'test_lbnl_file'* ]]; then
+        #        : FIXME DO NOT continue
+        #    fi
         fi
         . $CHECKTEST
         unplan

@@ -13,9 +13,20 @@ STAT_FMT_STR=''
 STAT_FMT_FIELDS_DEFAULT=( perm blocks blksize devno mode gid group nlinks inode mntpnt realname size major minor uid user btime atime mtime ctime )
 STAT_FMT_FIELDS=( )
 if [[ "${OSTYPE,,}" == *'linux'* ]]; then
-    # Only default to requesting SELinux context data on Linux.
-    STAT_FMT_STR_DEFAULT+=$'\f%C'
-    STAT_FMT_FIELDS_DEFAULT+=( context )
+    if [[ -s "/etc/selinux/config" ]]; then
+        source "/etc/selinux/config"
+    elif selinuxenabled; then
+        SELINUX=enforcing
+    else
+        ### FIXME:  What else?
+        SELINUX=''
+    fi
+
+    if [[ -n "$SELINUX" && "$SELINUX" != 'disabled' ]]; then
+        # Only default to requesting SELinux context data on SELinux-enabled Linux hosts.
+        STAT_FMT_STR_DEFAULT+=$'\f%C'
+        STAT_FMT_FIELDS_DEFAULT+=( context )
+    fi
 fi
 NHC_STAT_FILES=( )
 

@@ -48,6 +48,9 @@
 NHC_VERSION="1.5"
 export NHC_VERSION
 
+# Count how many times `-V` flag was specified
+typeset -i NHC_OPT_VERINFO=0
+
 # TSS (TimeStampSeconds) will remain empty unless NHC_TS is activated.
 # See the _out*() functions below for usage.
 TSS=''
@@ -273,6 +276,35 @@ function toggle_debug_mode() {
 
 #########################
 
+function nhcmain_version_info() {
+    local -i VERINFO=${1:-${NHC_OPT_VERINFO:-0}}
+    local NM=''
+
+    if (( VERINFO == 0 )); then
+        # Display nothing; just return successfully.
+        return 0
+    fi
+    # Display the version string for all values >= 1.  Eliminating redundant code for the win!
+    printf 'LBNL NHC version %s\n' $NHC_VERSION
+    if (( VERINFO == 1 )); then
+        # Display only the version itself; return successfully.
+        return 0
+    fi
+
+    if (( VERINFO >= 2 )); then
+        if [[ "$NAME" == 'nhc' ]]; then
+            NM="$NAME"
+        else
+            NM="${BASH_SOURCE[0]##?(*/)?(-)}(${NAME})"
+        fi
+        # For now, this is the only other value supported...but that may not always be the case.  So while this
+        # particular `if` statement seems superfluous at the moment, it actually does serve a purpose.
+        printf '\n  Runtime Status:  %s as %s:%s (from %s:%s) with %d groups\n' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
+        printf   'Interpreter Info:  %s-%s for %s %s on host %s (%s)\n' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE"
+    fi
+    return 0
+}
+
 function nhcmain_init_env() {
     ### Variable declarations
 
@@ -337,6 +369,8 @@ function nhcmain_init_env() {
     # Disable pathname expansion by default so no unintended globbing happens.
     # We'll turn it back on only where, and only for as long as, we need it.
     set -f
+    # Activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
+    shopt -s extglob 2>/dev/null
 }
 
 function nhcmain_help() {
@@ -358,6 +392,7 @@ $UNDERLINE
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
  -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
+ -V                Display NHC version ("-VV" for more verbosity) and exit
  -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
@@ -392,9 +427,10 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:ac:de:fhl:n:qt:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhl:n:qt:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
@@ -463,6 +499,12 @@ function nhcmain_finalize_env() {
     fi
     SYSLOG_CMD="${SYSLOG_CMD:-logger ${SYSLOG_PRIO:+-p ${SYSLOG_PRIO} }${SYSLOG_SIZE:+-S ${SYSLOG_SIZE} }-t}"
 
+    # Display version info if requested.
+    if (( NHC_OPT_VERINFO > 0 )); then
+        nhcmain_version_info $NHC_OPT_VERINFO
+        exit 0
+    fi
+
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
@@ -476,9 +518,9 @@ function nhcmain_finalize_env() {
     elif [[ "$FORCE_SETSID" == "1" && -z "$NHC_LOAD_ONLY" ]]; then
         # We are not yet a session leader, but we haven't tried setsid.  Try now.
         dbg "NHC process $NHC_PID is not session leader."
-        dbg "Restarting via setsid:  setsid $0 ${NHC_ARGS_LIST[*]} FORCE_SETSID=0"
+        dbg "Restarting via setsid:  setsid ${NHC_ARGV[*]} FORCE_SETSID=0"
         export NHC_FORCED_SESSION=$NHC_PID
-        exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
+        exec setsid "${NHC_ARGV[@]}" "FORCE_SETSID=0"
     fi
 
     if [[ -n "$EVAL_LINE" ]]; then
@@ -901,7 +943,7 @@ function nhcmain_finish() {
 
 ### Script guts begin here.
 declare -irx BASHVER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"
-declare -a NHC_ARGS_LIST=( "$@" )
+declare -a NHC_ARGV=( "$0" "$@" )
 if [[ -n "$NHC_LOAD_ONLY" ]]; then
     # We're only supposed to define functions, not actually run anything.
     return 0 || exit 0
@@ -916,7 +958,7 @@ trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 14
 
 nhcmain_init_env
 nhcmain_load_sysconfig
-nhcmain_parse_cmdline "${NHC_ARGS_LIST[@]}" || exit 10
+nhcmain_parse_cmdline "${NHC_ARGV[@]:1}" || exit 10
 nhcmain_finalize_env
 if [[ -n "$EVAL_LINE" ]]; then
     nhcmain_load_scripts
@@ -939,11 +981,10 @@ if [[ "$NHC_RM" == "sge" ]]; then
     if nhcmain_run_checks ; then
         nhcmain_finish
     fi
-    if [[ "${NHC_ARGS_LIST[*]}" == *NHC_RM=sge* ]]; then
-        exec $0 "${NHC_ARGS_LIST[@]}"
-    else
-        exec $0 "${NHC_ARGS_LIST[@]}" NHC_RM=sge
+    if [[ "${NHC_ARGV[*]}" != *NHC_RM=sge* ]]; then
+        NHC_ARGV+=( 'NHC_RM=sge' )
     fi
+    exec $0 "${NHC_ARGV[@]}"
 else
     nhcmain_load_scripts
     nhcmain_set_watchdog

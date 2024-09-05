@@ -141,11 +141,6 @@ function str_clean() {
     local CCHAR='#' OUTVAR="" SNAME="" STR="" WS=$' \t\f\n\r\v'
     local -i OUT=0 RM_COMMENTS=0 MERGE_WS=0 SAVE_EG=0 TRIM_LEAD=0 TRIM_TRAIL=0
 
-    # Turn on extended globbing, but save its prior value
-    shopt -q extglob
-    SAVE_EG=$?
-    shopt -s extglob
-
     OPTIND=1
     while getopts ":12C:OW:clmo:s:tw" OPTION ; do
         case "$OPTION" in
@@ -191,10 +186,6 @@ function str_clean() {
     fi
     if [[ -n "$OUTVAR" ]]; then
         eval "$OUTVAR"'="$STR"'
-    fi
-
-    if [[ $SAVE_EG -ne 0 ]]; then
-        shopt -u extglob
     fi
     return 0
 }

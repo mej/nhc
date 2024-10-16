@@ -276,7 +276,7 @@ function check_file_stat() {
             die 1 "$FUNCNAME:  stat($FNAME) returned $RC:  $MSG"
             return 1
         fi
-        dbg "nhc_file_stat() returned record index #${IDX} for $FNAME (${NHC_STAT_FILES[IDX]} => ${NHC_STAT_REALNAME[IDX]})\n"
+        dbg "nhc_file_stat() returned record index #${IDX} for $FNAME (${NHC_STAT_FILES[IDX]} => ${NHC_STAT_REALNAME[IDX]})"
 
         if [[ -n "$BTIME_NEWER" ]]; then
             if [[ -z "${NHC_STAT_BTIME[$IDX]}" ]]; then

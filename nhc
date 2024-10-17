@@ -55,8 +55,17 @@ typeset -i NHC_OPT_VERINFO=0
 # See the _out*() functions below for usage.
 TSS=''
 
-### Output Functions
+# List/Hash Constants that help streamline/simplify output generation.
+readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
+    NHC_BOOL_CLANG=( [0]='false' [1]='true' ) \
+    NHC_BOOL_YESNO=( [0]='no' [1]='yes' ) \
+    NHC_BOOL_ONOFF=( [0]='off' [1]='on' ) \
+    NHC_BOOL_ISNOT=( [0]='not ' [1]='' ) \
+    NHC_BOOL_ISN_T=( [0]="isn't" [1]='is' ) \
+    NHC_BOOL_ARENT=( [0]="aren't" [1]='are' )
 
+
+### Output Functions
 # Convert standard `die()` message to JSON object
 function jsonify() {
     local VARNAME="$1" MSG="${*:3}"
@@ -280,28 +289,51 @@ function nhcmain_version_info() {
     local -i VERINFO=${1:-${NHC_OPT_VERINFO:-0}}
     local NM=''
 
-    if (( VERINFO == 0 )); then
-        # Display nothing; just return successfully.
-        return 0
-    fi
-    # Display the version string for all values >= 1.  Eliminating redundant code for the win!
-    printf 'LBNL NHC version %s\n' $NHC_VERSION
-    if (( VERINFO == 1 )); then
-        # Display only the version itself; return successfully.
-        return 0
+    if (( VERINFO >= 1 )); then
+        printf 'LBNL NHC version %s\n' $NHC_VERSION
     fi
 
     if (( VERINFO >= 2 )); then
+        # Any transforms or other shenanigans required to facilitate the stuff below...
         if [[ "$NAME" == 'nhc' ]]; then
             NM="$NAME"
         else
             NM="${BASH_SOURCE[0]##?(*/)?(-)}(${NAME})"
         fi
-        # For now, this is the only other value supported...but that may not always be the case.  So while this
-        # particular `if` statement seems superfluous at the moment, it actually does serve a purpose.
-        printf '\n  Runtime Status:  %s as %s:%s (from %s:%s) with %d groups\n' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
-        printf   'Interpreter Info:  %s-%s for %s %s on host %s (%s)\n' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE"
+        echo
+
+        # Not sure exactly how to label this; "runtime status" seems good enough for now, but future additions may necessitate a change.
+        printf '%20s  %s running as %s:%s (from %s:%s) with %d groups\n' \
+                'Runtime Status:' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
+        printf '%20s  %s-%s for %s %s on host %s (%s) - Level %d, Subs %d, Depth %d\n' \
+                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE" \
+                "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))
     fi
+
+    if (( VERINFO >= 3 )); then
+        # Any transforms or other shenanigans required to facilitate the stuff below...
+        if (( DETACHED_MODE == 0 )); then
+            unset DETACHED_MODE
+        fi
+        echo
+
+        printf '%20s  Host %s (%s)  RM "%s"  LIBEXECDIR="%s" SYSCONFIGDIR="%s"  MAX_SYS_UID=%d\n' \
+                "System Setup:" "$HOSTNAME_S" "$HOSTNAME" "$NHC_RM" "$LIBEXECDIR" "$SYSCONFIGDIR" "$MAX_SYS_UID"
+        printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s"\n' \
+                "Package Setup:" "$CONFDIR" "$HELPERDIR" "$INCDIR"
+        printf '%20s  Context "%s" Config "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
+                "Invocation Details:" "$NAME" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
+                "${NHC_BOOL_ONOFF[${#DETACHED_MODE}]^^}" "${NHC_DETACHED:+ (from $NHC_DETACHED)}" \
+                "${DETACHED_MODE:+, data ${NHC_BOOL_ISNOT[DETACHED_MODE_FAIL_NODATA]}required}"
+        printf '%20s  LOGFILE="%s" RESULTFILE="%s"\n' \
+                "Results/Reporting:" "$LOGFILE" "$RESULTFILE"
+        printf '%20s  SYSLOG_CMD="%s" SYSLOG_IDENT="%s" SYSLOG_TAG="%s"\n' \
+                "System Logging:" "$SYSLOG_CMD" "$SYSLOG_IDENT" "$SYSLOG_TAG"
+        printf '%20s  ALL=%s FORKED=%s  SID %d (%sforced)  MARK_OFFLINE=%s ONLINE_NODE="%s" OFFLINE_NODE="%s"\n' \
+                "Check Handling:" "$NHC_CHECK_ALL" "$NHC_CHECK_FORKED" "$NHC_SID" \
+                "${NHC_BOOL_ISNOT[(NHC_FORCED_SESSION == 0 ? 0 : 1)]}" "$MARK_OFFLINE" "$ONLINE_NODE" "$OFFLINE_NODE"
+    fi
+
     return 0
 }
 
@@ -347,6 +379,7 @@ function nhcmain_init_env() {
     NHC_WATCHDOG=0
     FAIL_CNT=0
     FORCE_SETSID=1
+    NHC_FORCED_SESSION=0
     NHC_FD_OUT=1
     NHC_FD_ERR=2
     export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
@@ -499,19 +532,13 @@ function nhcmain_finalize_env() {
     fi
     SYSLOG_CMD="${SYSLOG_CMD:-logger ${SYSLOG_PRIO:+-p ${SYSLOG_PRIO} }${SYSLOG_SIZE:+-S ${SYSLOG_SIZE} }-t}"
 
-    # Display version info if requested.
-    if (( NHC_OPT_VERINFO > 0 )); then
-        nhcmain_version_info $NHC_OPT_VERINFO
-        exit 0
-    fi
-
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         # We're already a session leader, possibly after setsid, possibly not.
         dbg "NHC process $NHC_PID is session leader."
         NHC_SID=-$NHC_PID
-    elif [[ -n "$NHC_FORCED_SESSION" && "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
+    elif [[ "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
         # We tried to become a session leader via setsid.  Apparently we failed.
         # Don't try again since that would create an infinite loop.
         dbg "NHC failed to become session leader."
@@ -519,8 +546,7 @@ function nhcmain_finalize_env() {
         # We are not yet a session leader, but we haven't tried setsid.  Try now.
         dbg "NHC process $NHC_PID is not session leader."
         dbg "Restarting via setsid:  setsid ${NHC_ARGV[*]} FORCE_SETSID=0"
-        export NHC_FORCED_SESSION=$NHC_PID
-        exec setsid "${NHC_ARGV[@]}" "FORCE_SETSID=0"
+        exec setsid "${NHC_ARGV[@]}" "FORCE_SETSID=0" "NHC_FORCED_SESSION=$NHC_PID"
     fi
 
     if [[ -n "$EVAL_LINE" ]]; then
@@ -583,6 +609,12 @@ function nhcmain_finalize_env() {
         NHC_START_TS=$((NHC_TS-ELAPSED_SECONDS))
     else
         NHC_TS=''
+    fi
+
+    # Display version info if requested, possibly including display of final config.
+    if (( NHC_OPT_VERINFO > 0 )); then
+        nhcmain_version_info $NHC_OPT_VERINFO
+        exit 0
     fi
 
     if [[ -n "$NHC_DETACHED" ]]; then

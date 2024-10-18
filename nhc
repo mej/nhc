@@ -68,22 +68,34 @@ readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
 ### Output Functions
 # Convert standard `die()` message to JSON object
 function jsonify() {
-    local VARNAME="$1" MSG="${*:3}"
-    local -a BOOL=( [0]='true' [1]='false' )
+    local VARNAME="$1" _JSON_MSG="${*:3}"
     local -i RC=$2
+    #local VARNAME="$1" MSGTYPE="$2" _JSON_MSG="${*:4}"
+    #local -i RC=$3
 
     # CURRENT SCHEMA:
-    # { "progname": "nhc", "context": "$NAME", "tag": "$SYSLOG_TAG",
-    #   "exitcode": $RC, "healthy": <true/false>, "message": "$MSG" }
+    # { "objtype": "message.nhc", "msgtype": { "result.check" | "result.run" | "err.check" | "err.internal" },  ?????
+    #   "progname": "nhc", "context": "$NAME", "tag": "$SYSLOG_TAG",
+    #   "exitcode": $RC, "healthy": <true/false>, "message": "$_JSON_MSG" }
 
     # Objectify the current NHC data we need to log.
+    #printf -v "$VARNAME" '{"objtype":"%s","msgtype":"%s","progname":"%s","context":"%s","tag":"%s","exitcode":"%d","healthy":"%s","message":"%s"}' \
+    #                      'message.nhc' "$MSGTYPE" 'nhc' "$NAME" "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" \
+    #                      $RC ${NHC_BOOL_SHELL[(RC == 0) ? (0) : (1)]} "${_JSON_MSG//\"/\\\"}"
     printf -v "$VARNAME" '{"progname":"%s","context":"%s","tag":"%s","exitcode":"%d","healthy":"%s","message":"%s"}' \
                           'nhc' "$NAME" "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" \
-                          $RC ${BOOL[(RC == 0) ? (0) : (1)]} "$MSG"
+                          $RC ${NHC_BOOL_SHELL[(RC == 0) ? (0) : (1)]} "${_JSON_MSG//\"/\\\"}"
 }
-# Declare a print-error-and-exit function.
+# die() is the core function that handles check failure and fatal signals.  Except for "check-all" runs (e.g., `nhc -a`), die()
+# will ultimately terminate the NHC process.  (Unit tests don't use this version of die(), so they don't count.)  The first
+# argument, the "exit code," will almost always be 1 when called due to check failure; currently, there are only a couple
+# exceptions to this (check_cmd_output() and check_file_contents(), both for the same reason -- abnormal/"impossible" parser
+# termination), and even those two cases are being reconsidered.
+#
+# The first argument is "optional;" if it is present and looks like an integer, it is used as the exit code, and the value of `1`
+# is the default if it's empty or not a positive integer.  The remainder of the arguments are used to generate the message.
 function die() {
-    local BASE MSG RET
+    local BASE _DIE_MSG RET
     local LEADER='Health check failed: '     # FIXME:  Config variable?
 
     IFS=$' \t\n'
@@ -95,6 +107,10 @@ function die() {
     fi
     CHECK_DIED=1
 
+    # If we don't know which check was running, or we weren't running a check at all, `"die "` is prepended to the message.
+    # This is a special case that is handled below.
+    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $_DIE_MSG"
+
     # Perform log and syslog output, in either plaintext or JSON, juggling the message appropriately(?)
     # FIXME:  This'll be a hell of a lot cleaner after the "output overhaul"
     if [[ $# -gt 0 ]]; then
@@ -102,48 +118,45 @@ function die() {
     else
         BASE="'${CHECK:-${FUNCNAME[1]:-${FUNCNAME[0]}}}' ${1:+'$*' }"
     fi
-    MSG="$LEADER $BASE"
-    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $MSG"
-
+    _DIE_MSG="$LEADER $BASE"
+    log "$_DIE_MSG"
     if (( NHC_FMT_JSON )); then
-        jsonify 'MSG' "$RET" "$MSG"
+        jsonify '_DIE_MSG' "$RET" "$BASE"
+        syslog -f "$_DIE_MSG"
+        _DIE_MSG="$LEADER $BASE"
+    else
+        syslog -f "$_DIE_MSG"
     fi
-    syslog -f "$MSG"
-    MSG="ERROR:  $NAME:  $MSG"
-    if (( NHC_FMT_JSON )); then
-        jsonify 'MSG' "$RET" "$MSG"
-    fi
-    log "$MSG"
-
-    # Reset message
-    MSG="$LEADER $BASE"
 
     # If the configuration settings and node status warrant it, offline the node.
     if [[ -n "$NHC_RM" && "$NHC_RM" != 'none' && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         if [[ "${CHECK:0:4}" == "die " ]]; then
-            CHECK="$OFFLINE_NODE '$HOSTNAME' '$MSG'"
-            ($OFFLINE_NODE "$HOSTNAME" "$MSG")
-            CHECK="$FUNCNAME $MSG"
+            CHECK="$OFFLINE_NODE '$HOSTNAME' '$_DIE_MSG'"
+            ($OFFLINE_NODE "$HOSTNAME" "$_DIE_MSG")
+            CHECK="$FUNCNAME $_DIE_MSG"
         else
-            ($OFFLINE_NODE "$HOSTNAME" "$MSG")
+            ($OFFLINE_NODE "$HOSTNAME" "$_DIE_MSG")
         fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         if [[ -w "$RESULTFILE" || (! -e "$RESULTFILE" && -w "${RESULTFILE%/*}") ]] && echo "$RET $*" > $RESULTFILE ; then
             dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
-            MSG="ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            log "$MSG"
-            syslog -f "$MSG"
+            _DIE_MSG="Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            log "ERROR:  $NAME:  $_DIE_MSG"
+            if (( NHC_FMT_JSON )); then
+                jsonify '_DIE_MSG' 100 "$_DIE_MSG"
+            fi
+            syslog -f "$_DIE_MSG"
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:false" >&$NHC_FD_OUT
-        echo "$HOSTNAME:diagnosis:NHC: $MSG" >&$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:NHC: $_DIE_MSG" >&$NHC_FD_OUT
         echo "end" >&$NHC_FD_OUT
         return 77
     elif [[ -n "$LOGFILE" ]]; then
-        oecho "ERROR:  $NAME:  $MSG"
+        oecho "ERROR:  $NAME:  $_DIE_MSG"
     fi
     if [[ "$NHC_CHECK_ALL" == "1" ]]; then
         ((FAIL_CNT++))
@@ -160,14 +173,14 @@ function die() {
 
 # Store syslog output, send at end of script execution.
 function syslog() {
-    local MSG="$*"
+    local _SYSLOG_MSG="$*"
     local -i FLUSH=0 RC=0
 
     # For now, there's no point using `getopts`; this is far simpler!
     if [[ "$1" == "-f" ]]; then
         (( FLUSH++ ))
         shift
-        MSG="$*"
+        _SYSLOG_MSG="$*"
     fi
 
     if [[ $# -gt 0 ]]; then
@@ -460,7 +473,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:Vac:de:fhl:n:qt:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhjl:n:qt:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
@@ -470,6 +483,7 @@ function nhcmain_parse_cmdline() {
             e) EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
             f) NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
             h) nhcmain_help ; exit 0 ;;
+            j) NHC_FMT_JSON=1 ; dbg "Syslog messages will be generated in JSON." ;;
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
@@ -518,6 +532,7 @@ function nhcmain_finalize_env() {
     TIMEOUT=${TIMEOUT:-30}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
+    NHC_FMT_JSON=${NHC_FMT_JSON:-0}
     export NHC_SID=0
 
     # Configure syslog() logging.
@@ -681,7 +696,7 @@ function nhcmain_redirect_output() {
 
 function nhcmain_check_concurrency() {
     local DIR="${1:-$NHC_RUNDIR}" CONTEXT="${2:-$NAME}"
-    local MSG="" PIDFILE="$DIR/NHC.$CONTEXT.pid" PID=0
+    local _CC_MSG="" PIDFILE="$DIR/NHC.$CONTEXT.pid" PID=0
 
     if [[ -z "$DIR" || -z "$CONTEXT" ]]; then
         vlog "${FUNCNAME[0]}():  Skipping concurrency check (\"$DIR\" / \"$CONTEXT\")"
@@ -718,18 +733,24 @@ function nhcmain_check_concurrency() {
         # the PID file *should* be an empty file newly created with effective UID/GID.
         dbg "All sanity checks on \"$PIDFILE\" passed."
     else
-        MSG="Unable to record PID ($NHC_PID) due to sanity check failure for PID file \"$PIDFILE\" -- $(ls -Flaid "$PIDFILE")"
-        log "$MSG"
-        syslog "$MSG"
+        _CC_MSG="Unable to record PID ($NHC_PID) due to sanity check failure for PID file \"$PIDFILE\" -- $(ls -Flaid "$PIDFILE")"
+        log "$_CC_MSG"
+        if (( NHC_FMT_JSON )); then
+            jsonify '_CC_MSG' 100 "$_CC_MSG"
+        fi
+        syslog "$_CC_MSG"
         unset NHC_PIDFILE
         return 1
     fi
     printf '%d\n' "$NHC_PID" > "$PIDFILE"
     read PID < "$PIDFILE"
     if [[ "$PID" != "$NHC_PID" ]]; then
-        MSG="WARNING:  Wrote PID $NHC_PID to $PIDFILE but read back $PID.  Probably gremlins."
-        log "$MSG"
-        syslog "$MSG"
+        _CC_MSG="WARNING:  Wrote PID $NHC_PID to $PIDFILE but read back $PID.  Probably gremlins."
+        log "$_CC_MSG"
+        if (( NHC_FMT_JSON )); then
+            jsonify '_CC_MSG' 100 "$_CC_MSG"
+        fi
+        syslog "$_CC_MSG"
         unset NHC_PIDFILE
     fi
     return 0
@@ -935,9 +956,15 @@ function nhcmain_run_checks() {
     if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
-        log "ERROR:  $NAME:  $FAIL_CNT health checks failed."
-        syslog -f "$FAIL_CNT health checks failed."
-        [[ -n "$LOGFILE" ]] && oecho "ERROR:  $NAME:  $FAIL_CNT health checks failed."
+        CHECK_STR="$FAIL_CNT health checks failed."
+        [[ -n "$LOGFILE" ]] \
+            && oecho "ERROR:  $NAME:  $CHECK_STR"
+        log "ERROR:  $NAME:  $CHECK_STR"
+
+        if (( NHC_FMT_JSON )); then
+            jsonify 'CHECK_STR' "$FAIL_CNT" "$CHECK_STR"
+        fi
+        syslog -f "$CHECK_STR"
         kill_watchdog
         exit $FAIL_CNT
     fi
@@ -951,11 +978,14 @@ function nhcmain_mark_online() {
 
 function nhcmain_finish() {
     local -i ELAPSED=$((SECONDS-NHC_START_TS))
-    local MSG
+    local _FIN_MSG
 
-    MSG="Node Health Check completed successfully; ${#CHECKS[*]} passed in $ELAPSED second(s)."
-    vlog "$MSG"
-    syslog -f "$MSG"
+    _FIN_MSG="Node Health Check completed successfully; ${#CHECKS[*]} passed in $ELAPSED second(s)."
+    vlog "$_FIN_MSG"
+    if (( NHC_FMT_JSON )); then
+        jsonify '_FIN_MSG' 0 "$_FIN_MSG"
+    fi
+    syslog -f "$_FIN_MSG"
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:true" >&$NHC_FD_OUT

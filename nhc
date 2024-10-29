@@ -757,9 +757,23 @@ function nhcmain_check_concurrency() {
 }
 
 function nhcmain_check_conffile() {
+    local _CONF_MSG=''
+
     # Check for config file before we do too much work.
-    if [[ ! -f "$CONFFILE" ]]; then
+    if [[ ! (-b "$CONFFILE" || -c "$CONFFILE" || -f "$CONFFILE" || -h "$CONFFILE" || -p "$CONFFILE") ]]; then
         # Missing config means no checks.  No checks means no failures.
+        _CONF_MSG="Missing/invalid configuration file (\"$CONFFILE\") ignored."
+    elif [[ ! -r "$CONFFILE" ]]; then
+        _CONF_MSG="Configuration file \"$CONFFILE\" is unreadable or corrupted; ignored."
+    fi
+    if [[ -n "${_CONF_MSG}" ]]; then
+        log "$_CONF_MSG"
+        if (( NHC_FMT_JSON )); then
+            # Even though it's "log-worthy," a missing/empty/bogus config file isn't a reason
+            # for NHC to return failure -- it won't cause jobs/nodes to fail -- so we return 0.
+            jsonify '_CONF_MSG' 0 "$_CONF_MSG"
+        fi
+        syslog -f "$_CONF_MSG"
         return 1
     fi
     return 0
@@ -898,6 +912,7 @@ function nhcmain_detach() {
 
     syslog -f
     if [[ "$RC" != "0" ]]; then
+        # FIXME:  Should this be a `die()` call?
         echo "ERROR Health check failed:  $MSG"
         exit $RC
     fi

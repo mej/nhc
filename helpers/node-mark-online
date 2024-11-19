@@ -16,7 +16,7 @@ LEADER="NHC:"
 HOSTNAME="$1"
 NOTE=""
 
-echo "`date '+%Y%m%d %H:%M:%S'` [$NHC_RM] $0 $*"
+echo "`date '+%Y%m%d %H:%M:%S %z'` [$NHC_RM] $0 $*"
 
 ### PBS (TORQUE)
 if [[ "$NHC_RM" == "pbs" ]]; then

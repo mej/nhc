@@ -15,7 +15,7 @@ STAT_FMT_FIELDS=( )
 if [[ "${OSTYPE,,}" == *'linux'* ]]; then
     if [[ -s "/etc/selinux/config" ]]; then
         source "/etc/selinux/config"
-    elif selinuxenabled; then
+    elif selinuxenabled >&/dev/null; then
         SELINUX=enforcing
     else
         ### FIXME:  What else?
@@ -87,7 +87,7 @@ function nhc_file_stat() {
         return $RC
     fi
 
-    IFS=$'\f'   ### FIXME:  Use ${FS} (field separator) instead?
+    IFS=$'\f'   ### FIXME:  Use ${US} (unit separator, ^_, 0x1f) instead?
     STINFO=( $STATOUT )
     IFS=$' \t\n'
     NHC_STAT_FILES[$idx]="$FNAME"

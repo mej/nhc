@@ -282,6 +282,9 @@ function kill_watchdog() {
     fi
 }
 
+### Signal Handling Utility Functions
+
+# Toggle Bash's `-x` "tracing" mode on or off in response to SIGUSR1.
 function toggle_bash_tracing() {
     if [[ "$-" == *x* ]]; then
         : "BASH tracing mode (-x) turned off via SIGUSR1."
@@ -292,6 +295,7 @@ function toggle_bash_tracing() {
     fi
 }
 
+# Toggle NHC's `-d` debugging mode on or off in response to SIGUSR2.
 function toggle_debug_mode() {
     if [[ -z "$DEBUG" || "$DEBUG" -eq 0 ]]; then
         DEBUG=1
@@ -332,6 +336,7 @@ function nhcmain_version_info() {
     if (( VERINFO >= 3 )); then
         # Any transforms or other shenanigans required to facilitate the stuff below...
         if (( DETACHED_MODE == 0 )); then
+            # If it's false, unset it completely so we can use conditional parameter expansion
             unset DETACHED_MODE
         fi
         echo

@@ -306,6 +306,114 @@ function toggle_debug_mode() {
     fi
 }
 
+### General Utility Functions (those required pre-script-loading)
+
+# Find the first directory in a list (passed as individual args or delimited like `$PATH`) that
+# satisfies a given conditional.  Prior to the directory list itself, callers can specify zero
+# or more of:
+#  1 - a variable name to write the result to, starting with a `$` (e.g., `$WINNER`);
+#  2 - a single-character separator used to delimit multiple directories inside a single string
+#      (like `$PATH`, but the delimiter isn't hardcoded to `:`) (e.g., `,`); and/or
+#  3 - a user-specified "conditional" enclosed in braces against which each candidate directory
+#      is evaluated one-at-a-time until a directory is found for which the "conditional" returns
+#      true.  The value of the conditional must be a valid function body, can access the current
+#      candidate directory by referencing `$DIR` or `$1`, and should return (figuratively or
+#      literally) `0` for "true" and anything else for "false" -- in other words, standard POSIX
+#      shell semantics (e.g., `{ [[ "$(stat -c %m "$DIR")" == "${DIR}" ]]; }` (only matches
+#      directories which are themselves mount points)).
+# If a matching directory is found, `pickdir()` will either echo the winning directory path to
+# `stdout` or, if a variable name was provided, assign it to the specified variable; it then
+# returns 0 (shell "true").
+# If no matching directory can be found, nothing is printed, but the empty string *is* assigned
+# to the specified variable if there was one; `pickdir()` will then return "false" -- more
+# precisely, it returns the number of directories that were tested and failed, up to a limit of
+# `100`.  This, hopefully, will assist in troubleshooting unexpected match-finding failures.
+function pickdir() {
+    local -a DIRS=( );
+    local COND='{ :; }' DELIM='' DIR DIRLIST IFS=$' \t\n' VARNAME='';
+    local -i RC=0;
+
+    while (( $# > 0 )); do
+        if [[ "$1" == '/' ]]; then
+            # We don't want single-char path to be taken as a delimiter
+            break
+        elif [[ "$1" == '--' ]]; then
+            # The universal "stop parsing options" option
+            shift
+            break
+        elif (( ${#1} == 0 && $# > 0 )); then
+            # We ignore empty strings to make passing variable expansions simpler (as long as we have args left).
+            shift
+            continue
+        elif (( ${#1} == 1 )); then
+            # A single character (except for `/` above) is a delimiter
+            DELIM="$1"
+            shift
+        elif [[ "${1:0:1}" == '$' ]]; then
+            # If it starts with a `$`, it's a target variable name.
+            VARNAME="${1:1}"
+            shift
+            if [[ -n "${VARNAME//[_0-9A-Za-z]}" ]]; then
+                :
+            fi
+        elif [[ "${1:0:1}" == '{' && "${1: -1:1}" == '}' ]]; then
+            # Braces surround a conditional to override the default of "always true."
+            COND="$1"
+            shift
+        else
+            # If it's not any of those, it's our first path.  Start picking!
+            break
+        fi
+    done
+
+    # Use the brace-enclosed conditional (theirs or ours) as an anonymous function body, and give it a name.
+    eval "function __cond_pick() ${COND}"
+
+    # Check for an empty directory list, delimited string, etc.
+    if [[ $# -eq 0 ]]; then
+        err 'No directories given for picking!'
+        return 2
+    elif [[ $# -gt 1 ]]; then
+        # If more than one item is still left, treat remaining args as a directory list.
+        DIRS=( "$@" )
+        DIRLIST="${DIRS[*]}"
+    elif [[ "${1//${DELIM}}" != "$1" ]]; then
+        # If there's only one arg left, and it contains our chosen delimiter, split on that.
+        DIRLIST="$1"
+        IFS="${DELIM}"
+        DIRS=( $1 )
+    else
+        # Otherwise, it's a single value.  For whatever reason, we're "picking" from a candidate pool of 1.
+        DIRLIST="$1"
+        DIRS=( "$1" )
+    fi
+
+    # Make sure each directory exists, evaluate the conditional, and act on the result.
+    dbg "${FUNCNAME[0]}():  Picking from $# directories (\"$*\"${DELIM:+ split on '${DELIM}'}) to satisfy the conditional ${COND}"
+    for DIR in "${DIRS[@]}"; do
+        dbg " -> Checking ${DIR}..."
+        if [[ -d "${DIR}" ]]; then
+            __cond_pick "${DIR}" || {
+                dbg "    -> Not a match.  Next!"
+                continue
+            }
+        else
+            dbg "    -> That's not a directory."
+            continue
+        fi
+
+        # It's a directory, and the conditional evaluated to "true," so we found our pick.
+        dbg "\"${DIR}\" for the win!"
+        printf ${VARNAME:+-v${VARNAME}} "%s" "${DIR}"
+        return 0
+    done
+
+    # If none of the candidates pass, set the variable to the empty string, and return the number of paths we tried.
+    dbg "${FUNCNAME[0]}():  Ran out of candidate directories without finding a match.  We lose."
+    printf ${VARNAME:+-v${VARNAME}} '%s' ''
+    return $(( (${#DIRS[*]} < 100) ? (${#DIRS[*]}) : (100) ))
+}
+
 #########################
 
 function nhcmain_version_info() {

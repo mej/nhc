@@ -433,9 +433,9 @@ function nhcmain_version_info() {
         fi
         echo
 
-        # Not sure exactly how to label this; "runtime status" seems good enough for now, but future additions may necessitate a change.
-        printf '%20s  %s running as %s:%s (from %s:%s) with %d groups\n' \
-                'Runtime Status:' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
+        # Not sure exactly how to label this; "runtime identity" seems good enough for now, but is it clear enough?
+        printf '%20s  %s running as %s:%s (real %s:%s) with %d groups\n' \
+                'Runtime Identity:' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
         printf '%20s  %s-%s for %s %s on host %s (%s) - Level %d, Subs %d, Depth %d\n' \
                 'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE" \
                 "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))

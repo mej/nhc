@@ -225,10 +225,16 @@ function eecho() { eout "$@"; }
 function vecho() { vout "$@"; }
 
 # For future use, maybe?
-function err()   { echo "ERROR:  $*" ; } >&2
-function errf()  { printf "ERROR:  $1\n" "${@:2}" ; } >&2
-function warn()  { echo "WARNING:  $*" ; } >&2
-function warnf() { printf "WARNING:  $1\n" "${@:2}" ; } >&2
+#function err()   { echo "ERROR:  $*" ; } >&2
+#function errf()  { printf "ERROR:  $1\n" "${@:2}" ; } >&2
+#function warn()  { echo "WARNING:  $*" ; } >&2
+#function warnf() { printf "WARNING:  $1\n" "${@:2}" ; } >&2
+# Or maybe try these?
+function err()   { eout  "ERROR: "      "$@";     }
+function errf()  { eoutf "ERROR:  $1"   "${@:2}"; }
+function warn()  { eout  "WARNING: "    "$@";     }
+function warnf() { eoutf "WARNING:  $1" "${@:2}"; }
+
 
 ### Timer utility functions
 

@@ -1074,7 +1074,16 @@ function nhcmain_run_checks() {
         fi
 
         # Check for failure.
-        if [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
+        if (( RET == 127 )); then
+            # An exit code of 127 means Bash couldn't find that check; probably a bad or missing `.nhc` file.
+            log "Node Health Check failed.  No such check \"${CHECK%% *}\" (missing/corrupt .nhc file?); check $CHECK_STR ($CHECK) returned $RET"
+            die $RET "No such check \"${CHECK%% *}\" (missing/corrupt .nhc file?); check $CHECK_STR ($CHECK) returned $RET"
+        elif (( RET == 126 )); then
+            # An exit code of 126 means Bash found the check (in theory) but couldn't execute it.  Permissions?  Mount flags?
+            log "Node Health Check failed.  Unable to run check \"${CHECK%% *}\" (permissions/mount flags?); check $CHECK_STR ($CHECK) returned $RET"
+            die $RET "Unable to run check \"${CHECK%% *}\" (permissions/mount flags?); check $CHECK_STR ($CHECK) returned $RET"
+        elif [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
+            # Anything else is handled uniformly here.
             if [[ "$NHC_CHECK_FORKED" == "1" && "$RET" -gt 100 ]]; then
                 # The forked check did successfully call die(), so we don't have to.
                 exit $((RET-100))

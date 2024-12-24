@@ -453,6 +453,16 @@ function nhcmain_version_info() {
                 "System Setup:" "$HOSTNAME_S" "$HOSTNAME" "$NHC_RM" "$LIBEXECDIR" "$SYSCONFIGDIR" "$MAX_SYS_UID"
         printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s"\n' \
                 "Package Setup:" "$CONFDIR" "$HELPERDIR" "$INCDIR"
+
+        #printf '%20s  (NHC_CFG_)GLOBAL="%s" SYSCONFIGDIR="%s" LIBEXECDIR="%s" CONFDIR="%s" INCDIR="%s" HELPERDIR="%s"\n' \
+        #        "NHC_CFG_* Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" "${NHC_CFG_LIBEXECDIR-<unset>}" \
+        #        "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}"
+        printf -v S ' %s' 'NHC_CFG_'{SYSCONFIG,LIBEXEC}'DIR="%s"'
+        printf '%20s  NHC_CFG_GLOBAL="%s"'"$S"'\n' \
+                "Init Env Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" "${NHC_CFG_LIBEXECDIR-<unset>}"
+        printf -v S ' %s' 'NHC_CFG_'{CONF,INC,HELPER}'DIR="%s"'
+        printf '%20s  '"${S:1}"'\n' '' "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}"
+
         printf '%20s  Context "%s" Config "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
                 "Invocation Details:" "$NAME" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
                 "${NHC_BOOL_ONOFF[${#DETACHED_MODE}]^^}" "${NHC_DETACHED:+ (from $NHC_DETACHED)}" \
@@ -464,37 +474,110 @@ function nhcmain_version_info() {
         printf '%20s  ALL=%s FORKED=%s  SID %d (%sforced)  MARK_OFFLINE=%s ONLINE_NODE="%s" OFFLINE_NODE="%s"\n' \
                 "Check Handling:" "$NHC_CHECK_ALL" "$NHC_CHECK_FORKED" "$NHC_SID" \
                 "${NHC_BOOL_ISNOT[(NHC_FORCED_SESSION == 0 ? 0 : 1)]}" "$MARK_OFFLINE" "$ONLINE_NODE" "$OFFLINE_NODE"
+        echo
     fi
 
     return 0
 }
 
 function nhcmain_init_env() {
-    ### Variable declarations
+    local _DEF_SCDIR='/etc/sysconfig' _DEF_LEXDIR='/usr/libexec'
+    local -i RC=1
+
+    unset CONFDIR CONFFILE INCDIR HELPERDIR LOGFILE DEBUG SILENT VERBOSE TIMEOUT RESULTFILE
+    unset MAX_SYS_UID EVAL_LINE SYSLOG_CMD SYSLOG_FAC SYSLOG_IDENT SYSLOG_LEVEL SYSLOG_PRIO SYSLOG_SIZE
+
+    # We already (usually) accept pre-existing values in the environment, but
+    # some important global settings -- paths in particular -- are not
+    # "namespaced;" for conflict-avoidance purposes, these are unset prior to
+    # configuration.  To address this issue, we also now handle a series of
+    # environment variables named starting with `NHC_CFG_`.  These are safe to
+    # set/change anywhere, including places like `/etc/bashrc` and/or
+    # `~/.bashrc`, and take precedence over everything but the command line.
+    # This will also help a lot with non-`root` NHC use!
+    #
+    # NHC_CFG_GLOBAL - (Full) path to global settings file, like `/etc/sysconfig/nhc`
+    #NHC_CFG_GLOBAL="$HOME/.nhc/globals.env.bash"
+    #
+    # NHC_CFG_PREFIX - Assume `autoconf`-style layout with `--prefix=<value>`
+    #NHC_CFG_PREFIX="/usr/local"
+    #
+    # NHC_CFG_SYSCONFIGDIR - Override default `SYSCONFIGDIR` value (OS-dependent)
+    #NHC_CFG_SYSCONFIGDIR="$HOME/.nhc/global"
+    #
+    # NHC_CFG_LIBEXECDIR - Override default `LIBEXECDIR` value (OS-dependent)
+    #NHC_CFG_LIBEXECDIR="$HOME/.nhc/libexec"
+    #
+    # NHC_CFG_CONFDIR - Override default `CONFDIR` value (`/etc/nhc`)
+    #NHC_CFG_CONFDIR="$HOME/.nhc"
+    #
+    # NHC_CFG_INCDIR - Override default `INCDIR` value (`$CONFDIR/scripts`)
+    #NHC_CFG_INCDIR="$NHC_CFG_CONFDIR/checks"
+    #
+    # NHC_CFG_HELPERDIR - Override default `HELPERDIR` value (`$LIBEXECDIR/nhc`)
+    #NHC_CFG_HELPERDIR="$NHC_CFG_CONFDIR/helpers"
+    #
+    # NOTE:  Some or all of these may be changed in a future release into keys
+    #        of a single hashmap (e.g., NHC_CFG[global]) to be even safer!
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
-    if [[ -f "/etc/debian_version" ]]; then
-        SYSCONFIGDIR="/etc/default"
-        LIBEXECDIR="/usr/lib"
-    else
-        if [[ -d "/etc/sysconfig" ]]; then
-            SYSCONFIGDIR="/etc/sysconfig"
-        elif [[ -d "/etc/default" ]]; then
-            SYSCONFIGDIR="/etc/default"
-        else
+    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-${BASH_SOURCE[0]##*/}.main}()]> '
+
+    # To guess or not to guess.  Too complicated, I think.  "Overengineered."
+    #local GUESS_PFX=$(realpath ${BASH_SOURCE[0]%/*}/.)
+    #if [[ "$GUESS_PFX" == *(*/)?(s)bin ]]; then
+    #    GUESS_PFX=$(realpath "$GUESS_PFX"/../.)
+    #fi
+    #if [[ -d "$GUESS_PFX/etc" && (-d "$GUESS_PFX/bin" || -d "$GUESS_PFX/sbin") && (-d "$GUESS_PFX/libexec" || -d "$GUESS_PFX/lib") ]]; then
+    #    export NHC_PREFIX="$GUESS_PFX"
+    #fi
+
+    # Pre-populate settings based on new global-safe variable names
+    if [[ -n "${NHC_CFG_GLOBAL}" ]]; then
+        # One environment to rule them all!
+        source "${NHC_CFG_GLOBAL}" && RC=0
+    fi
+
+    if [[ (-n "$NHC_PREFIX") && (! -d "$NHC_PREFIX") ]]; then
+        warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
+            "$NHC_PREFIX='$NHC_PREFIX'" "$(ls -Flaid "$NHC_PREFIX")"
+        unset NHC_PREFIX
+    fi
+
+    pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "${NHC_PREFIX:+$NHC_PREFIX/sysconfig}" "$SYSCONFIGDIR" \
+            "${NHC_CFG_CONFDIR:+$NHC_CFG_CONFDIR/sysconfig}" "$_DEF_SCDIR" '/etc/sysconfig' '/etc/default'
+    if [[ -z "$SYSCONFIGDIR" ]]; then
+        if (( EUID == 0 )); then
             SYSCONFIGDIR="/etc/nhc/sysconfig"
-            if [[ ! -d "${SYSCONFIGDIR}" ]]; then
-                mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
-            fi
-        fi
-        if [[ -d "/usr/libexec" ]]; then
-            LIBEXECDIR="/usr/libexec"
         else
-            LIBEXECDIR="/usr/lib"
+            SYSCONFIGDIR="$HOME/.nhc/sysconfig"
         fi
     fi
+    ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
+    #if [[ ! -d "${SYSCONFIGDIR}" ]]; then
+    #    mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
+    #fi
+
+    pickdir '$LIBEXECDIR' "$NHC_CFG_LIBEXECDIR" "${NHC_PREFIX:+$NHC_PREFIX/libexec}" "${NHC_PREFIX:+$NHC_PREFIX/lib}" \
+            "$LIBEXECDIR" "$_DEF_LEXDIR" '/usr/libexec' '/usr/lib' "${NHC_CFG_CONFDIR:+$(realpath "$NHC_CFG_CONFDIR"/lib{exec,})}"
+    if [[ -z "$LIBEXECDIR" ]]; then
+        if (( EUID == 0 )); then
+            LIBEXECDIR='/usr/lib/nhc'
+        else
+            LIBEXECDIR="$HOME/.nhc/libexec"
+        fi
+    fi
+    ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
+    #if [[ ! -d "${LIBEXECDIR}" ]]; then
+    #    mkdir -p -m 0700 "${LIBEXECDIR}" >&/dev/null
+    #fi
+
+    # Using the assorted machinations above, use similar logic to establish locations of configs, checks, and tools, respectively.
+    pickdir '$CONFDIR'   "$NHC_CFG_CONFDIR"   "$CONFDIR" "$NHC_PREFIX/etc/nhc" "$NHC_PREFIX/etc"
+    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"
+    pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR"
+
     if [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
     elif [[ -z "$HOSTNAME" ]]; then
@@ -514,16 +597,11 @@ function nhcmain_init_env() {
     NHC_FORCED_SESSION=0
     NHC_FD_OUT=1
     NHC_FD_ERR=2
-    export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
+    export PATH PS4 SYSCONFIGDIR LIBEXECDIR CONFDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
     export NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
-
-    # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
-    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED EVAL_LINE
-    unset SYSLOG_CMD SYSLOG_FAC SYSLOG_IDENT SYSLOG_LEVEL SYSLOG_PRIO SYSLOG_SIZE
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -536,6 +614,9 @@ function nhcmain_init_env() {
     set -f
     # Activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
     shopt -s expand_aliases extglob 2>/dev/null
+
+    # Return TRUE (0) iff the global settings have already been read in.
+    return $RC
 }
 
 function nhcmain_help() {
@@ -1180,8 +1261,7 @@ trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
 trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 142' 14
 
-nhcmain_init_env
-nhcmain_load_sysconfig
+nhcmain_init_env || nhcmain_load_sysconfig
 nhcmain_parse_cmdline "${NHC_ARGV[@]:1}" || exit 10
 nhcmain_finalize_env
 if [[ -n "$EVAL_LINE" ]]; then

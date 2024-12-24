@@ -557,8 +557,8 @@ $UNDERLINE
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
  -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
- -V                Display NHC version ("-VV" for more verbosity) and exit
- -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
+ -V                Display NHC version (add'l -V(s) show more info) and exit
+ -a                Run ALL checks; don't exit on 1st failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
  -e <check>        Evaluate check line <check> and exit immediately
@@ -566,6 +566,7 @@ $UNDERLINE
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
+ -r <prog>         Force use of <prog> (or "none") as RM (i.e., NHC_RM=<prog>)
  -t <timeout>      Use timeout of <timeout> seconds (default: 30)
  -v                Run verbosely (i.e., VERBOSE=1)
  -x                Run in eXtreme debug/trace mode (same as "bash -x")
@@ -592,7 +593,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:Vac:de:fhjl:n:qt:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhjl:n:qr:t:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
@@ -606,6 +607,7 @@ function nhcmain_parse_cmdline() {
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
+            r) NHC_RM="$OPTARG" ; dbg "Resource manager set to $NHC_RM." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
             v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
             x) set -x ; dbg "BASH tracing active." ;;
@@ -727,6 +729,11 @@ function nhcmain_finalize_env() {
         # SGE's looping model is incompatible with detached mode and the watchdog timer.
         DETACHED_MODE=0
         TIMEOUT=0
+    elif [[ "$NHC_RM" == 'none' ]]; then
+        # None of these makes sense without a resource manager!
+        ONLINE_NODE=:
+        OFFLINE_NODE=:
+        MARK_OFFLINE=0
     fi
 
     # If timestamps are desired, initialize them here.
@@ -766,34 +773,46 @@ function nhcmain_find_rm() {
     local DIR
     local -a DIRLIST
 
+    if [[ -z "$NHC_RM" ]]; then
+        # Default to "none"
+        NHC_RM='none'
+    else
+        # We've already got one!  Iz very niiice!
+        dbg "Resource manager already set to \"$NHC_RM\" so no need to guess."
+        return 0
+    fi
     if [[ -d /var/spool/torque ]]; then
-        NHC_RM="pbs"
+        NHC_RM='pbs'
         return 0
     elif [[ -n "$SGE_ROOT" && -x "$SGE_ROOT/util/arch" ]]; then
         # SGE binaries typically won't be on the path defined above in the
         # load sensor environment, but SGE_ROOT will be there.
-        NHC_RM="sge"
+        NHC_RM='sge'
+        return 0
     fi
 
     # Search PATH for commands
     if type -a -p -f -P scontrol >&/dev/null ; then
-        NHC_RM="slurm"
+        NHC_RM='slurm'
         return 0
     elif type -a -p -f -P pbsnodes >&/dev/null ; then
-        NHC_RM="pbs"
+        NHC_RM='pbs'
         return 0
     elif type -a -p -f -P qselect >&/dev/null ; then
-        NHC_RM="sge"
+        NHC_RM='sge'
         return 0
     elif type -a -p -f -P badmin >&/dev/null || type -a -p -f -P sbatchd >&/dev/null ; then
-        NHC_RM="lsf"
+        NHC_RM='lsf'
         return 0
     fi
 
-    if [[ -z "$NHC_RM" ]]; then
-        dbg "Unable to detect resource manager."
+    if [[ "$NHC_RM" == 'none' ]]; then
+        dbg "Unable to detect resource manager; using \"$NHC_RM.\""
         return 1
     fi
+
+    # We should never get here, but...
+    die 1 "Fatal internal error in ${FUNCNAME[0]}() [${BASH_SOURCE[0]} line $LINENO]; NHC_RM is \"$NHC_RM\""
 }
 
 function nhcmain_redirect_output() {

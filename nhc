@@ -535,7 +535,7 @@ function nhcmain_init_env() {
     # We'll turn it back on only where, and only for as long as, we need it.
     set -f
     # Activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
-    shopt -s extglob 2>/dev/null
+    shopt -s expand_aliases extglob 2>/dev/null
 }
 
 function nhcmain_help() {

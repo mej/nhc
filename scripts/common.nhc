@@ -137,7 +137,7 @@ function array_join() {
 }
 
 ### Cleanup/trim/normalize the contents of a string/char buffer
-function str_clean() {
+function strtidy() {
     local CCHAR='#' OUTVAR="" SNAME="" STR="" WS=$' \t\f\n\r\v'
     local -i OUT=0 RM_COMMENTS=0 MERGE_WS=0 SAVE_EG=0 TRIM_LEAD=0 TRIM_TRAIL=0
 
@@ -185,10 +185,15 @@ function str_clean() {
         echo "$STR"
     fi
     if [[ -n "$OUTVAR" ]]; then
-        eval "$OUTVAR"'="$STR"'
+        printf -v "$OUTVAR" '%s' "$STR"
     fi
     return 0
 }
+alias ltrim='strtidy -l'
+alias rtrim='strtidy -t'
+alias trim='strtidy -w'
+alias merge_ws='strtidy -m'
+alias strip_comments='strtidy -c'
 
 ### Show a stack trace of bash functions and file locations
 function bash_stack_trace() {

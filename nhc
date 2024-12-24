@@ -193,7 +193,7 @@ function syslog() {
     fi
     if (( FLUSH )); then
         if (( ${#LOGGER_TEXT} > 0 )); then
-            $SYSLOG_CMD "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" <<< "$LOGGER_TEXT"
+            $SYSLOG_CMD "$SYSLOG_IDENT${SYSLOG_TAG:+{$SYSLOG_TAG}}" <<< "$LOGGER_TEXT"
             RC=$?
         fi
         LOGGER_TEXT=''

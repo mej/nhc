@@ -578,12 +578,20 @@ function nhcmain_init_env() {
     pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"
     pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR"
 
-    if [[ -r /proc/sys/kernel/hostname ]]; then
+    # Figure out `HOSTNAME` and `HOSTNAME_S` (long and short hostnames, respectively)
+    if [[ -n "$NHC_HOST" ]]; then
+        dbg "\$NHC_HOST is set to \"${NHC_HOST}\" to override $HOSTNAME."
+        HOSTNAME="${NHC_HOST}"
+    elif [[ -n "$HOSTNAME" ]]; then
+        dbg "\$HOSTNAME is already set to \"$HOSTNAME\" -- hopefully that's correct."
+    elif [[ -s "/etc/hostname" ]]; then
+        read HOSTNAME < /etc/hostname
+    elif [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
-    elif [[ -z "$HOSTNAME" ]]; then
+    else
         HOSTNAME="localhost"
     fi
-    HOSTNAME_S=${HOSTNAME/%.*}
+    HOSTNAME_S=${HOSTNAME%%.*}
     RET=0
     LOGGER_TEXT=""
     NHC_PID=$$
@@ -645,6 +653,7 @@ $UNDERLINE
  -e <check>        Evaluate check line <check> and exit immediately
  -f                Run checks in forked subprocesses (i.e., NHC_CHECK_FORKED=1)
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
+ -m <host>         Masquerade as <host> (i.e., NHC_HOST=<host>), not "$HOSTNAME"
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
  -r <prog>         Force use of <prog> (or "none") as RM (i.e., NHC_RM=<prog>)
@@ -674,7 +683,7 @@ function nhcmain_parse_cmdline() {
     local OPTION
 
     OPTIND=1
-    while getopts ":D:Vac:de:fhjl:n:qr:t:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhjl:m:n:qr:t:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
             V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
@@ -686,6 +695,7 @@ function nhcmain_parse_cmdline() {
             h) nhcmain_help ; exit 0 ;;
             j) NHC_FMT_JSON=1 ; dbg "Syslog messages will be generated in JSON." ;;
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
+            m) NHC_HOST="$OPTARG" ; dbg "Hostname will be set to $NHC_HOST." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
             r) NHC_RM="$OPTARG" ; dbg "Resource manager set to $NHC_RM." ;;
@@ -736,6 +746,18 @@ function nhcmain_finalize_env() {
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
     NHC_FMT_JSON=${NHC_FMT_JSON:-0}
     export NHC_SID=0
+
+    # Masquerade as a different host (i.e., use a non-canonical hostname) when
+    # interacting with the RM/scheduler.  Useful for platforms where the actual
+    # name of the node (on Linux, that means the current value of `nodename` in
+    # the `struct utsname` structure returned by the `uname(2)` system call for
+    # the current UTS namespace) as returned by the `hostname` command does not
+    # match the node's identifier used by the resource manager.
+    if [[ -n "${NHC_HOST}" ]]; then
+        export HOSTNAME="${NHC_HOST}" HOSTNAME_S="${NHC_HOST%%.*}"
+    else
+        typeset -lrx NHC_HOST="$HOSTNAME"
+    fi
 
     # Configure syslog() logging.
     SYSLOG_FAC="${SYSLOG_FAC:-daemon}"

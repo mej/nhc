@@ -38,7 +38,7 @@ function test_nhc_driver() {
 
     # Check help output
     IFS=$'\n'
-    LINES=( $(nhcmain_help) )
+    LINES=( $(HOSTNAME=moo nhcmain_help) )
     IFS=$' \t\n'
     for ((i=0; i<${#LINES[*]}; i++)); do
         LINE="${LINES[$i]}"

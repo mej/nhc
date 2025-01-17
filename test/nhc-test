@@ -103,25 +103,33 @@ function test_nhc_driver() {
     # Reset environment for testing purposes.
     PATH="$TOP_SRCDIR:$PATH"
     SYSCONFIGDIR="$TOP_SRCDIR"
-    LIBEXECDIR="$TOP_SRCDIR/helpers"
+    LIBEXECDIR="$TOP_SRCDIR"
+    STATEDIR="$TOP_SRCDIR"
     CONFDIR="$TOP_SRCDIR"
-    HELPERDIR="$LIBEXECDIR"
+    INCDIR="$CONFDIR/scripts"
+    HELPERDIR="$LIBEXECDIR/helpers"
+    LOGDIR="$STATEDIR/log"
+    RUNDIR="$STATEDIR/run"
+    CONFFILE="$CONFDIR/$NAME.conf"
     LOGFILE=" "
     NHC_RM="pbs"
     SYSLOG_TAG="the-cow-goes-moo"
 
     # Finalize environment.  Make sure we get what we expect.
     nhcmain_finalize_env
-    plan 27 "nhcmain_finalize_env" && {
-        is $SYSCONFIGDIR $TOP_SRCDIR '$SYSCONFIGDIR unchanged'
-        is $LIBEXECDIR "$TOP_SRCDIR/helpers" '$LIBEXECDIR unchanged'
-        is $HELPERDIR $LIBEXECDIR '$HELPERDIR unchanged'
-        is $CONFDIR $TOP_SRCDIR '$CONFDIR unchanged'
-        is $CONFFILE "$TOP_SRCDIR/$NAME.conf" '$CONFFILE set correctly'
-        is $INCDIR "$CONFDIR/scripts" '$INCDIR default correct'
-        is $ONLINE_NODE "$LIBEXECDIR/node-mark-online" '$ONLINE_NODE set correctly'
-        is $OFFLINE_NODE "$LIBEXECDIR/node-mark-offline" '$OFFLINE_NODE set correctly'
-        unlike $LOGFILE '/[<>|&]/' '$LOGFILE contains no redirection'
+    plan 30 "nhcmain_finalize_env" && {
+        is "$SYSCONFIGDIR" "$TOP_SRCDIR" '$SYSCONFIGDIR unchanged'
+        is "$LIBEXECDIR" "$TOP_SRCDIR" '$LIBEXECDIR unchanged'
+        is "$STATEDIR" "$TOP_SRCDIR" '$STATEDIR unchanged'
+        is "$CONFDIR" "$TOP_SRCDIR" '$CONFDIR preserved correctly'
+        is "$INCDIR" "$CONFDIR/scripts" '$INCDIR preserved correctly'
+        is "$HELPERDIR" "$LIBEXECDIR/helpers" '$HELPERDIR preserved correctly'
+        is "$LOGDIR" "$STATEDIR/log" '$LOGDIR preserved correctly'
+        is "$RUNDIR" "$STATEDIR/run" '$RUNDIR preserved correctly'
+        is "$ONLINE_NODE" "$HELPERDIR/node-mark-online" '$ONLINE_NODE set correctly'
+        is "$OFFLINE_NODE" "$HELPERDIR/node-mark-offline" '$OFFLINE_NODE set correctly'
+        is "$CONFFILE" "$CONFDIR/$NAME.conf" '$CONFFILE set correctly'
+        unlike "$LOGFILE" '/[<>|&]/' '$LOGFILE contains no redirection'
         is $DEBUG 0 'Debugging off by default'
         is $SILENT 0 'Silent mode off by default'
         is $VERBOSE 0 'Verbose mode off by default'

@@ -409,7 +409,7 @@ function pickdir() {
     done
 
     # If none of the candidates pass, set the variable to the empty string, and return the number of paths we tried.
-    dbg "${FUNCNAME[0]}():  Ran out of candidate directories without finding a match.  We lose."
+    dbg "${FUNCNAME[0]}():  Tried ${#DIRS[*]} candidate directories without finding a match.  We lose."
     printf ${VARNAME:+-v${VARNAME}} '%s' ''
     return $(( (${#DIRS[*]} < 100) ? (${#DIRS[*]}) : (100) ))
 }
@@ -550,10 +550,29 @@ function nhcmain_init_env() {
         source "${NHC_CFG_GLOBAL}" && RC=0
     fi
 
-    if [[ (-n "$NHC_CFG_PREFIX") && (! -d "$NHC_CFG_PREFIX") ]]; then
-        warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
-            "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX")"
-        unset NHC_CFG_PREFIX
+    if [[ -n "$NHC_CFG_PREFIX" ]]; then
+        if [[ ! -d "$NHC_CFG_PREFIX" ]]; then
+            warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
+                "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX")"
+            unset NHC_CFG_PREFIX
+        else
+            # Set paths according to the default layout, but don't overwrite what might've just been imported!
+            SYSCONFIGDIR="${SYSCONFIGDIR-$NHC_CFG_PREFIX/sysconfig}"
+            LIBEXECDIR="${LIBEXECDIR-$NHC_CFG_PREFIX/libexec}"
+            STATEDIR="${STATEDIR-$NHC_CFG_PREFIX/var}"
+            CONFDIR="${CONFDIR-$NHC_CFG_PREFIX/etc/nhc}"
+            HELPERDIR="${HELPERDIR-$LIBEXECDIR/nhc}"
+            LOGDIR="${LOGDIR-$STATEDIR/log}"
+            RUNDIR="${RUNDIR-$STATEDIR/run/nhc}"
+            if [[ "$NHC_CFG_PREFIX" == *'/nhc'* ]]; then
+                # No need for `/nhc` to appear >1 time!   -- Bob, the Secretary of Redundancy Secretary, US Dept of Redundancy Dept
+                CONFDIR="${CONFDIR%/nhc}"
+                HELPERDIR="${HELPERDIR%/nhc}"
+                RUNDIR="${RUNDIR%/nhc}"
+            fi
+            # Do this one last in case CONFDIR changed.
+            INCDIR="${INCDIR-$CONFDIR/scripts}"
+        fi
     fi
 
     pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/sysconfig}" "$SYSCONFIGDIR" \
@@ -600,8 +619,8 @@ function nhcmain_init_env() {
     # Using the assorted machinations above, use similar logic to establish locations of configs, checks, and tools, respectively.
     pickdir '$CONFDIR'   "$NHC_CFG_CONFDIR"   "$CONFDIR"   "$NHC_CFG_PREFIX/etc/nhc" "$NHC_CFG_PREFIX/etc" '/etc/nhc' \
         || if (( EUID == 0 )); then CONFDIR='/etc/nhc'; else CONFDIR="$HOME/.nhc/etc"; fi
-    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
     pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR" "$LIBEXECDIR/nhc"   || HELPERDIR="$LIBEXECDIR/nhc"
+    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
     pickdir '$LOGDIR'    "$NHC_CFG_LOGDIR"    "$LOGDIR"    "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
     pickdir '$RUNDIR'    "$NHC_CFG_RUNDIR"    "$RUNDIR"    "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
 

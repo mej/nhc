@@ -2,8 +2,23 @@ AUTOMAKE_OPTIONS = foreign
 SUBDIRS = bench test
 #SHELL = /bin/bash -x
 
+# NOTE:  The space at the front of `ifeq` and its buddies below is required to
+#        work around a GNU Automake bug.  Without the leading whitespace,
+#        `automake` errors out, complaining that there's an `else` with no `if`
+#        (and the same error again with `endif`).  Well, thank you, Captain
+#        Obvious, but that's just not an error.  :-I
+# See:  https://patchwork.kernel.org/project/intel-gfx/patch/1435845897-14001-1-git-send-email-damien.lespiau@intel.com/
+#
+ ifeq (/nhc,$(findstring /nhc,$(prefix)))
+helperdir = $(libexecdir)
+confdir = $(sysconfdir)
+nhc_sysconfig = $(prefix)/sysconfig
+ else
 helperdir = $(libexecdir)/nhc
 confdir = $(sysconfdir)/nhc
+nhc_sysconfig = $(sysconfdir)/sysconfig
+ endif
+
 logrotatedir = $(sysconfdir)/logrotate.d
 
 dist_sbin_SCRIPTS = nhc nhc-genconf nhc-wrapper
@@ -18,14 +33,14 @@ nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc		\
                         scripts/lbnl_ps.nhc  scripts/csc_nvidia_smi.nhc
 
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
-DISTCLEANFILES = 
-CLEANFILES = 
+DISTCLEANFILES =
+CLEANFILES =
 EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate		\
              nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
 install-data-local:
-	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' \
-		'$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(confdir)/sysconfig'
+	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/log' \
+		'$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(sysconfdir)/sysconfig' '$(DESTDIR)$(nhc_sysconfig)'
 	$(INSTALL_DATA) $(srcdir)/nhc.logrotate '$(DESTDIR)$(logrotatedir)/nhc'
 
 uninstall-local:

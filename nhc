@@ -204,8 +204,8 @@ function syslog() {
 function syslog_flush() { syslog -f "$@"; }
 
 function tsup()  { TSS=''; (( NHC_TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
-function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >& $2; }
-function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" $'\n' >& $2; }
+function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" >&${2:-1}; }
+function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" >&${2:-1}; }
 function dbg()   { _out  $((DEBUG))    2   "DEBUG:  $@"; }
 function dbgf()  { _outf $((DEBUG))    2   "DEBUG:  $@"; }
 function log()   { _out  $((!SILENT))  1           "$@"; }
@@ -389,7 +389,7 @@ function pickdir() {
     fi
 
     # Make sure each directory exists, evaluate the conditional, and act on the result.
-    dbg "${FUNCNAME[0]}():  Picking from $# directories (\"$*\"${DELIM:+ split on '${DELIM}'}) to satisfy the conditional ${COND}"
+    dbg "${FUNCNAME[0]}():  Picking${VARNAME:+ \$$VARNAME} from $# directories (\"$*\"${DELIM:+ split on '${DELIM}'}) to satisfy the conditional ${COND}"
     for DIR in "${DIRS[@]}"; do
         dbg " -> Checking ${DIR}..."
         if [[ -d "${DIR}" ]]; then
@@ -409,7 +409,7 @@ function pickdir() {
     done
 
     # If none of the candidates pass, set the variable to the empty string, and return the number of paths we tried.
-    dbg "${FUNCNAME[0]}():  Ran out of candidate directories without finding a match.  We lose."
+    dbg "${FUNCNAME[0]}():  Tried ${#DIRS[*]} candidate directories without finding a match.  We lose."
     printf ${VARNAME:+-v${VARNAME}} '%s' ''
     return $(( (${#DIRS[*]} < 100) ? (${#DIRS[*]}) : (100) ))
 }
@@ -449,7 +449,7 @@ function nhcmain_version_info() {
         fi
         echo
 
-        printf '%20s  Host %s (%s)  RM "%s"  LIBEXECDIR="%s" SYSCONFIGDIR="%s"  STATEDIR=%s\n' \
+        printf '%20s  Host %s (%s)  RM "%s"  LIBEXECDIR="%s" SYSCONFIGDIR="%s"  STATEDIR="%s"\n' \
                 "System Setup:" "$HOSTNAME_S" "$HOSTNAME" "$NHC_RM" "$LIBEXECDIR" "$SYSCONFIGDIR" "$STATEDIR"
         printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s" LOGDIR="%s" RUNDIR="%s"\n' \
                 "Package Setup:" "$CONFDIR" "$HELPERDIR" "$INCDIR" "$LOGDIR" "$RUNDIR"
@@ -484,6 +484,7 @@ function nhcmain_version_info() {
 
 function nhcmain_init_env() {
     local _DEF_SCDIR='/etc/sysconfig' _DEF_LEXDIR='/usr/libexec' _DEF_STATEDIR='/var'
+    #local -a XTRADIRS=( )     ### FIXME:  Try harder? e.g., $(realpath "<other-nhc-dir>"/../{../,}lib{exec,})
     local -i RC=1
 
     unset CONFDIR CONFFILE INCDIR HELPERDIR LOGDIR RUNDIR STATEDIR DEBUG EVAL_LINE LOGFILE RESULTFILE SILENT
@@ -550,14 +551,28 @@ function nhcmain_init_env() {
         source "${NHC_CFG_GLOBAL}" && RC=0
     fi
 
-    if [[ (-n "$NHC_CFG_PREFIX") && (! -d "$NHC_CFG_PREFIX") ]]; then
-        warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
-            "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX")"
-        unset NHC_CFG_PREFIX
+    if [[ -n "$NHC_CFG_PREFIX" ]]; then
+        if [[ ! -d "$NHC_CFG_PREFIX" ]]; then
+            warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
+                "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX")"
+            unset NHC_CFG_PREFIX
+        else
+            # Set paths according to the default layout, but don't overwrite what might've just been imported!
+            CONFDIR="${CONFDIR-$NHC_CFG_PREFIX/etc/nhc}"
+            INCDIR="${INCDIR-$CONFDIR/scripts}"
+            SYSCONFIGDIR="${SYSCONFIGDIR-$CONFDIR/sysconfig}"
+
+            LIBEXECDIR="${LIBEXECDIR-$NHC_CFG_PREFIX/libexec}"
+            HELPERDIR="${HELPERDIR-$LIBEXECDIR/nhc}"
+
+            STATEDIR="${STATEDIR-$NHC_CFG_PREFIX/var}"
+            LOGDIR="${LOGDIR-$STATEDIR/log}"
+            RUNDIR="${RUNDIR-$STATEDIR/run/nhc}"
+        fi
     fi
 
-    pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/sysconfig}" "$SYSCONFIGDIR" \
-            "${NHC_CFG_CONFDIR:+$NHC_CFG_CONFDIR/sysconfig}" "$_DEF_SCDIR" '/etc/sysconfig' '/etc/default'
+    pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "$SYSCONFIGDIR" "${NHC_CFG_CONFDIR:+$NHC_CFG_CONFDIR/sysconfig}" \
+            "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/sysconfig}" "$_DEF_SCDIR" '/etc/sysconfig' '/etc/default'
     if [[ -z "$SYSCONFIGDIR" ]]; then
         if (( EUID == 0 )); then
             SYSCONFIGDIR="/etc/nhc/sysconfig"
@@ -570,11 +585,11 @@ function nhcmain_init_env() {
     #    mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
     #fi
 
-    pickdir '$LIBEXECDIR' "$NHC_CFG_LIBEXECDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/libexec}" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/lib}" \
-            "$LIBEXECDIR" "$_DEF_LEXDIR" '/usr/libexec' '/usr/lib' "${NHC_CFG_CONFDIR:+$(realpath "$NHC_CFG_CONFDIR"/../{../,}lib{exec,})}"
+    pickdir '$LIBEXECDIR' "$NHC_CFG_LIBEXECDIR" "$LIBEXECDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/libexec}" \
+        "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/lib}" "$_DEF_LEXDIR" '/usr/libexec' '/usr/lib'
     if [[ -z "$LIBEXECDIR" ]]; then
         if (( EUID == 0 )); then
-            LIBEXECDIR='/usr/lib/nhc'
+            LIBEXECDIR="$NHC_CFG_PREFIX$_DEF_LEXDIR"
         else
             LIBEXECDIR="$HOME/.nhc/libexec"
         fi
@@ -584,10 +599,10 @@ function nhcmain_init_env() {
     #    mkdir -p -m 0700 "${LIBEXECDIR}" >&/dev/null
     #fi
 
-    pickdir '$STATEDIR' "$NHC_CFG_STATEDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/var}" "$STATEDIR" "$_DEF_STATEDIR" '/var' "${NHC_CFG_CONFDIR:+$(realpath "$NHC_CFG_CONFDIR"/../{../,}var)}"
+    pickdir '$STATEDIR' "$NHC_CFG_STATEDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/var}" "$STATEDIR" "$_DEF_STATEDIR" '/var'
     if [[ -z "$STATEDIR" ]]; then
         if (( EUID == 0 )); then
-            STATEDIR='/usr/lib/nhc'
+            STATEDIR="$NHC_CFG_PREFIX/var"
         else
             STATEDIR="$HOME/.nhc/var"
         fi
@@ -600,8 +615,8 @@ function nhcmain_init_env() {
     # Using the assorted machinations above, use similar logic to establish locations of configs, checks, and tools, respectively.
     pickdir '$CONFDIR'   "$NHC_CFG_CONFDIR"   "$CONFDIR"   "$NHC_CFG_PREFIX/etc/nhc" "$NHC_CFG_PREFIX/etc" '/etc/nhc' \
         || if (( EUID == 0 )); then CONFDIR='/etc/nhc'; else CONFDIR="$HOME/.nhc/etc"; fi
-    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
     pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR" "$LIBEXECDIR/nhc"   || HELPERDIR="$LIBEXECDIR/nhc"
+    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
     pickdir '$LOGDIR'    "$NHC_CFG_LOGDIR"    "$LOGDIR"    "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
     pickdir '$RUNDIR'    "$NHC_CFG_RUNDIR"    "$RUNDIR"    "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
 

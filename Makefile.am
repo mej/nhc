@@ -18,19 +18,19 @@ nobase_dist_conf_DATA = scripts/lbnl_cmd.nhc scripts/common.nhc		\
                         scripts/lbnl_ps.nhc  scripts/csc_nvidia_smi.nhc
 
 MAINTAINERCLEANFILES = Makefile.in aclocal.m4 configure install-sh missing
-DISTCLEANFILES = 
-CLEANFILES = 
+DISTCLEANFILES =
+CLEANFILES =
 EXTRA_DIST = COPYING ChangeLog LICENSE autogen.sh nhc.logrotate		\
              nhc-test.conf lbnl-nhc.spec contrib/nhc.cron
 
 install-data-local:
-	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(localstatedir)/lib/nhc' \
-		'$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(confdir)/sysconfig'
+	$(MKDIR_P) '$(DESTDIR)$(logrotatedir)' '$(DESTDIR)$(confdir)/sysconfig' \
+		'$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(localstatedir)/log'
 	$(INSTALL_DATA) $(srcdir)/nhc.logrotate '$(DESTDIR)$(logrotatedir)/nhc'
 
 uninstall-local:
 	-( cd '$(DESTDIR)$(logrotatedir)' && rm -f nhc )
-	-rmdir '$(DESTDIR)$(localstatedir)/lib/nhc' '$(DESTDIR)$(localstatedir)/run/nhc'
+	-rmdir '$(DESTDIR)$(confdir)/sysconfig' '$(DESTDIR)$(localstatedir)/run/nhc' '$(DESTDIR)$(localstatedir)/log'
 
 install-exec-hook:
 	if test -n '@NHC_VERSION@' && ! grep -q '^NHC_VERSION="@NHC_VERSION@"' $(DESTDIR)$(sbindir)/nhc; then \

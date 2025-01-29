@@ -49,7 +49,7 @@ NHC_VERSION="1.5"
 export NHC_VERSION
 
 # Count how many times `-V` flag was specified
-typeset -i NHC_OPT_VERINFO=0
+typeset -i NHC_OPT_VERINFO=0 NHC_FD_OUT=1 NHC_FD_ERR=2
 
 # TSS (TimeStampSeconds) will remain empty unless NHC_TS is activated.
 # See the _out*() functions below for usage.
@@ -204,20 +204,20 @@ function syslog() {
 function syslog_flush() { syslog -f "$@"; }
 
 function tsup()  { TSS=''; (( NHC_TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
-function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" >&${2:-1}; }
-function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" >&${2:-1}; }
-function dbg()   { _out  $((DEBUG))    2   "DEBUG:  $@"; }
-function dbgf()  { _outf $((DEBUG))    2   "DEBUG:  $@"; }
-function log()   { _out  $((!SILENT))  1           "$@"; }
-function logf()  { _outf $((!SILENT))  1           "$@"; }
-function vlog()  { _out  $((VERBOSE))  1           "$@"; }
-function vlogf() { _outf $((VERBOSE))  1           "$@"; }
-function out()   { _out  $((!SILENT))  $NHC_FD_OUT "$@"; }
-function outf()  { _outf $((!SILENT))  $NHC_FD_OUT "$@"; }
-function eout()  { _out  $((!SILENT))  $NHC_FD_ERR "$@"; }
-function eoutf() { _outf $((!SILENT))  $NHC_FD_ERR "$@"; }
-function vout()  { _out  $((VERBOSE))  $NHC_FD_OUT "$@"; }
-function voutf() { _outf $((VERBOSE))  $NHC_FD_OUT "$@"; }
+function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >&$2; }
+function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" >&$2; }
+function dbg()   { _out  $((DEBUG))    2        "DEBUG:  $@"; }
+function dbgf()  { _outf $((DEBUG))    2        "DEBUG:  $@"; }
+function log()   { _out  $((!SILENT))  1                "$@"; }
+function logf()  { _outf $((!SILENT))  1                "$@"; }
+function vlog()  { _out  $((VERBOSE))  1                "$@"; }
+function vlogf() { _outf $((VERBOSE))  1                "$@"; }
+function out()   { _out  $((!SILENT))  ${NHC_FD_OUT:-1} "$@"; }
+function outf()  { _outf $((!SILENT))  ${NHC_FD_OUT:-1} "$@"; }
+function eout()  { _out  $((!SILENT))  ${NHC_FD_ERR:-2} "$@"; }
+function eoutf() { _outf $((!SILENT))  ${NHC_FD_ERR:-2} "$@"; }
+function vout()  { _out  $((VERBOSE))  ${NHC_FD_OUT:-1} "$@"; }
+function voutf() { _outf $((VERBOSE))  ${NHC_FD_OUT:-1} "$@"; }
 
 # "Aliases" (wrappers) for the original functions that got renamed.
 function oecho() { out "$@"; }
@@ -554,7 +554,7 @@ function nhcmain_init_env() {
     if [[ -n "$NHC_CFG_PREFIX" ]]; then
         if [[ ! -d "$NHC_CFG_PREFIX" ]]; then
             warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
-                "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX")"
+                "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX" 2>&1)"
             unset NHC_CFG_PREFIX
         else
             # Set paths according to the default layout, but don't overwrite what might've just been imported!
@@ -645,8 +645,6 @@ function nhcmain_init_env() {
     FAIL_CNT=0
     FORCE_SETSID=1
     NHC_FORCED_SESSION=0
-    NHC_FD_OUT=1
-    NHC_FD_ERR=2
     export PATH PS4 SYSCONFIGDIR LIBEXECDIR STATEDIR CONFDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
     export NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 

@@ -8,13 +8,14 @@ GETENT_CMD="${GETENT:-getent}"
 # syntax: check_group_member [-t timeout] -g group
 function check_group_member() {
     local TIMEOUT=10
-    local GROUP="" WHOLEGROUP="" USER=""
+    local GROUP="" WHOLEGROUP="" USER="" MEMBERS=""
 
     OPTIND=1
     while getopts ":t:g:" OPTION; do
         case "$OPTION" in
             t) TIMEOUT="$OPTARG" ;;
             g) GROUP="$OPTARG" ;;
+            m) MEMBERS="$OPTARG" ;;  # comma-separated list
             -) ((OPTIND++)) ; break ;;
             :) die 1 "$CHECK: Option -$OPTARG requires an argument."; return 1 ;;
             \?) die 1 "$CHECK: Invalid option: -$OPTARG"; return 1 ;;
@@ -27,7 +28,11 @@ function check_group_member() {
             return 1
     fi
 
-    for USER in $(echo "$WHOLEGROUP" | cut -d":" -f 4 | tr "," " "); do
+    if [ -z "$MEMBERS" ]; then
+        MEMBERS="$(echo "$WHOLEGROUP" | cut -d":" -f 4)"
+    fi
+
+    for USER in $(echo "$MEMBERS" | tr "," "\n" | sort -R); do
         timeout "$TIMEOUT" su "$USER" -c "whoami" >& /dev/null
         if [ $? -eq 0 ]; then
                 export NHC_USABLE_USER=$USER

@@ -11,7 +11,7 @@ function check_group_member() {
     local GROUP="" WHOLEGROUP="" USER="" MEMBERS=""
 
     OPTIND=1
-    while getopts ":t:g:" OPTION; do
+    while getopts ":t:g:m:" OPTION; do
         case "$OPTION" in
             t) TIMEOUT="$OPTARG" ;;
             g) GROUP="$OPTARG" ;;

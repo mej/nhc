@@ -591,6 +591,18 @@ array_contains () {
     return $in
 }
 
+array_match () {
+    local seeking=$1; shift
+    local in=1
+    for element; do
+        if mcheck_glob "$seeking" "$element" ; then
+            in=0
+            break
+        fi
+    done
+    return $in
+}
+
 # Checks the local file systems for free space with a warning and critical threshold
 function check_all_local_fs_free() {
     local THRESHOLD=0 FS_EXCLUSIONS=0 FS_CHECKS=0
@@ -645,13 +657,15 @@ function check_all_local_fs_free() {
 function check_all_local_fs_mount_check_found_action() {
     local FS_EXCLUSIONS=0 FS_CHECKS=0
     local FS_EXCLUDED=( )
+    local PATH_EXCLUSIONS=0 PATH_EXCLUDED=( )
     local FS_CHECKED=( )
     local OPTION
 
     local OPTIND=1
-    while getopts ":t:X:C:E:" OPTION ; do
+    while getopts ":t:x:X:C:E:" OPTION ; do
         case "$OPTION" in
             X) FS_EXCLUDED[$FS_EXCLUSIONS]="$OPTARG" ; ((FS_EXCLUSIONS++)) ;;
+            x) PATH_EXCLUDED[$PATH_EXCLUSIONS]="$OPTARG" ; ((PATH_EXCLUSIONS++)) ;;
             C) FS_CHECKED[$FS_CHECKS]="$OPTARG" ; ((FS_CHECKS++)) ;;
             -) ((OPTIND++)) ; break ;;
             :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
@@ -674,6 +688,10 @@ function check_all_local_fs_mount_check_found_action() {
         fi
 
         if [ $FS_CHECKS -ne 0 ] && ! array_contains "${FS_TYPE[$i]}" "${FS_CHECKED[@]}"; then
+            continue
+        fi
+
+        if [ "$PATH_EXCLUSIONS" -gt 0 ] && array_match "${FS_MNTPT[$i]}" "${PATH_EXCLUDED[@]}"; then
             continue
         fi
 

@@ -361,3 +361,22 @@ function check_file_stat() {
     done
     return 0
 }
+
+# Check that a directory is empty
+# If there are files in the directory, the first line of the first file will be
+# used as reason for the error.
+function check_dir_empty() {
+    local DIR="$1"
+    local FILE
+    [[ ! -d "$DIR" ]] && return 0
+
+    # temporarily enable globbing (disabled by default in nhc)
+    set +f
+    shopt -s nullglob
+    for FILE in "${DIR}"/*
+    do
+        die 1 "$FILE: `head -1 $FILE`"
+    done
+    set -f
+    shopt -u nullglob
+}

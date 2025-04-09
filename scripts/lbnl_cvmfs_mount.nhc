@@ -1,0 +1,61 @@
+# LBNL NHC - Check a cvmfs mount
+# 
+# Karen Fernsler <kmfernsler@lbl.gov>
+# 09 April 2025
+#
+
+cmd="cvmfs_config"
+cmdcmd="probe"
+#cvmfs="alice.cern.ch"
+cvmfs=$1
+
+
+count=0
+
+function check_cvmfs_mount () {
+
+   local tmp
+   local out=`$cmd $cmdcmd $cvmfs`
+
+   if [[ "$out" =~ "Failed" ]]; then
+   #   echo "fixing cmvfs"
+      systemctl daemon-reload
+      systemctl stop cvmfs-alice.cern.ch.mount
+      systemctl stop cvmfs-alice.cern.ch.automount
+      systemctl start cvmfs-alice.cern.ch.automount
+      systemctl start cvmfs-alice.cern.ch.mount
+   fi
+
+   tmp=$((count+1))
+   count=$tmp
+
+   if [[ "$out" =~ "OK" ]]; then
+      dbg "$cvmfs  OK"
+      return 0
+   fi
+
+   if [[ $count -le 3 ]]; then
+      echo "cvmfs_mount_check"
+      cvmfs_mount_check $count
+   fi
+
+   if [[ $count -eq 3 ]]; then
+      die 1 "$cvmfs unmountable"
+      return 1
+   fi
+
+  # if [[ "$out" =~ "OK" ]]; then
+  #    dbg "$cvmfs  OK"   
+  #    return 0
+  # fi
+}
+
+
+function cvmfs_mount_check () {
+   if [ $count -le 3 ]; then
+   #   echo -n "checking..."
+      check_cvmfs_mount $out
+   fi
+}
+
+cvmfs_mount_check $count

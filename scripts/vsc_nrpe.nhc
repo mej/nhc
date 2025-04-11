@@ -1,0 +1,57 @@
+# shellcheck shell=bash
+# NHC - nrpe check
+#
+# Check the output of an nrpe check
+# based on lbnl_cmd.nhc by Michael Jennings <mej@lbl.gov>
+
+
+function check_nrpe_cmd() {
+    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="${FUNCNAME[0]}" OUTPUT_VAR CMD_START_TS=$SECONDS
+    local IFS RET CMD
+    local -a CMD_LIST LINES
+
+    OPTIND=1
+    while getopts ":c:t:" OPTION ; do
+        case "$OPTION" in
+            c) NRPECHECK="$OPTARG" ;;
+            t) CMD_TIMEOUT="$OPTARG" ;;
+            :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    CMD_LIST=( "/usr/bin/runnrpe" "-e" "$NRPECHECK" )
+
+    # FIXME:  We can't do this as a pipeline because the contents of
+    # the while loop will execute in a subshell, and all our variable
+    # values will get lost.
+    # nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}" | while read LINE ; do
+    #
+    # Once we can drop support for RHEL4 and 5, we can use "coproc"
+    # For now, this means we have to run the command and grab all its
+    # output all in 1 go, so commands with lengthy output must be
+    # avoided.
+    IFS=$'\n'
+    # See Exceptions on https://www.shellcheck.net/wiki/SC2207
+    # shellcheck disable=SC2207
+    LINES=( $(nhc_cmd_with_timeout "$CMD_TIMEOUT" "${CMD_LIST[@]}") )
+    RET=$?
+    if [[ -n "$OUTPUT_VAR" ]]; then
+        eval "$OUTPUT_VAR"'=( "${LINES[@]}" )'
+    fi
+    IFS=$' \t\n'
+
+    if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
+        if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
+            # A return code of 143 (128+15) means that the process received SIGTERM,
+            # probably from our command watchdog timer.  Detect that and make it clearer.
+            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"$CMD\"; subprocess terminated."
+            return 1
+        fi
+        die 1 "NRPE $NRPECHECK ($RET) ${LINES[0]}"
+        return 1
+    fi
+
+}
+

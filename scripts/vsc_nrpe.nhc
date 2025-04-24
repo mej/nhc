@@ -46,7 +46,7 @@ function check_nrpe_cmd() {
         if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
             # A return code of 143 (128+15) means that the process received SIGTERM,
             # probably from our command watchdog timer.  Detect that and make it clearer.
-            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"$CMD\"; subprocess terminated."
+            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"${CMD_LIST[@]}\"; subprocess terminated."
             return 1
         fi
         die 1 "NRPE $NRPECHECK ($RET) ${LINES[0]}"

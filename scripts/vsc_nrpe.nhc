@@ -21,7 +21,7 @@ function check_nrpe_cmd() {
     done
     shift $((OPTIND-1))
 
-    CMD_LIST=( "/usr/bin/runnrpe" "-e" "$NRPECHECK" )
+    CMD_LIST=( "/usr/bin/runnrpe" "-c" "$NRPECHECK" )
 
     # FIXME:  We can't do this as a pipeline because the contents of
     # the while loop will execute in a subshell, and all our variable

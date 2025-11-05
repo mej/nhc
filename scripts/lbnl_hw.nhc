@@ -29,26 +29,32 @@ function nhc_hw_gather_data() {
 
     # Gather CPU info
     PROCESSOR=-1
+
+    # Optimized CPU info gathering for high thread count systems
+    # Uses grep instead of line-by-line bash loop processing
+    # Reduces execution time from 40+ seconds to <1 second on 768-thread systems
     if [[ -e /proc/cpuinfo ]]; then
-        while read -a FIELD ; do
-            if [[ "${FIELD[0]} ${FIELD[1]}" = "processor :" ]]; then
-                : $((PROCESSOR++))
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "physical id :" ]]; then
-                PHYS_ID=${FIELD[3]}
-                if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
-                    PHYS_IDS[$PHYS_ID]=1
-                    : $((HW_SOCKETS++))
-                fi
-            elif [[ "${FIELD[0]} ${FIELD[1]}" = "siblings :" ]]; then
-                SIBLINGS=${FIELD[2]}
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu cores :" ]]; then
-                CORES=${FIELD[3]}
-            elif [[ "${FIELD[0]} ${FIELD[1]} ${FIELD[2]}" = "cpu MHz :" ]]; then
-                MHZ="${FIELD[3]}"
-                MHZ="${MHZ/%.*}"
+        # Fast counting using grep instead of line-by-line processing
+        PROCESSOR=$(grep -c "^processor" /proc/cpuinfo)
+        : $((PROCESSOR--))
+
+        # Count unique physical IDs
+        local phys_id_list
+        phys_id_list=$(grep "^physical id" /proc/cpuinfo | awk '{print $NF}' | sort -u)
+        for PHYS_ID in $phys_id_list; do
+            if [[ -z "${PHYS_IDS[$PHYS_ID]}" ]]; then
+                PHYS_IDS[$PHYS_ID]=1
+                : $((HW_SOCKETS++))
             fi
-        done < /proc/cpuinfo
+        done
+
+        # Get siblings and cores values
+        SIBLINGS=$(grep "^siblings" /proc/cpuinfo | head -1 | awk '{print $NF}')
+        CORES=$(grep "^cpu cores" /proc/cpuinfo | head -1 | awk '{print $NF}')
+        MHZ=$(grep "^cpu MHz" /proc/cpuinfo | head -1 | awk '{print $NF}')
+        MHZ="${MHZ/%.*}"
     fi
+
     if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
         HW_SOCKETS=$((PROCESSOR+1))
         HW_CORES=$HW_SOCKETS

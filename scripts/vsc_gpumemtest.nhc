@@ -1,0 +1,28 @@
+# shellcheck shell=bash
+
+# run the nvidia gpu memcheck once at boot for a specific GPU
+# see HPC-12516
+# example config:
+# * || boot_gpu_memcheck 2
+function boot_gpu_memcheck() {
+    local LOCKDIR LOCKFILE GPU
+
+    GPU=$1
+
+    # shipped by slurm-prepilogue
+    GPU_MEMTEST=/usr/libexec/slurm/prolog/memtestG80
+    LOCKDIR=/run/vsc
+    LOCKFILE=${LOCKDIR}/nhc-gpu-${GPU}-memtest-done
+
+    if [ -e "$LOCKFILE" ];
+    then
+        return 0
+    fi
+
+    # We don't care about the result of this test: if it triggers an error, the
+    # check_gpu_reset nhc check will pick it up
+    $GPU_MEMTEST --gpu "$GPU" 1 1 > /dev/null 2>&1
+
+    mkdir -p "$LOCKDIR"
+    touch "$LOCKFILE"
+}

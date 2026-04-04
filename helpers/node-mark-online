@@ -65,7 +65,12 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             echo "$0:  State \"$STATUS\" not yet handled; ignoring."
             exit 0
             ;;
-        down*|drain*|drng*|fail*|maint*)
+        maint*)
+            # Resuming nodes in this state is an "Invalid node state transition"
+            echo "$0:  Resuming from state \"$STATUS\" is an invalid node state transition; ignoring."
+            exit 0
+            ;;
+        down*|drain*|drng*|fail*)
             # If there is no old note, and we've not been told to ignore that, do not online the node.
             if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
                 echo "$0:  Not onlining $HOSTNAME:  No note set."

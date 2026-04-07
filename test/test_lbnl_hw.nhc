@@ -1,6 +1,11 @@
 # Tests for lbnl_hw.nhc
 
-plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
+plan $((16+7+7+13+13+13+4+4+4+10+3+7+6)) "lbnl_hw.nhc" && {
+    is "`type -t nhc_hw_cpu_gather_data 2>&1`" 'function' 'nhc_hw_cpu_gather_data() loaded properly'
+    is "`type -t nhc_hw_mem_gather_data 2>&1`" 'function' 'nhc_hw_mem_gather_data() loaded properly'
+    is "`type -t nhc_hw_kmod_gather_data 2>&1`" 'function' 'nhc_hw_kmod_gather_data() loaded properly'
+    is "`type -t nhc_hw_hsn_gather_data 2>&1`" 'function' 'nhc_hw_hsn_gather_data() loaded properly'
+    is "`type -t nhc_hw_eth_gather_data 2>&1`" 'function' 'nhc_hw_eth_gather_data() loaded properly'
     is "`type -t nhc_hw_gather_data 2>&1`" 'function' 'nhc_hw_gather_data() loaded properly'
     is "`type -t check_hw_cpuinfo 2>&1`" 'function' 'check_hw_cpuinfo() loaded properly'
     is "`type -t check_hw_physmem 2>&1`" 'function' 'check_hw_physmem() loaded properly'
@@ -10,11 +15,71 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is "`type -t check_hw_swap_free 2>&1`" 'function' 'check_hw_swap_free() loaded properly'
     is "`type -t check_hw_mem_free 2>&1`" 'function' 'check_hw_mem_free() loaded properly'
     is "`type -t check_hw_ib 2>&1`" 'function' 'check_hw_ib() loaded properly'
-    is "`type -t check_hw_gm 2>&1`" 'function' 'check_hw_gm() loaded properly'
     is "`type -t check_hw_eth 2>&1`" 'function' 'check_hw_eth() loaded properly'
+    is "`type -t check_hw_gm 2>&1`" 'function' 'check_hw_gm() loaded properly'
 
 
-    # CPU data:  Dual-socket, 6-core Sandy Bridge system with HT on
+    ###
+    ### CPU Info Tests
+    ###
+
+    ### Auto-generate fake `cpuinfo` file.
+    # NOTE:  NHC doesn't use all the data in /proc/cpuinfo; in fact,
+    # it uses very little of it.  The important items are the
+    # "processor" field (and even there, only the count of them
+    # matters) and the "physical id" field (only the count of unique
+    # values), along with the value of one of the "siblings" lines
+    # (currently the last one, though this may change).  So we don't
+    # need to reproduce an entire cpuinfo file to test our code.
+
+    # These are the "input" (independent) variables:  Socket count,
+    # cores-per-socket count, and threads-per-core count.
+    # We'll use a pair of 38-core Ice Lake-SP Xeon processors, no HT
+    CPUINFO_SOCKETS=2
+    CPUINFO_CPS=40
+    CPUINFO_TPC=1
+
+    # The rest of this is generic
+    CPUINFO_SIBLINGS=$(( CPUINFO_CPS * CPUINFO_TPC ))
+    CPUINFO_CORES=$CPUINFO_CPS
+    CPUINFO_PROCS=$(( CPUINFO_CPS * CPUINFO_TPC * CPUINFO_SOCKETS ))
+    CPUDATA_STR=""  # Note DATA, not INFO
+    for ((p=0; p<CPUINFO_PROCS; p++)); do
+        CPUDATA_STR+=$(printf '%-16s: %s\n%-16s: %s\n%-16s: %s\n%-16s: %s\n' \
+                              'processor' "$p" \
+                              'physical id' $((p % CPUINFO_SOCKETS)) \
+                              'siblings' "$CPUINFO_SIBLINGS" \
+                              'cpu cores' "$CPUINFO_CORES")
+    done
+
+    # For our tests, we'll supply the generated "file" as STDIN
+    CPUINFO_FILE="/dev/stdin"
+    # Check for dual-socket 40-core without HT (e.g., Intel Ice Lake-SP 8380)
+    check_hw_cpuinfo 2 80 80 <<< "$CPUDATA_STR"
+    is $? 0 "Valid test hardware:  2 sockets, 40 cores/socket, 1 thread/core"
+    # Check for dual-socket 6-core HT off (e.g., Intel Patsburg/Sandy Bridge E5-2440)
+    check_hw_cpuinfo 2 12 12 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  2 sockets, 6 cores/socket, 1 thread/core"
+    # Check for dual-socket quad-core with HT (e.g., Intel Nehalem E5520)
+    check_hw_cpuinfo 2 8 16 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  2 sockets, 4 cores/socket, 2 threads/core"
+    # Check for dual-socket quad-core no HT (e.g., Intel Clovertown E5345)
+    check_hw_cpuinfo 2 8 8 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  2 sockets, 4 cores/socket, 1 thread/core"
+    # Check for dual-socket single core (e.g., Intel Lindenhurst with Irwindale Xeons)
+    check_hw_cpuinfo 2 2 2 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  2 sockets, 1 core/socket, 1 thread/core"
+    # Check for single-socket single core (e.g., the year 1998)
+    check_hw_cpuinfo 1 1 1 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  1 socket, 1 core/socket, 1 thread/core"
+    # Idiot-proofing
+    check_hw_cpuinfo 0 0 0 <<< "$CPUDATA_STR"
+    is $? 1 "Invalid test hardware:  Non-existent CPU"
+
+
+    # This time, we'll hard-code the CPU data (like before) and run
+    # all the same checks against the data.  This time it's a
+    # dual-socket, 6-core Sandy Bridge system with HT on
     HW_SOCKETS=2
     HW_CORES=12
     HW_THREADS=24
@@ -42,24 +107,32 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 1 "Invalid test hardware:  Non-existent CPU"
 
 
-    # Memory data:  32GB RAM, 18GB swap
-    HW_RAM_FREE=27828840
-    HW_RAM_TOTAL=32857508
-    HW_SWAP_FREE=18480520
-    HW_SWAP_TOTAL=18563064
+    ###
+    ### Memory Tests
+    ###
+
+    # This "fake file" generation is far simpler than the last one!
+    MEMDATA_STR=$(printf '%s\n%s\n%s\n%s\n%s\n' \
+                         'MemTotal:       32761604 kB' 'MemFree:        22582488 kB' 'Buffers:            3152 kB' \
+                         'Cached:          7692684 kB' 'SwapTotal:      16516092 kB' 'SwapFree:       16516092 kB')
+    MEMINFO_FILE="/dev/stdin"
+    #HW_RAM_FREE=27828840
+    #HW_RAM_TOTAL=32857508
+    #HW_SWAP_FREE=18480520
+    #HW_SWAP_TOTAL=18563064
 
     # Check ranges of RAM:  0, exact, max below, at max, in range, at min, min above
-    check_hw_physmem 0 0
+    check_hw_physmem 0 0 <<< "$MEMDATA_STR"
     is $? 1 "Bogus RAM range:  0kB - 0kB"
-    check_hw_physmem 32857508 32857508
+    check_hw_physmem 32761604 32761604
     is $? 0 "Non-range check equal to actual physical RAM size"
     check_hw_physmem 1 12
     is $? 1 "RAM range maximum is below actual physical RAM size"
-    check_hw_physmem 100 32857508
+    check_hw_physmem 100 32761604
     is $? 0 "RAM range maximum equal to actual physical RAM size"
     check_hw_physmem 31GB 33GB
     is $? 0 "RAM range includes actual physical RAM size"
-    check_hw_physmem 32857508 99G
+    check_hw_physmem 32761604 99G
     is $? 0 "RAM range minimum equal to actual physical RAM size"
     check_hw_physmem 98GB 99GB
     is $? 1 "RAM range minimum is above actual physical RAM size"
@@ -79,21 +152,21 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     # Check ranges of swap:  0, exact, max below, at max, in range, at min, min above
     check_hw_swap 0 0
     is $? 1 "Bogus swap range:  0kB - 0kB"
-    check_hw_swap 18563064 18563064
+    check_hw_swap 16516092 16516092
     is $? 0 "Non-range check equal to actual swap size"
     check_hw_swap 1 12
     is $? 1 "Swap range maximum is below actual swap size"
-    check_hw_swap 100 18563064
+    check_hw_swap 100 16516092
     is $? 0 "Swap range maximum equal to actual swap size"
-    check_hw_swap 18000000 19G
+    check_hw_swap 16000000 19G
     is $? 0 "Swap range includes actual swap size"
-    check_hw_swap 18563064 99G
+    check_hw_swap 16516092 99G
     is $? 0 "Swap range minimum equal to actual swap size"
     check_hw_swap 999999999 99G
     is $? 1 "Swap range minimum is above actual swap size"
-    check_hw_swap 18g 18g 10%
+    check_hw_swap 16g 16g 10%
     is $? 0 "Swap range includes actual swap size given 10% fudge factor"
-    check_hw_swap 18g 18g 0%
+    check_hw_swap 16g 16g 0%
     is $? 1 "Swap range does not include actual swap size given 0% fudge factor"
     check_hw_swap 22g 28g 50%
     is $? 0 "Swap range includes actual swap size given 50% fudge factor (low end)"
@@ -107,15 +180,15 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     # Check ranges of memory:  0, exact, max below, at max, in range, at min, min above
     check_hw_mem 0 0
     is $? 1 "Bogus memory range:  0kB - 0kB"
-    check_hw_mem 51420572 51420572
+    check_hw_mem 49277696 49277696
     is $? 0 "Non-range check equal to actual memory size"
     check_hw_mem 1 12k
     is $? 1 "Memory range maximum is below actual memory size"
-    check_hw_mem 100kB 51420572
+    check_hw_mem 100kB 49277696
     is $? 0 "Memory range maximum equal to actual memory size"
-    check_hw_mem 48g 52gb
+    check_hw_mem 45g 52gb
     is $? 0 "Memory range includes actual memory size"
-    check_hw_mem 51420572 99gb
+    check_hw_mem 49277696 99gb
     is $? 0 "Memory range minimum equal to actual memory size"
     check_hw_mem 99999999 99G
     is $? 1 "Memory range minimum is above actual memory size"
@@ -137,7 +210,7 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 0 "Free RAM - 0 (no) minimum"
     check_hw_physmem_free 100k
     is $? 0 "Free RAM - Minimum below actual"
-    check_hw_physmem_free 27828840
+    check_hw_physmem_free 22582488
     is $? 0 "Free RAM - Minimum equal to actual"
     check_hw_physmem_free 99999999
     is $? 1 "Free RAM - Minimum above actual"
@@ -147,7 +220,7 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 0 "Free Swap - 0 (no) minimum"
     check_hw_swap_free 1mb
     is $? 0 "Free Swap - Minimum below actual"
-    check_hw_swap_free 18480520
+    check_hw_swap_free 16516092
     is $? 0 "Free Swap - Minimum equal to actual"
     check_hw_swap_free 99999M
     is $? 1 "Free Swap - Minimum above actual"
@@ -157,7 +230,7 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 0 "Free memory - 0 (no) minimum"
     check_hw_mem_free 1M
     is $? 0 "Free memory - Minimum below actual"
-    check_hw_mem_free 46309360
+    check_hw_mem_free 39098580
     is $? 0 "Free memory - Minimum equal to actual"
     check_hw_mem_free 99999M
     is $? 1 "Free memory - Minimum above actual"
@@ -193,21 +266,26 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 1 "Present:  Infiniband link on ib1"
 
 
+    ###
+    ### Kernel Module and Myrinet/Ethernet Tests
+    ###
+
     # Kernel module data:  Pared down list from 2.6.32
-    HW_MODULES=( "ext3" "jbd" "vfat" "fat" "pcspkr" "fuse" "ipv6" "cdrom" "3w_sas" "ahci" )
-    # Ethernet data:  4 1GbE NICs, 1 VM bridge, 1 Myrinet card
-    HW_ETH_DEV=( "lo" "eth0" "eth1" "eth2" "eth3" "virbr0" "virbr0-nic" "myri0" )
+    KMOD_LIST=( "ext3" "jbd" "vfat" "fat" "pcspkr" "fuse" "ipv6" "cdrom" "3w_sas" "ahci" )
+    KMOD_STR=$(IFS=$'\n' ; printf '%s\n' "${KMOD_LIST[*]}")
+    KMOD_STR+=$'\n'
+    KMOD_FILE="/dev/stdin"
 
-    # Check for Myrinet interfaces.  No gm kernel module is present.
-    check_hw_gm myri0
-    is $? 1 "Myrinet interface myri0 is present, but no gm driver loaded."
-    check_hw_gm myri1
-    is $? 1 "No myri1 interface present."
+    # Ethernet data:  4 1GbE NICs, 1 VM bridge
+    NETDEV_LIST=( "lo:" "eth0:" "eth1:" "eth2:" "eth3:" "virbr0:" "virbr0-nic:" )
+    NETDEV_STR=$(IFS=$'\n' ; printf '%s\n' "${NETDEV_LIST[*]}")
+    NETDEV_STR+=$'\n'
+    NETDEV_FILE="/dev/stdin"
 
-    # If we "add" the kernel module, it should succeed.
-    HW_MODULES[${#HWMODULES[*]}]=gm
-    check_hw_gm myri0
-    is $? 0 "Myrinet interface myri0 is present and gm driver loaded."
+    # At this point, we need to manually load the above data.  There may be
+    # a better way, but it's not coming to mind at the moment.
+    nhc_hw_kmod_gather_data <<< "${KMOD_STR}"
+    nhc_hw_eth_gather_data <<< "${NETDEV_STR}"
 
     # Check for some NICs
     check_hw_eth lo
@@ -222,6 +300,24 @@ plan $((11+7+13+13+13+4+4+4+10+3+6+6)) "lbnl_hw.nhc" && {
     is $? 1 "Ethernet interface vmbr0 is not present."
     check_hw_eth virbr0
     is $? 0 "Ethernet interface virbr0 is present."
+
+    # Check for Myrinet interfaces.  No gm kernel module is present.
+    check_hw_gm myri0
+    is $? 1 "Myrinet interface myri0 is present, but no gm driver loaded."
+    check_hw_gm myri1
+    is $? 1 "No myri1 interface present."
+
+    # Now we "insert" the Myrinet kernel module; the tests should now pass.
+    KMOD_STR+=$'gm\n'
+    NETDEV_STR+=$'myri0:\n'
+    nhc_hw_kmod_gather_data <<< "${KMOD_STR}"
+    nhc_hw_eth_gather_data <<< "${NETDEV_STR}"
+
+    check_hw_gm myri0
+    is $? 0 "Myrinet interface myri0 is present and gm driver loaded."
+    check_hw_gm myri1
+    isnt $? 0 "Myrinet interface myri1 is still not present."
+
 
     # Fake MCE log data
     MCELOG="echo -e"

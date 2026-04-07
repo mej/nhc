@@ -1,17 +1,18 @@
 # Tests for lbnl_file.nhc
 
-plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
+plan $((3+5+5+3+9+6+8+12+22)) "lbnl_file.nhc" && {
     is "`type -t check_file_contents 2>&1`" 'function' 'check_file_contents() loaded properly'
     is "`type -t check_file_test 2>&1`" 'function' 'check_file_test() loaded properly'
     is "`type -t check_file_stat 2>&1`" 'function' 'check_file_stat() loaded properly'
 
     FILEDATA=$'line1\nline2\nline3\nline4\nline5\nline6\n'
 
-    if ! check_file_contents <(echo "check123") '*123*' ; then
-        # There seems to be a bash bug.  It doesn't handle process substitution
-        # correctly (i.e., <(...) constructs) when debugging (set -x).  Skip.
-        skip $((5+5+3+9+6+8+10))
-    else
+    ### FIXME:  No longer needed?
+    #if [[ $- == *x* ]]; then
+    #    # There seems to be a bash bug.  It doesn't handle process substitution
+    #    # correctly (i.e., <(...) constructs) when debugging (set -x).  Skip.
+    #    skip $((5+5+3+9+6+8+12))
+    #else
         check_file_contents <(echo "$FILEDATA") '/line3/'
         is $? 0 'Single regexp match success'
         check_file_contents <(echo "$FILEDATA") 'line1'
@@ -75,7 +76,7 @@ plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
 
         FILEDATA=$'$pbsserver master.node\n$pbsclient master.node\n$restricted master.node\n\n$usecp *:/global /global\n$usecp *:/clusterfs /clusterfs\n$usecp *:/var/spool/torque /var/spool/torque\n\n$nospool_dir_list *\n$spool_as_final_name true\n\n$node_check_script /usr/sbin/nhc\n$node_check_interval 5,jobstart,jobend\n$down_on_error 1\n$check_poll_time 60\n\n$logevent 255\n$loglevel 3\n'
 
-    # Some real-world example checks against an actual TORQUE pbs_mom config
+        # Some real-world example checks against an actual TORQUE pbs_mom config
         check_file_contents <(echo "$FILEDATA") '/^\$pbsserver master.node$/'
         is $? 0 'Real world example:  Match TORQUE server name against MOM config'
         check_file_contents <(echo "$FILEDATA") '!/^\$pbsserver[[:space:]]*local/'
@@ -93,12 +94,10 @@ plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
         check_file_contents <(echo "$FILEDATA") '!$pbs*'
         is $? 1 'Real world example:  Match TORQUE configuration (negated, failed)'
 
-    # Check some file attributes of a dynamically-created file
+        # Check some file attributes of a dynamically-created file
         FILEDATA='stuff'
-        FILEDATA_FILE=<(echo "$FILEDATA") check_file_test -a "$FILEDATA_FILE" -e "$FILEDATA_FILE" -r "$FILEDATA_FILE"
+        check_file_test -e -r <(echo "$FILEDATA")
         is $? 0 'Bash process substitution file exists and is readable.'
-        check_file_test -a -e -r <(echo "$FILEDATA")
-        is $? 0 'Bash process substitution file exists and is readable (single file, multiple operators).'
         check_file_test -d <(echo "$FILEDATA")
         is $? 1 'Bash process substitution file is not a directory.'
         check_file_test -f <(echo "$FILEDATA")
@@ -115,23 +114,30 @@ plan $((3+5+5+3+9+6+8+10+22)) "lbnl_file.nhc" && {
         is $? 0 'Bash process substitution file is owned by uid $EUID.'
         check_file_test -G <(echo "$FILEDATA")
         is $? 0 'Bash process substitution file is owned by gid of $$.'
-    fi
+        check_file_test -GOer <(echo "$FILEDATA")
+        is $? 0 'Flags to check_file_test() can be bundled.'
+        check_file_test -!dfgkux <(echo "$FILEDATA")
+        is $? 0 'Negation flag means check should pass if all tests fail.'
+        check_file_test -!dfgkux -er <(echo "$FILEDATA")
+        is $? 1 'Negation flag means check should pass IFF all tests fail.'
+    #fi
 
     # Check file stats and compare to expected values
-    TEST_STATS=( `/usr/bin/stat -c '%a %b %B %D %g %h %i %m %s %t %T %u %Y %Z' /` )
-    check_file_stat -m 0123 "/"
+    TEST_STATS=( `/usr/bin/stat -c '0%04a %b %B 0x%D %g %h %i %m %s 0x%04t 0x%04T %u %Y %Z' /` )
+    check_file_stat -p 0123 "/"
     is $? 1 'stat() exact permissions, unlikely value'
-    check_file_stat -m 0${TEST_STATS[0]} "/"
+    check_file_stat -p ${TEST_STATS[0]} "/"
     is $? 0 'stat() exact permissions, correct value'
-    check_file_stat -M 0777 "/"
+    check_file_stat -P 0777 "/"
     is $? 1 'stat() matching permissions, unlikely value'
-    check_file_stat -M 0100 "/"
+    check_file_stat -P 0100 "/"
     is $? 0 'stat() matching permissions, likely value'
     ### TODO:  Block count and size [1] and [2]
     check_file_stat -d 0xdeadbeef "/"
     is $? 1 'stat() device number, unlikely value'
-    check_file_stat -d 0x${TEST_STATS[3]} "/"
+    check_file_stat -d ${TEST_STATS[3]} "/"
     is $? 0 'stat() device number, correct value'
+    ### TODO:  Complete mode in hex
     check_file_stat -g 31415 "/"
     is $? 1 'stat() GID, unlikely value'
     check_file_stat -g ${TEST_STATS[4]} "/"

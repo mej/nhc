@@ -1,3 +1,4 @@
+/p/
 Makefile
 Makefile.in
 configure
@@ -9,6 +10,8 @@ autom4te.cache
 aclocal.m4
 install-sh
 missing
+nhc.conf.*
+*.code-workspace
 *.spec
 *.tar.gz
 *.tar.xz

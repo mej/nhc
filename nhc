@@ -42,44 +42,121 @@
 # or script).  Failure of any check will result in the node being
 # flagged as "unhealthy" and the termination of further checks.
 
-### Library functions
+### Global variable declarations
 
-# Declare a print-error-and-exit function.
+# The following line gets updated automagically
+NHC_VERSION="1.5"
+export NHC_VERSION
+
+# Count how many times `-V` flag was specified
+typeset -i NHC_OPT_VERINFO=0 NHC_FD_OUT=1 NHC_FD_ERR=2
+
+# TSS (TimeStampSeconds) will remain empty unless NHC_TS is activated.
+# See the _out*() functions below for usage.
+TSS=''
+
+# List/Hash Constants that help streamline/simplify output generation.
+readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
+    NHC_BOOL_CLANG=( [0]='false' [1]='true' ) \
+    NHC_BOOL_YESNO=( [0]='no' [1]='yes' ) \
+    NHC_BOOL_ONOFF=( [0]='off' [1]='on' ) \
+    NHC_BOOL_ISNOT=( [0]='not ' [1]='' ) \
+    NHC_BOOL_ISN_T=( [0]="isn't" [1]='is' ) \
+    NHC_BOOL_ARENT=( [0]="aren't" [1]='are' )
+
+
+### Output Functions
+# Convert standard `die()` message to JSON object
+function jsonify() {
+    local VARNAME="$1" _JSON_MSG="${*:3}"
+    local -i RC=$2
+    #local VARNAME="$1" MSGTYPE="$2" _JSON_MSG="${*:4}"
+    #local -i RC=$3
+
+    # CURRENT SCHEMA:
+    # { "objtype": "message.nhc", "msgtype": { "result.check" | "result.run" | "err.check" | "err.internal" },  ?????
+    #   "progname": "nhc", "context": "$NAME", "tag": "$SYSLOG_TAG",
+    #   "exitcode": $RC, "healthy": <true/false>, "message": "$_JSON_MSG" }
+
+    # Objectify the current NHC data we need to log.
+    #printf -v "$VARNAME" '{"objtype":"%s","msgtype":"%s","progname":"%s","context":"%s","tag":"%s","exitcode":"%d","healthy":"%s","message":"%s"}' \
+    #                      'message.nhc' "$MSGTYPE" 'nhc' "$NAME" "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" \
+    #                      $RC ${NHC_BOOL_SHELL[(RC == 0) ? (0) : (1)]} "${_JSON_MSG//\"/\\\"}"
+    printf -v "$VARNAME" '{"progname":"%s","context":"%s","tag":"%s","exitcode":"%d","healthy":"%s","message":"%s"}' \
+                          'nhc' "$NAME" "${SYSLOG_IDENT}${SYSLOG_TAG:+{${SYSLOG_TAG}}}" \
+                          $RC ${NHC_BOOL_SHELL[(RC == 0) ? (0) : (1)]} "${_JSON_MSG//\"/\\\"}"
+}
+# die() is the core function that handles check failure and fatal signals.  Except for "check-all" runs (e.g., `nhc -a`), die()
+# will ultimately terminate the NHC process.  (Unit tests don't use this version of die(), so they don't count.)  The first
+# argument, the "exit code," will almost always be 1 when called due to check failure; currently, there are only a couple
+# exceptions to this (check_cmd_output() and check_file_contents(), both for the same reason -- abnormal/"impossible" parser
+# termination), and even those two cases are being reconsidered.
+#
+# The first argument is "optional;" if it is present and looks like an integer, it is used as the exit code, and the value of `1`
+# is the default if it's empty or not a positive integer.  The remainder of the arguments are used to generate the message.
 function die() {
-    IFS=$' \t\n'
-    local RET="$1"
-    shift
+    local BASE _DIE_MSG RET
+    local LEADER='Health check failed: '     # FIXME:  Config variable?
 
+    IFS=$' \t\n'
+    if [[ -n "$1" && "$1" == +([0-9]) ]]; then
+        RET="$1"
+        shift
+    else
+        RET=1
+    fi
     CHECK_DIED=1
-    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $*"
-    log "ERROR:  $NAME:  Health check failed:  $*"
-    syslog "Health check failed:  $*"
-    syslog_flush
-    if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
+
+    # If we don't know which check was running, or we weren't running a check at all, `"die "` is prepended to the message.
+    # This is a special case that is handled below.
+    [[ -z "$CHECK" ]] && CHECK="$FUNCNAME $_DIE_MSG"
+
+    # Perform log and syslog output, in either plaintext or JSON, juggling the message appropriately(?)
+    # FIXME:  This'll be a hell of a lot cleaner after the "output overhaul"
+    if [[ $# -gt 0 ]]; then
+        BASE="$*"
+    else
+        BASE="'${CHECK:-${FUNCNAME[1]:-${FUNCNAME[0]}}}' ${1:+'$*' }"
+    fi
+    _DIE_MSG="$LEADER $BASE"
+    log "$_DIE_MSG"
+    if (( NHC_FMT_JSON )); then
+        jsonify '_DIE_MSG' "$RET" "$BASE"
+        syslog -f "$_DIE_MSG"
+        _DIE_MSG="$LEADER $BASE"
+    else
+        syslog -f "$_DIE_MSG"
+    fi
+
+    # If the configuration settings and node status warrant it, offline the node.
+    if [[ -n "$NHC_RM" && "$NHC_RM" != 'none' && "$MARK_OFFLINE" -eq 1 && "$FAIL_CNT" -eq 0 ]]; then
         if [[ "${CHECK:0:4}" == "die " ]]; then
-            CHECK="$OFFLINE_NODE '$HOSTNAME' '$*'"
-            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
-            CHECK="$FUNCNAME $*"
+            CHECK="$OFFLINE_NODE '$HOSTNAME' '$_DIE_MSG'"
+            ($OFFLINE_NODE "$HOSTNAME" "$_DIE_MSG")
+            CHECK="$FUNCNAME $_DIE_MSG"
         else
-            eval $OFFLINE_NODE "'$HOSTNAME'" "'$*'"
+            ($OFFLINE_NODE "$HOSTNAME" "$_DIE_MSG")
         fi
     fi
     if [[ -n "$NHC_DETACHED" ]]; then
         if [[ -w "$RESULTFILE" || (! -e "$RESULTFILE" && -w "${RESULTFILE%/*}") ]] && echo "$RET $*" > $RESULTFILE ; then
             dbg "Wrote results file $RESULTFILE:  $RET $*"
         else
-            log "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            syslog "ERROR:  $NAME:  Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
-            syslog_flush
+            _DIE_MSG="Unable to write to \"$RESULTFILE\" -- is ${RESULTFILE%/*} missing/read-only?"
+            log "ERROR:  $NAME:  $_DIE_MSG"
+            if (( NHC_FMT_JSON )); then
+                jsonify '_DIE_MSG' 100 "$_DIE_MSG"
+            fi
+            syslog -f "$_DIE_MSG"
         fi
     elif [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:false" >&$NHC_FD_OUT
-        echo "$HOSTNAME:diagnosis:NHC: $*" >&$NHC_FD_OUT
+        echo "$HOSTNAME:diagnosis:NHC: $_DIE_MSG" >&$NHC_FD_OUT
         echo "end" >&$NHC_FD_OUT
         return 77
     elif [[ -n "$LOGFILE" ]]; then
-        oecho "ERROR:  $NAME:  Health check failed:  $*"
+        oecho "ERROR:  $NAME:  $_DIE_MSG"
     fi
     if [[ "$NHC_CHECK_ALL" == "1" ]]; then
         ((FAIL_CNT++))
@@ -94,97 +171,120 @@ function die() {
     exit $RET
 }
 
-# Quick-and-dirty debugging output
-function dbg() {
-    local PREFIX=""
-
-    if [[ "$DEBUG" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "${PREFIX}DEBUG:  $*"
-    fi
-}
-
-# Quick-and-dirty log output
-function log() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Log output only in VERBOSE mode
-function vlog() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@"
-    fi
-}
-
-# Send information to previous stdout
-function oecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
-# Send information to previous stderr
-function eecho() {
-    local PREFIX=""
-
-    if [[ "$SILENT" == "0" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_ERR
-    fi
-}
-
-# Echo only if VERBOSE
-function vecho() {
-    local PREFIX=""
-
-    if [[ "$VERBOSE" == "1" ]]; then
-        [[ $TS -ne 0 ]] && PREFIX="[$SECONDS] - "
-        echo "$PREFIX$@" >&$NHC_FD_OUT
-    fi
-}
-
 # Store syslog output, send at end of script execution.
 function syslog() {
-    if [[ -z "$LOGGER_TEXT" ]]; then
-        LOGGER_TEXT="$*"
-    else
-        LOGGER_TEXT="$LOGGER_TEXT"$'\n'"$*"
-    fi
-}
+    local _SYSLOG_MSG="$*"
+    local -i FLUSH=0 RC=0
 
-function syslog_flush() {
-    if [[ -n "$LOGGER_TEXT" ]]; then
-        echo "$LOGGER_TEXT" | logger -p daemon.err -t "$NAME[${BASHPID:-$$}]"
+    # For now, there's no point using `getopts`; this is far simpler!
+    if [[ "$1" == "-f" ]]; then
+        (( FLUSH++ ))
+        shift
+        _SYSLOG_MSG="$*"
     fi
-    LOGGER_TEXT=""
+
+    if [[ $# -gt 0 ]]; then
+        # Only output something if there's something to output.
+        if [[ -z "$LOGGER_TEXT" ]]; then
+            LOGGER_TEXT="$*"
+        else
+            LOGGER_TEXT+=$'\n'"$*"
+        fi
+    fi
+    if (( FLUSH )); then
+        if (( ${#LOGGER_TEXT} > 0 )); then
+            $SYSLOG_CMD "$SYSLOG_IDENT${SYSLOG_TAG:+{$SYSLOG_TAG}}" <<< "$LOGGER_TEXT"
+            RC=$?
+        fi
+        LOGGER_TEXT=''
+    fi
+    return $RC
+}
+# "Temporary" wrapper/alias for backward compatibility/just-in-case
+function syslog_flush() { syslog -f "$@"; }
+
+function tsup()  { TSS=''; (( NHC_TS )) && printf -v TSS '[%s] - ' "$SECONDS"; return 0; }
+function _out()  { tsup; (( $1 )) && printf '%s' "$TSS${@:3}" $'\n' >&$2; }
+function _outf() { tsup; (( $1 )) && printf "$3" "$TSS${@:4}" >&$2; }
+function dbg()   { _out  $((DEBUG))    2        "DEBUG:  $@"; }
+function dbgf()  { _outf $((DEBUG))    2        "DEBUG:  $@"; }
+function log()   { _out  $((!SILENT))  1                "$@"; }
+function logf()  { _outf $((!SILENT))  1                "$@"; }
+function vlog()  { _out  $((VERBOSE))  1                "$@"; }
+function vlogf() { _outf $((VERBOSE))  1                "$@"; }
+function out()   { _out  $((!SILENT))  ${NHC_FD_OUT:-1} "$@"; }
+function outf()  { _outf $((!SILENT))  ${NHC_FD_OUT:-1} "$@"; }
+function eout()  { _out  $((!SILENT))  ${NHC_FD_ERR:-2} "$@"; }
+function eoutf() { _outf $((!SILENT))  ${NHC_FD_ERR:-2} "$@"; }
+function vout()  { _out  $((VERBOSE))  ${NHC_FD_OUT:-1} "$@"; }
+function voutf() { _outf $((VERBOSE))  ${NHC_FD_OUT:-1} "$@"; }
+
+# "Aliases" (wrappers) for the original functions that got renamed.
+function oecho() { out "$@"; }
+function eecho() { eout "$@"; }
+function vecho() { vout "$@"; }
+
+# For future use, maybe?
+#function err()   { echo "ERROR:  $*" ; } >&2
+#function errf()  { printf "ERROR:  $1\n" "${@:2}" ; } >&2
+#function warn()  { echo "WARNING:  $*" ; } >&2
+#function warnf() { printf "WARNING:  $1\n" "${@:2}" ; } >&2
+# Or maybe try these?
+function err()   { eout  "ERROR: "      "$@";     }
+function errf()  { eoutf "ERROR:  $1"   "${@:2}"; }
+function warn()  { eout  "WARNING: "    "$@";     }
+function warnf() { eoutf "WARNING:  $1" "${@:2}"; }
+
+
+### Timer utility functions
+
+# Sleep some number of seconds, 100ms at a time, aborting if the PID dies
+function sleep_wait() {
+    local -i TLIM=$((${1:-1} * 10)) WPID="${2:-$NHC_PID}" KSIG="${3:-0}"
+    local -i i=0
+
+    while kill -s "$KSIG" -- ${WPID#-} 2>/dev/null && (( i < TLIM )); do
+        if ! sleep 0.1; then
+            # It's unlikely we'll encounter a `sleep` that can't take
+            # non-integer time values, but just in case, handle it.
+            sleep $1    # Best effort - sleep the original amount
+            return $?
+        fi
+        (( i++ ))
+    done
+    # Return 1 (failure) if the PID is still there after full sleep time
+    return $(( (i == TLIM) ? (1) : (0) ))
 }
 
 function kill_watchdog() {
+    local KPID=${1:-${NHC_WATCHDOG:-0}}
     local i
 
-    dbg "$FUNCNAME:  Watchdog PID is $WATCHDOG_PID."
-    if [[ $WATCHDOG_PID -ne 0 ]]; then
+    if [[ $KPID -ne 0 ]]; then
+        dbg "$FUNCNAME($*):  Terminating watchdog timer $KPID; main NHC watchdog PID is $NHC_WATCHDOG."
         for i in 1 2 3 4 ; do
-            dbg "Killing watchdog timer $WATCHDOG_PID -- Attempt #$i"
-            kill -s INT -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null || return 0
-            sleep 0.01 || sleep 1
+            dbg "Killing watchdog timer $KPID -- Attempt #$i"
+            kill -s INT -- -$KPID $KPID 2>/dev/null || return 0
+            sleep_wait 1 "$KPID"
         done
-        kill -s KILL -- -$WATCHDOG_PID $WATCHDOG_PID 2>/dev/null
+        kill -s KILL -- -$KPID $KPID 2>/dev/null
+    else
+        dbg "$FUNCNAME($*):  Invalid watchdog PID $KPID; main NHC watchdog PID is $NHC_WATCHDOG."
+        return 2
     fi
-    return 0
+
+    if sleep_wait 2 $KPID; then
+        dbg "$FUNCNAME($*):  Successfully terminated watchdog timer $KPID."
+        return 0
+    else
+        dbg "$FUNCNAME($*):  Unable to terminate defunct watchdog timer $KPID (survived SIGKILL)."
+        return 1
+    fi
 }
 
+### Signal Handling Utility Functions
+
+# Toggle Bash's `-x` "tracing" mode on or off in response to SIGUSR1.
 function toggle_bash_tracing() {
     if [[ "$-" == *x* ]]; then
         : "BASH tracing mode (-x) turned off via SIGUSR1."
@@ -195,6 +295,7 @@ function toggle_bash_tracing() {
     fi
 }
 
+# Toggle NHC's `-d` debugging mode on or off in response to SIGUSR2.
 function toggle_debug_mode() {
     if [[ -z "$DEBUG" || "$DEBUG" -eq 0 ]]; then
         DEBUG=1
@@ -205,40 +306,334 @@ function toggle_debug_mode() {
     fi
 }
 
+### General Utility Functions (those required pre-script-loading)
+
+# Find the first directory in a list (passed as individual args or delimited like `$PATH`) that
+# satisfies a given conditional.  Prior to the directory list itself, callers can specify zero
+# or more of:
+#  1 - a variable name to write the result to, starting with a `$` (e.g., `$WINNER`);
+#  2 - a single-character separator used to delimit multiple directories inside a single string
+#      (like `$PATH`, but the delimiter isn't hardcoded to `:`) (e.g., `,`); and/or
+#  3 - a user-specified "conditional" enclosed in braces against which each candidate directory
+#      is evaluated one-at-a-time until a directory is found for which the "conditional" returns
+#      true.  The value of the conditional must be a valid function body, can access the current
+#      candidate directory by referencing `$DIR` or `$1`, and should return (figuratively or
+#      literally) `0` for "true" and anything else for "false" -- in other words, standard POSIX
+#      shell semantics (e.g., `{ [[ "$(stat -c %m "$DIR")" == "${DIR}" ]]; }` (only matches
+#      directories which are themselves mount points)).
+# If a matching directory is found, `pickdir()` will either echo the winning directory path to
+# `stdout` or, if a variable name was provided, assign it to the specified variable; it then
+# returns 0 (shell "true").
+# If no matching directory can be found, nothing is printed, but the empty string *is* assigned
+# to the specified variable if there was one; `pickdir()` will then return "false" -- more
+# precisely, it returns the number of directories that were tested and failed, up to a limit of
+# `100`.  This, hopefully, will assist in troubleshooting unexpected match-finding failures.
+function pickdir() {
+    local -a DIRS=( );
+    local COND='{ :; }' DELIM='' DIR DIRLIST IFS=$' \t\n' VARNAME='';
+    local -i RC=0;
+
+    while (( $# > 0 )); do
+        if [[ "$1" == '/' ]]; then
+            # We don't want single-char path to be taken as a delimiter
+            break
+        elif [[ "$1" == '--' ]]; then
+            # The universal "stop parsing options" option
+            shift
+            break
+        elif (( ${#1} == 0 && $# > 0 )); then
+            # We ignore empty strings to make passing variable expansions simpler (as long as we have args left).
+            shift
+            continue
+        elif (( ${#1} == 1 )); then
+            # A single character (except for `/` above) is a delimiter
+            DELIM="$1"
+            shift
+        elif [[ "${1:0:1}" == '$' ]]; then
+            # If it starts with a `$`, it's a target variable name.
+            VARNAME="${1:1}"
+            shift
+            if [[ -n "${VARNAME//[_0-9A-Za-z]}" ]]; then
+                :
+            fi
+        elif [[ "${1:0:1}" == '{' && "${1: -1:1}" == '}' ]]; then
+            # Braces surround a conditional to override the default of "always true."
+            COND="$1"
+            shift
+        else
+            # If it's not any of those, it's our first path.  Start picking!
+            break
+        fi
+    done
+
+    # Use the brace-enclosed conditional (theirs or ours) as an anonymous function body, and give it a name.
+    eval "function __cond_pick() ${COND}"
+
+    # Check for an empty directory list, delimited string, etc.
+    if [[ $# -eq 0 ]]; then
+        err 'No directories given for picking!'
+        return 2
+    elif [[ $# -gt 1 ]]; then
+        # If more than one item is still left, treat remaining args as a directory list.
+        DIRS=( "$@" )
+        DIRLIST="${DIRS[*]}"
+    elif [[ "${1//${DELIM}}" != "$1" ]]; then
+        # If there's only one arg left, and it contains our chosen delimiter, split on that.
+        DIRLIST="$1"
+        IFS="${DELIM}"
+        DIRS=( $1 )
+    else
+        # Otherwise, it's a single value.  For whatever reason, we're "picking" from a candidate pool of 1.
+        DIRLIST="$1"
+        DIRS=( "$1" )
+    fi
+
+    # Make sure each directory exists, evaluate the conditional, and act on the result.
+    dbg "${FUNCNAME[0]}():  Picking${VARNAME:+ \$$VARNAME} from $# directories (\"$*\"${DELIM:+ split on '${DELIM}'}) to satisfy the conditional ${COND}"
+    for DIR in "${DIRS[@]}"; do
+        dbg " -> Checking ${DIR}..."
+        if [[ -d "${DIR}" ]]; then
+            __cond_pick "${DIR}" || {
+                dbg "    -> Not a match.  Next!"
+                continue
+            }
+        else
+            dbg "    -> That's not a directory."
+            continue
+        fi
+
+        # It's a directory, and the conditional evaluated to "true," so we found our pick.
+        dbg "\"${DIR}\" for the win!"
+        printf ${VARNAME:+-v${VARNAME}} "%s" "${DIR}"
+        return 0
+    done
+
+    # If none of the candidates pass, set the variable to the empty string, and return the number of paths we tried.
+    dbg "${FUNCNAME[0]}():  Tried ${#DIRS[*]} candidate directories without finding a match.  We lose."
+    printf ${VARNAME:+-v${VARNAME}} '%s' ''
+    return $(( (${#DIRS[*]} < 100) ? (${#DIRS[*]}) : (100) ))
+}
+
 #########################
 
+function nhcmain_version_info() {
+    local -i VERINFO=${1:-${NHC_OPT_VERINFO:-0}}
+    local NM=''
+
+    if (( VERINFO >= 1 )); then
+        printf 'LBNL NHC version %s\n' $NHC_VERSION
+    fi
+
+    if (( VERINFO >= 2 )); then
+        # Any transforms or other shenanigans required to facilitate the stuff below...
+        if [[ "$NAME" == 'nhc' ]]; then
+            NM="$NAME"
+        else
+            NM="${BASH_SOURCE[0]##?(*/)?(-)}(${NAME})"
+        fi
+        echo
+
+        # Not sure exactly how to label this; "runtime identity" seems good enough for now, but is it clear enough?
+        printf '%20s  %s running as %s:%s (real %s:%s) with %d groups\n' \
+                'Runtime Identity:' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
+        printf '%20s  %s-%s for %s %s on host %s (%s) - Level %d, Subs %d, Depth %d\n' \
+                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE" \
+                "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))
+    fi
+
+    if (( VERINFO >= 3 )); then
+        # Any transforms or other shenanigans required to facilitate the stuff below...
+        if (( DETACHED_MODE == 0 )); then
+            # If it's false, unset it completely so we can use conditional parameter expansion
+            unset DETACHED_MODE
+        fi
+        echo
+
+        printf '%20s  Host %s (%s)  RM "%s"  LIBEXECDIR="%s" SYSCONFIGDIR="%s"  STATEDIR="%s"\n' \
+                "System Setup:" "$HOSTNAME_S" "$HOSTNAME" "$NHC_RM" "$LIBEXECDIR" "$SYSCONFIGDIR" "$STATEDIR"
+        printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s" LOGDIR="%s" RUNDIR="%s"\n' \
+                "Package Setup:" "$CONFDIR" "$HELPERDIR" "$INCDIR" "$LOGDIR" "$RUNDIR"
+
+        #printf '%20s  (NHC_CFG_)GLOBAL="%s" SYSCONFIGDIR="%s" LIBEXECDIR="%s" CONFDIR="%s" INCDIR="%s" HELPERDIR="%s"\n' \
+        #        "NHC_CFG_* Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" "${NHC_CFG_LIBEXECDIR-<unset>}" \
+        #        "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}"
+        printf -v S ' %s' 'NHC_CFG_'{SYSCONFIG,LIBEXEC,STATE}'DIR="%s"'
+        printf '%20s  NHC_CFG_GLOBAL="%s"'"$S"'\n' \
+                "Init Env Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" \
+                "${NHC_CFG_LIBEXECDIR-<unset>}" "${NHC_CFG_STATEDIR-<unset>}"
+        printf -v S ' %s' 'NHC_CFG_'{CONF,INC,HELPER,LOG,RUN}'DIR="%s"'
+        printf '%20s  '"${S:1}"'\n' '' "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}" \
+                "${NHC_CFG_LOGDIR-<unset>}" "${NHC_CFG_RUNDIR-<unset>}"
+
+        printf '%20s  Context "%s" Config "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
+                "Invocation Details:" "$NAME" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
+                "${NHC_BOOL_ONOFF[${#DETACHED_MODE}]^^}" "${NHC_DETACHED:+ (from $NHC_DETACHED)}" \
+                "${DETACHED_MODE:+, data ${NHC_BOOL_ISNOT[DETACHED_MODE_FAIL_NODATA]}required}"
+        printf '%20s  LOGFILE="%s" RESULTFILE="%s"\n' \
+                "Results/Reporting:" "$LOGFILE" "$RESULTFILE"
+        printf '%20s  SYSLOG_CMD="%s" SYSLOG_IDENT="%s" SYSLOG_TAG="%s"\n' \
+                "System Logging:" "$SYSLOG_CMD" "$SYSLOG_IDENT" "$SYSLOG_TAG"
+        printf '%20s  ALL=%s FORKED=%s  SID %d (%sforced)  MARK_OFFLINE=%s ONLINE_NODE="%s" OFFLINE_NODE="%s"\n' \
+                "Check Handling:" "$NHC_CHECK_ALL" "$NHC_CHECK_FORKED" "$NHC_SID" \
+                "${NHC_BOOL_ISNOT[(NHC_FORCED_SESSION == 0 ? 0 : 1)]}" "$MARK_OFFLINE" "$ONLINE_NODE" "$OFFLINE_NODE"
+        echo
+    fi
+
+    return 0
+}
+
 function nhcmain_init_env() {
-    ### Variable declarations
+    local _DEF_SCDIR='/etc/sysconfig' _DEF_LEXDIR='/usr/libexec' _DEF_STATEDIR='/var'
+    #local -a XTRADIRS=( )     ### FIXME:  Try harder? e.g., $(realpath "<other-nhc-dir>"/../{../,}lib{exec,})
+    local -i RC=1
+
+    unset CONFDIR CONFFILE INCDIR HELPERDIR LOGDIR RUNDIR STATEDIR DEBUG EVAL_LINE LOGFILE RESULTFILE SILENT
+    unset TIMEOUT VERBOSE SYSLOG_CMD SYSLOG_FAC SYSLOG_IDENT SYSLOG_LEVEL SYSLOG_PRIO SYSLOG_SIZE
+
+    # We already (usually) accept pre-existing values in the environment, but
+    # some important global settings -- paths in particular -- are not
+    # "namespaced;" for conflict-avoidance purposes, these are unset prior to
+    # configuration.  To address this issue, we also now handle a series of
+    # environment variables named starting with `NHC_CFG_`.  These are safe to
+    # set/change anywhere, including places like `/etc/bashrc` and/or
+    # `~/.bashrc`, and take precedence over everything but the command line.
+    # This will also help a lot with non-`root` NHC use!
+    #
+    # NHC_CFG_GLOBAL - (Full) path to global settings file, like `/etc/sysconfig/nhc`
+    #NHC_CFG_GLOBAL="$HOME/.nhc/globals.env.bash"
+    #
+    # NHC_CFG_PREFIX - Assume `autoconf`-style layout with `--prefix=<value>`
+    #NHC_CFG_PREFIX="/usr/local"
+    #
+    # NHC_CFG_SYSCONFIGDIR - Override default `SYSCONFIGDIR` value (OS-dependent)
+    #NHC_CFG_SYSCONFIGDIR="$HOME/.nhc/global"
+    #
+    # NHC_CFG_LIBEXECDIR - Override default `LIBEXECDIR` value (OS-dependent)
+    #NHC_CFG_LIBEXECDIR="$HOME/.nhc/libexec"
+    #
+    # NHC_CFG_STATEDIR - Override default `STATEDIR` value (OS-dependent)
+    #NHC_CFG_STATEDIR="$HOME/.nhc/var"
+    #
+    # NHC_CFG_CONFDIR - Override default `CONFDIR` value (`/etc/nhc`)
+    #NHC_CFG_CONFDIR="$HOME/.nhc"
+    #
+    # NHC_CFG_HELPERDIR - Override default `HELPERDIR` value (`$LIBEXECDIR/nhc`)
+    #NHC_CFG_HELPERDIR="$NHC_CFG_CONFDIR/helpers"
+    #
+    # NHC_CFG_INCDIR - Override default `INCDIR` value (`$CONFDIR/scripts`)
+    #NHC_CFG_INCDIR="$NHC_CFG_CONFDIR/checks"
+    #
+    # NHC_CFG_LOGDIR - Override default `LOGDIR` value (`$STATEDIR/log`)
+    #NHC_CFG_LOGDIR="$NHC_CFG_STATEDIR/log"
+    #
+    # NHC_CFG_RUNDIR - Override default `RUNDIR` value (`$STATEDIR/run/nhc`)
+    #NHC_CFG_RUNDIR="$NHC_CFG_STATEDIR/run"
+    #
+    # NOTE:  Some or all of these may be changed in a future release into keys
+    #        of a single hashmap (e.g., NHC_CFG[global]) to be even safer!
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]}()]> '
-    if [[ -f "/etc/debian_version" ]]; then
-        SYSCONFIGDIR="/etc/default"
-        LIBEXECDIR="/usr/lib"
-    else
-        if [[ -d "/etc/sysconfig" ]]; then
-            SYSCONFIGDIR="/etc/sysconfig"
-        elif [[ -d "/etc/default" ]]; then
-            SYSCONFIGDIR="/etc/default"
+    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-${BASH_SOURCE[0]##*/}.main}()]> '
+
+    # To guess or not to guess.  Too complicated, I think.  "Overengineered."
+    #local GUESS_PFX=$(realpath ${BASH_SOURCE[0]%/*}/.)
+    #if [[ "$GUESS_PFX" == *(*/)?(s)bin ]]; then
+    #    GUESS_PFX=$(realpath "$GUESS_PFX"/../.)
+    #fi
+    #if [[ -d "$GUESS_PFX/etc" && (-d "$GUESS_PFX/bin" || -d "$GUESS_PFX/sbin") && (-d "$GUESS_PFX/libexec" || -d "$GUESS_PFX/lib") ]]; then
+    #    export NHC_CFG_PREFIX="$GUESS_PFX"
+    #fi
+
+    # Pre-populate settings based on new global-safe variable names
+    if [[ -n "${NHC_CFG_GLOBAL}" ]]; then
+        # One environment to rule them all!
+        source "${NHC_CFG_GLOBAL}" && RC=0
+    fi
+
+    if [[ -n "$NHC_CFG_PREFIX" ]]; then
+        if [[ ! -d "$NHC_CFG_PREFIX" ]]; then
+            warnf 'The NHC autotools-layout prefix value is set (%s) but is missing/invalid:  %s\n' \
+                "NHC_CFG_PREFIX='$NHC_CFG_PREFIX'" "$(ls -Flaid "$NHC_CFG_PREFIX" 2>&1)"
+            unset NHC_CFG_PREFIX
         else
-            SYSCONFIGDIR="/etc/nhc/sysconfig"
-            if [[ ! -d "${SYSCONFIGDIR}" ]]; then
-                mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
-            fi
-        fi
-        if [[ -d "/usr/libexec" ]]; then
-            LIBEXECDIR="/usr/libexec"
-        else
-            LIBEXECDIR="/usr/lib"
+            # Set paths according to the default layout, but don't overwrite what might've just been imported!
+            CONFDIR="${CONFDIR-$NHC_CFG_PREFIX/etc/nhc}"
+            INCDIR="${INCDIR-$CONFDIR/scripts}"
+            SYSCONFIGDIR="${SYSCONFIGDIR-$CONFDIR/sysconfig}"
+
+            LIBEXECDIR="${LIBEXECDIR-$NHC_CFG_PREFIX/libexec}"
+            HELPERDIR="${HELPERDIR-$LIBEXECDIR/nhc}"
+
+            STATEDIR="${STATEDIR-$NHC_CFG_PREFIX/var}"
+            LOGDIR="${LOGDIR-$STATEDIR/log}"
+            RUNDIR="${RUNDIR-$STATEDIR/run/nhc}"
         fi
     fi
-    if [[ -r /proc/sys/kernel/hostname ]]; then
+
+    pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "$SYSCONFIGDIR" "${NHC_CFG_CONFDIR:+$NHC_CFG_CONFDIR/sysconfig}" \
+            "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/sysconfig}" "$_DEF_SCDIR" '/etc/sysconfig' '/etc/default'
+    if [[ -z "$SYSCONFIGDIR" ]]; then
+        if (( EUID == 0 )); then
+            SYSCONFIGDIR="/etc/nhc/sysconfig"
+        else
+            SYSCONFIGDIR="$HOME/.nhc/sysconfig"
+        fi
+    fi
+    ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
+    #if [[ ! -d "${SYSCONFIGDIR}" ]]; then
+    #    mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
+    #fi
+
+    pickdir '$LIBEXECDIR' "$NHC_CFG_LIBEXECDIR" "$LIBEXECDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/libexec}" \
+        "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/lib}" "$_DEF_LEXDIR" '/usr/libexec' '/usr/lib'
+    if [[ -z "$LIBEXECDIR" ]]; then
+        if (( EUID == 0 )); then
+            LIBEXECDIR="$NHC_CFG_PREFIX$_DEF_LEXDIR"
+        else
+            LIBEXECDIR="$HOME/.nhc/libexec"
+        fi
+    fi
+    ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
+    #if [[ ! -d "${LIBEXECDIR}" ]]; then
+    #    mkdir -p -m 0700 "${LIBEXECDIR}" >&/dev/null
+    #fi
+
+    pickdir '$STATEDIR' "$NHC_CFG_STATEDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/var}" "$STATEDIR" "$_DEF_STATEDIR" '/var'
+    if [[ -z "$STATEDIR" ]]; then
+        if (( EUID == 0 )); then
+            STATEDIR="$NHC_CFG_PREFIX/var"
+        else
+            STATEDIR="$HOME/.nhc/var"
+        fi
+    fi
+    ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
+    #if [[ ! -d "${STATEDIR}" ]]; then
+    #    mkdir -p -m 0700 "${STATEDIR}" >&/dev/null
+    #fi
+
+    # Using the assorted machinations above, use similar logic to establish locations of configs, checks, and tools, respectively.
+    pickdir '$CONFDIR'   "$NHC_CFG_CONFDIR"   "$CONFDIR"   "$NHC_CFG_PREFIX/etc/nhc" "$NHC_CFG_PREFIX/etc" '/etc/nhc' \
+        || if (( EUID == 0 )); then CONFDIR='/etc/nhc'; else CONFDIR="$HOME/.nhc/etc"; fi
+    pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR" "$LIBEXECDIR/nhc"   || HELPERDIR="$LIBEXECDIR/nhc"
+    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
+    pickdir '$LOGDIR'    "$NHC_CFG_LOGDIR"    "$LOGDIR"    "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
+    pickdir '$RUNDIR'    "$NHC_CFG_RUNDIR"    "$RUNDIR"    "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
+
+    # Figure out `HOSTNAME` and `HOSTNAME_S` (long and short hostnames, respectively)
+    if [[ -n "$NHC_HOST" ]]; then
+        dbg "\$NHC_HOST is set to \"${NHC_HOST}\" to override $HOSTNAME."
+        HOSTNAME="${NHC_HOST}"
+    elif [[ -n "$HOSTNAME" ]]; then
+        dbg "\$HOSTNAME is already set to \"$HOSTNAME\" -- hopefully that's correct."
+    elif [[ -s "/etc/hostname" ]]; then
+        read HOSTNAME < /etc/hostname
+    elif [[ -r /proc/sys/kernel/hostname ]]; then
         read HOSTNAME < /proc/sys/kernel/hostname
-    elif [[ -z "$HOSTNAME" ]]; then
+    else
         HOSTNAME="localhost"
     fi
-    HOSTNAME_S=${HOSTNAME/%.*}
+    HOSTNAME_S=${HOSTNAME%%.*}
     RET=0
     LOGGER_TEXT=""
     NHC_PID=$$
@@ -246,20 +641,15 @@ function nhcmain_init_env() {
         unset BASHPID
     fi
     NHC_START_TS=0
-    WATCHDOG_PID=0
+    NHC_WATCHDOG=0
     FAIL_CNT=0
     FORCE_SETSID=1
-    NHC_FD_OUT=1
-    NHC_FD_ERR=2
-    export PATH PS4 SYSCONFIGDIR LIBEXECDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
-    export NHC_PID NHC_START_TS WATCHDOG_PID FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
+    NHC_FORCED_SESSION=0
+    export PATH PS4 SYSCONFIGDIR LIBEXECDIR STATEDIR CONFDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
+    export NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
-
-    # Don't allow previous environment to leak in.  Must be done from /etc/sysconfig/nhc only.
-    unset CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG SILENT VERBOSE TIMEOUT
-    unset RESULTFILE MAX_SYS_UID NHC_RM NHC_CHECK_ALL NHC_CHECK_FORKED EVAL_LINE
 
     if [[ -n "$NHC_DETACHED" ]]; then
         # We're running detached.
@@ -270,6 +660,11 @@ function nhcmain_init_env() {
     # Disable pathname expansion by default so no unintended globbing happens.
     # We'll turn it back on only where, and only for as long as, we need it.
     set -f
+    # Activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
+    shopt -s expand_aliases extglob 2>/dev/null
+
+    # Return TRUE (0) iff the global settings have already been read in.
+    return $RC
 }
 
 function nhcmain_help() {
@@ -290,15 +685,18 @@ $UNDERLINE
  OPTION            DESCRIPTION
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
- -D <confdir>      Use config directory <confdir> (default: /etc/<name>)
- -a                Run ALL checks; don't exit on first failure (NHC_CHECK_ALL=1)
+ -D <confdir>      Use config directory <confdir> (default: /etc/nhc)
+ -V                Display NHC version (add'l -V(s) show more info) and exit
+ -a                Run ALL checks; don't exit on 1st failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
  -d                Activate debugging output (i.e., DEBUG=1)
  -e <check>        Evaluate check line <check> and exit immediately
  -f                Run checks in forked subprocesses (i.e., NHC_CHECK_FORKED=1)
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
+ -m <host>         Masquerade as <host> (i.e., NHC_HOST=<host>), not "$HOSTNAME"
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
  -q                Run quietly (i.e., SILENT=1)
+ -r <prog>         Force use of <prog> (or "none") as RM (i.e., NHC_RM=<prog>)
  -t <timeout>      Use timeout of <timeout> seconds (default: 30)
  -v                Run verbosely (i.e., VERBOSE=1)
  -x                Run in eXtreme debug/trace mode (same as "bash -x")
@@ -322,21 +720,25 @@ EOF
 }
 
 function nhcmain_parse_cmdline() {
-    local OPTION
+    local OPTION SAVE_SCD="$SYSCONFIGDIR"
 
     OPTIND=1
-    while getopts ":D:ac:de:fhl:n:qt:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhjl:m:n:qr:t:vx" OPTION ; do
         case "$OPTION" in
             D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
             a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
             c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
             d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
             e) EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
             f) NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
             h) nhcmain_help ; exit 0 ;;
+            j) NHC_FMT_JSON=1 ; dbg "Syslog messages will be generated in JSON." ;;
             l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
+            m) NHC_HOST="$OPTARG" ; dbg "Hostname will be set to $NHC_HOST." ;;
             n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
             q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
+            r) NHC_RM="$OPTARG" ; dbg "Resource manager set to $NHC_RM." ;;
             t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
             v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
             x) set -x ; dbg "BASH tracing active." ;;
@@ -349,31 +751,46 @@ function nhcmain_parse_cmdline() {
         eval "$1"
         shift
     done
+
+    # After parsing the command line, if the value for `$SYSCONFIGDIR` has changed,
+    # and the `NHC_CFG_GLOBAL` variable is not set, call `nhcmain_load_sysconfig()`
+    # to ensure that the sysconfig file is read from the new location.
+    if [[ ("$SYSCONFIGDIR" != "$SAVE_SCD") && (-z "$NHC_CFG_GLOBAL") ]]; then
+        nhcmain_load_sysconfig
+    fi
     return 0
 }
 
 function nhcmain_load_sysconfig() {
-    # Load settings from system-wide location.  NOTE:  To change value of $NAME
-    # here, the driver script must be renamed to something other than "nhc"
-    # or "-n foo" or "NAME=foo" must be passed on the command line.
-    if [[ -f $SYSCONFIGDIR/$NAME ]]; then
+    # Load global settings from system-wide location if not already loaded
+    # via `NHC_CFG_GLOBAL` in `nhcmain_init_env()`.
+    if [[ -r $SYSCONFIGDIR/nhc ]]; then
+        . $SYSCONFIGDIR/nhc
+    fi
+    if [[ "$NAME" != 'nhc' && -r $SYSCONFIGDIR/$NAME ]]; then
         . $SYSCONFIGDIR/$NAME
     fi
 }
 
 function nhcmain_finalize_env() {
-    # Set some variables relative to possible /etc/sysconfig/nhc
-    # modifications.  Users may have overridden some of these.
-    CONFDIR="${CONFDIR:-/etc/nhc}"
+    # These are now "guaranteed" to be populated by `nhcmain_init_env()`/`pickdir()`,
+    # so this block is (should be?) redundant and obsolete.  Commented out for now
+    # but will be removed in the future.  Eventually.  Maybe.
+    #STATEDIR="${STATEDIR:-/var}"
+    #CONFDIR="${CONFDIR:-/etc/nhc}"
+    #INCDIR="${INCDIR:-$CONFDIR/scripts}"
+    #HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
+    #LOGDIR="${LOGDIR:-$STATEDIR/log}"
+    #RUNDIR="${RUNDIR:-$STATEDIR/run/nhc}"
+
+    # The rest of these are either independent or based on a setting above.
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
-    INCDIR="${INCDIR:-$CONFDIR/scripts}"
-    HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
     ONLINE_NODE="${ONLINE_NODE:-$HELPERDIR/node-mark-online}"
     OFFLINE_NODE="${OFFLINE_NODE:-$HELPERDIR/node-mark-offline}"
-    LOGFILE="${LOGFILE:->>/var/log/$NAME.log 2>&1}"
-    RESULTFILE="${RESULTFILE:-/var/run/nhc/$NAME.status}"
+    LOGFILE="${LOGFILE:->>$LOGDIR/$NAME.log 2>&1}"
+    RESULTFILE="${RESULTFILE:-$RUNDIR/$NAME.status}"
     DEBUG=${DEBUG:-0}
-    TS=${TS:-$DEBUG}
+    NHC_TS=${NHC_TS:-$DEBUG}
     SILENT=${SILENT:-0}
     VERBOSE=${VERBOSE:-0}
     MARK_OFFLINE=${MARK_OFFLINE:-1}
@@ -382,7 +799,32 @@ function nhcmain_finalize_env() {
     TIMEOUT=${TIMEOUT:-30}
     NHC_CHECK_ALL=${NHC_CHECK_ALL:-0}
     NHC_CHECK_FORKED=${NHC_CHECK_FORKED:-0}
+    NHC_FMT_JSON=${NHC_FMT_JSON:-0}
     export NHC_SID=0
+
+    # Masquerade as a different host (i.e., use a non-canonical hostname) when
+    # interacting with the RM/scheduler.  Useful for platforms where the actual
+    # name of the node (on Linux, that means the current value of `nodename` in
+    # the `struct utsname` structure returned by the `uname(2)` system call for
+    # the current UTS namespace) as returned by the `hostname` command does not
+    # match the node's identifier used by the resource manager.
+    if [[ -n "${NHC_HOST}" ]]; then
+        export HOSTNAME="${NHC_HOST}" HOSTNAME_S="${NHC_HOST%%.*}"
+    else
+        typeset -lrx NHC_HOST="$HOSTNAME"
+    fi
+
+    # Configure syslog() logging.
+    SYSLOG_FAC="${SYSLOG_FAC:-daemon}"
+    SYSLOG_LEVEL="${SYSLOG_LVL:-err}"
+    SYSLOG_PRIO="${SYSLOG_PRIO:-${SYSLOG_FAC}.${SYSLOG_LEVEL}}"
+    SYSLOG_SIZE="${SYSLOG_SIZE-$((1024*16))}"
+    if [[ "$NAME" == "nhc" ]]; then
+        SYSLOG_IDENT="${SYSLOG_IDENT:-${NAME}[${NHC_PID}]}"
+    else
+        SYSLOG_IDENT="${SYSLOG_IDENT:-nhc(${NAME})[${NHC_PID}]}"
+    fi
+    SYSLOG_CMD="${SYSLOG_CMD:-logger ${SYSLOG_PRIO:+-p ${SYSLOG_PRIO} }${SYSLOG_SIZE:+-S ${SYSLOG_SIZE} }-t}"
 
     # Check for session leader.
     kill -s 0 -- -$NHC_PID >/dev/null 2>&1
@@ -390,16 +832,15 @@ function nhcmain_finalize_env() {
         # We're already a session leader, possibly after setsid, possibly not.
         dbg "NHC process $NHC_PID is session leader."
         NHC_SID=-$NHC_PID
-    elif [[ -n "$NHC_FORCED_SESSION" && "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
+    elif [[ "$NHC_FORCED_SESSION" == "$NHC_PID" ]]; then
         # We tried to become a session leader via setsid.  Apparently we failed.
         # Don't try again since that would create an infinite loop.
         dbg "NHC failed to become session leader."
     elif [[ "$FORCE_SETSID" == "1" && -z "$NHC_LOAD_ONLY" ]]; then
         # We are not yet a session leader, but we haven't tried setsid.  Try now.
         dbg "NHC process $NHC_PID is not session leader."
-        dbg "Restarting via setsid:  setsid $0 ${NHC_ARGS_LIST[*]} FORCE_SETSID=0"
-        export NHC_FORCED_SESSION=$NHC_PID
-        exec setsid "$0" "${NHC_ARGS_LIST[@]}" "FORCE_SETSID=0"
+        dbg "Restarting via setsid:  setsid ${NHC_ARGV[*]} FORCE_SETSID=0"
+        exec setsid "${NHC_ARGV[@]}" "FORCE_SETSID=0" "NHC_FORCED_SESSION=$NHC_PID"
     fi
 
     if [[ -n "$EVAL_LINE" ]]; then
@@ -411,33 +852,46 @@ function nhcmain_finalize_env() {
         # If the log file looks like a path rather than a redirect, fix it.
         LOGFILE=">>$LOGFILE 2>&1"
     elif [[ "$LOGFILE" == "-" ]]; then
-        # Since bash doesn't distinguish between unset and empty, we use "-" instead.
+        # The use of a hyphen (-) is pretty standard for representing stdin/stdout
         unset LOGFILE
     fi
 
     if [[ -z "$NHC_RM" ]]; then
-        if ! nhcmain_find_rm ; then
-            ONLINE_NODE=:
-            OFFLINE_NODE=:
-            MARK_OFFLINE=0
-        fi
+        nhcmain_find_rm || NHC_RM='none'
     fi
-    if [[ "$NHC_RM" == "sge" ]]; then
-        # With SGE, we return the status and note directly from NHC.
+    if [[ "$NHC_RM" == 'none' || "$NHC_RM" == 'sge' ]]; then
+        # None of these makes sense without a resource manager!
+        # And with SGE, we return the status and note directly from NHC.
         ONLINE_NODE=:
         OFFLINE_NODE=:
         MARK_OFFLINE=0
-        # SGE's looping model is incompatible with detached mode and the watchdog timer.
-        DETACHED_MODE=0
-        TIMEOUT=0
+        if [[ "$NHC_RM" == "sge" ]]; then
+            # SGE's looping model is incompatible with detached mode and the watchdog timer.
+            DETACHED_MODE=0
+            TIMEOUT=0
+        fi
     fi
 
     # If timestamps are desired, initialize them here.
-    if [[ $TS -ne 0 ]]; then
-        TS=$(date '+%s')
+    if [[ $NHC_TS -ne 0 ]]; then
+        if (( BASHVER >= 42 )); then
+            # BASH 4.2 and higher don't require executing the `date` command.
+            # FIXME:  Remove this "if" once 4.2 becomes required.
+            printf -v NHC_TS '%(%s)T' -1
+        else
+            NHC_TS=$(date '+%s')
+        fi
         ELAPSED_SECONDS=$SECONDS
-        SECONDS=$((ELAPSED_SECONDS+TS))
-        NHC_START_TS=$((TS-ELAPSED_SECONDS))
+        SECONDS=$((ELAPSED_SECONDS+NHC_TS))
+        NHC_START_TS=$((NHC_TS-ELAPSED_SECONDS))
+    else
+        NHC_TS=''
+    fi
+
+    # Display version info if requested, possibly including display of final config.
+    if (( NHC_OPT_VERINFO > 0 )); then
+        nhcmain_version_info $NHC_OPT_VERINFO
+        exit 0
     fi
 
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -448,41 +902,54 @@ function nhcmain_finalize_env() {
         return
     fi
 
-    export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG TS SILENT TIMEOUT NHC_RM
+    ### FIXME:  These shouldn't *need* to be exported, right?
+    #export NAME CONFDIR CONFFILE INCDIR HELPERDIR ONLINE_NODE OFFLINE_NODE LOGFILE DEBUG NHC_TS SILENT TIMEOUT NHC_RM
 }
 
 function nhcmain_find_rm() {
     local DIR
     local -a DIRLIST
 
+    if [[ -z "$NHC_RM" ]]; then
+        # Default to "none"
+        NHC_RM='none'
+    else
+        # We've already got one!  Iz very niiice!
+        dbg "Resource manager already set to \"$NHC_RM\" so no need to guess."
+        return 0
+    fi
     if [[ -d /var/spool/torque ]]; then
-        NHC_RM="pbs"
+        NHC_RM='pbs'
         return 0
     elif [[ -n "$SGE_ROOT" && -x "$SGE_ROOT/util/arch" ]]; then
         # SGE binaries typically won't be on the path defined above in the
         # load sensor environment, but SGE_ROOT will be there.
-        NHC_RM="sge"
+        NHC_RM='sge'
+        return 0
     fi
 
     # Search PATH for commands
     if type -a -p -f -P scontrol >&/dev/null ; then
-        NHC_RM="slurm"
+        NHC_RM='slurm'
         return 0
     elif type -a -p -f -P pbsnodes >&/dev/null ; then
-        NHC_RM="pbs"
+        NHC_RM='pbs'
         return 0
     elif type -a -p -f -P qselect >&/dev/null ; then
-        NHC_RM="sge"
+        NHC_RM='sge'
         return 0
     elif type -a -p -f -P badmin >&/dev/null || type -a -p -f -P sbatchd >&/dev/null ; then
-        NHC_RM="lsf"
+        NHC_RM='lsf'
         return 0
     fi
 
-    if [[ -z "$NHC_RM" ]]; then
-        dbg "Unable to detect resource manager."
+    if [[ "$NHC_RM" == 'none' ]]; then
+        dbg "Unable to detect resource manager; using \"$NHC_RM.\""
         return 1
     fi
+
+    # We should never get here, but...
+    die 1 "Fatal internal error in ${FUNCNAME[0]}() [${BASH_SOURCE[0]} line $LINENO]; NHC_RM is \"$NHC_RM\""
 }
 
 function nhcmain_redirect_output() {
@@ -492,8 +959,7 @@ function nhcmain_redirect_output() {
         if [[ $? -ne 0 ]]; then
             exec 1>&3- 2>&4-
             echo "ERROR NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
-            syslog "NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
-            syslog_flush
+            syslog -f "NHC:  FATAL:  Can't write $LOGFILE as $USER (uid $EUID) -- Read-only filesystem/device failure?"
             exit 1
         else
             dbg "Output redirected per LOGFILE variable $LOGFILE"
@@ -503,10 +969,90 @@ function nhcmain_redirect_output() {
     fi
 }
 
+function nhcmain_check_concurrency() {
+    local DIR="${1:-$RUNDIR}" CONTEXT="${2:-$NAME}"
+    local _CC_MSG="" PIDFILE="$DIR/NHC.$CONTEXT.pid" PID=0
+
+    if [[ -z "$DIR" || -z "$CONTEXT" ]]; then
+        vlog "${FUNCNAME[0]}():  Skipping concurrency check (\"$DIR\" / \"$CONTEXT\")"
+        return 0
+    elif [[ ! (-r "$DIR" && -w "$DIR" && -x "$DIR") ]]; then
+        warn "Concurrency check disabled; unable to use PID file directory "$DIR" ($RUNDIR): "$'\n'"$(ls -Flaid "$DIR" "$RUNDIR")"
+        unset RUNDIR
+        return 1
+    fi
+
+    # First, does the PID file even exist?  If not, we can skip all the checking
+    NHC_PIDFILE="$PIDFILE"
+    if [[ -s "$PIDFILE" ]]; then
+        read PID < "$PIDFILE"
+        if [[ $PID =~ ^[[:digit:]]+$ ]]; then
+            if kill -s 0 $PID >& /dev/null ; then
+                # The NHC process still exists.  Not good.
+                # FIXME - Option to kill old NHC?
+                eecho "ERROR:  Prior NHC instance is still running (PID #$PID); is it hung?"
+                exit 145
+            else
+                dbg "Got process ID $PID from \"$PIDFILE,\" but it no longer exists."
+                > "$PIDFILE"
+            fi
+        else
+            dbg "PID file \"$PIDFILE\" exists with invalid contents ($PID)"
+        fi
+    elif [[ -e "$PIDFILE" ]]; then
+        dbg "PID file \"$PIDFILE\" exists but is empty: " "$(ls -Flaid "$PIDFILE")"
+    else
+        dbg "PID file \"$PIDFILE\" does not exist."
+    fi
+
+    # At this point we're going to proceed, so write our PID to the PID file
+    >> "$PIDFILE"
+    if [[ -f "$PIDFILE" && -r "$PIDFILE" && -w "$PIDFILE" && -O "$PIDFILE" && -G "$PIDFILE" && !( -s "$PIDFILE" || -h "$PIDFILE" ) ]]; then
+        # We used `>>` to avoid accidentally truncating something, but if all went correctly,
+        # the PID file *should* be an empty file newly created with effective UID/GID.
+        dbg "All sanity checks on \"$PIDFILE\" passed."
+    else
+        _CC_MSG="Unable to record PID ($NHC_PID) due to sanity check failure for PID file \"$PIDFILE\" -- $(ls -Flaid "$PIDFILE")"
+        log "$_CC_MSG"
+        if (( NHC_FMT_JSON )); then
+            jsonify '_CC_MSG' 100 "$_CC_MSG"
+        fi
+        syslog "$_CC_MSG"
+        unset NHC_PIDFILE
+        return 1
+    fi
+    printf '%d\n' "$NHC_PID" > "$PIDFILE"
+    read PID < "$PIDFILE"
+    if [[ "$PID" != "$NHC_PID" ]]; then
+        _CC_MSG="WARNING:  Wrote PID $NHC_PID to $PIDFILE but read back $PID.  Probably gremlins."
+        log "$_CC_MSG"
+        if (( NHC_FMT_JSON )); then
+            jsonify '_CC_MSG' 100 "$_CC_MSG"
+        fi
+        syslog "$_CC_MSG"
+        unset NHC_PIDFILE
+    fi
+    return 0
+}
+
 function nhcmain_check_conffile() {
+    local _CONF_MSG=''
+
     # Check for config file before we do too much work.
-    if [[ ! -f "$CONFFILE" ]]; then
+    if [[ ! (-b "$CONFFILE" || -c "$CONFFILE" || -f "$CONFFILE" || -h "$CONFFILE" || -p "$CONFFILE") ]]; then
         # Missing config means no checks.  No checks means no failures.
+        _CONF_MSG="Missing/invalid configuration file (\"$CONFFILE\") ignored."
+    elif [[ ! -r "$CONFFILE" ]]; then
+        _CONF_MSG="Configuration file \"$CONFFILE\" is unreadable or corrupted; ignored."
+    fi
+    if [[ -n "${_CONF_MSG}" ]]; then
+        log "$_CONF_MSG"
+        if (( NHC_FMT_JSON )); then
+            # Even though it's "log-worthy," a missing/empty/bogus config file isn't a reason
+            # for NHC to return failure -- it won't cause jobs/nodes to fail -- so we return 0.
+            jsonify '_CONF_MSG' 0 "$_CONF_MSG"
+        fi
+        syslog -f "$_CONF_MSG"
         return 1
     fi
     return 0
@@ -534,45 +1080,63 @@ function nhcmain_load_scripts() {
 }
 
 function nhcmain_watchdog_timer() {
-    local TIMEOUT="$1" NHC_PID="$2"
-    local SLEEP_PID MAIN_NHC_HUNG=0
+    local TASK_TIMEOUT="$1" TASK_PID="$2" TASK="$3"
+    local SLEEP_PID=0 MAIN_NHC_HUNG=0
+
+    # Sanity checks
+    if [[ "$TASK_TIMEOUT" -eq 0 ]]; then
+        # If there's no timeout, there's no need for a watchdog timer.
+        return 0
+    elif ! kill -0 "${TASK_PID#-}" 2>/dev/null; then
+        # If the watched process has already ended, our process should
+        # already be dead, but obviously it's still going.  Bail.
+        return 0
+    elif [[ -n "$TASK" && "$TASK" != "NHC"* ]]; then
+        TASK="NHC subprocess ($TASK)"
+    else
+        TASK="NHC"
+    fi
 
     # Start sleep process in background first so we can obtain its PID and set traps to handle signals.
-    sleep $TIMEOUT &
+    sleep $TASK_TIMEOUT &
     SLEEP_PID=$!
+    #trap 'set +x' RETURN    # As needed for debugging
     trap '' ALRM TERM
-    trap "kill -9 $SLEEP_PID >&/dev/null ; exit 0" EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
-    # Now we wait for the sleep to finish or for our process to be killed by the main NHC process.
-    wait
+    trap "kill -9 $SLEEP_PID >&/dev/null ; test -n "$NHC_PIDFILE" && rm -f "$NHC_PIDFILE" ; exit 0" \
+        EXIT HUP INT QUIT ILL ABRT FPE KILL SEGV PIPE USR1 USR2 CONT STOP TSTP TTIN TTOU PWR
+    # Now we wait for the sleep to finish or for this watchdog process to be killed by the task process.
+    wait ${SLEEP_PID}
 
     # If we get here, the watchdog timer has expired, and we need to kill the NHC process (group).  Start gently.
-    log "NHC watchdog timer ${BASHPID:-$$} ($TIMEOUT secs) has expired.  Signaling NHC:  kill -s ALRM -- $NHC_PID"
-    kill -s ALRM -- $NHC_PID || return 0
-    sleep 1
+    log "$TASK watchdog timer ${BASHPID:-$$} ($TASK_TIMEOUT secs) has expired.  Signaling $TASK:  kill -s ALRM -- $TASK_PID"
+    kill -s ALRM -- $TASK_PID || return 0
+    sleep_wait 1 $TASK_PID
 
     # Send a stronger signal this time.  If there's nothing left to receive our signal, we're done.
-    log "NHC watchdog timer ${BASHPID:-$$} terminating NHC:  kill -s TERM -- $NHC_PID"
-    kill -s TERM -- $NHC_PID 2>/dev/null || return 0
-    sleep 3
+    log "$TASK watchdog timer ${BASHPID:-$$} terminating $TASK:  kill -s TERM -- $TASK_PID"
+    kill -s TERM -- $TASK_PID 2>/dev/null || return 0
+    sleep_wait 3 $TASK_PID
 
     # If we still had things to kill, check one last time and kill by force.
-    log "NHC watchdog timer ${BASHPID:-$$} terminating NHC with extreme prejudice:  kill -s KILL -- $NHC_PID"
-    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
-        # Setting this to true means it's the main NHC that's still around, not merely a hung child process.  That
-        # means the main NHC process hasn't been able to terminate gracefully and write the appropriate message to
-        # stdout or the status file.  Thus the watchdog has to be the one to call die().  If it's just a hung child,
-        # we don't want to call die() again and overwrite the status message.
-        MAIN_NHC_HUNG=1
+    log "$TASK watchdog timer ${BASHPID:-$$} terminating $TASK_PID with extreme prejudice:  kill -s KILL -- $TASK_PID"
+    if [[ "$NHC_PID" == "$TASK_PID" ]]; then
+        if kill -0 ${TASK_PID#-} 2>/dev/null ; then
+            # Setting this to true means it's the main NHC that's still around, not merely a hung child process.  That
+            # means the main NHC process hasn't been able to terminate gracefully and write the appropriate message to
+            # stdout or the status file.  Thus the watchdog has to be the one to call die().  If it's just a hung child,
+            # we don't want to call die() again and overwrite the status message.
+            MAIN_NHC_HUNG=1
+        fi
     fi
-    kill -s KILL -- $NHC_PID 2>/dev/null
-    sleep 1
-    if kill -0 ${NHC_PID#-} 2>/dev/null ; then
+    kill -s KILL -- $TASK_PID 2>/dev/null
+    sleep_wait 1 $TASK_PID
+    if kill -0 ${TASK_PID#-} 2>/dev/null ; then
         # If the main NHC survived a "kill -9" it must be defunct.  Assume it called die() and exited cleanly.
-        log "NHC process ${NHC_PID#-} is defunct.  Considering it terminated."
+        log "$TASK process ${TASK_PID#-} is defunct.  Considering it terminated."
     elif [[ $MAIN_NHC_HUNG -eq 1 ]]; then
         # If the main NHC process survived SIGTERM but not SIGKILL, it likely didn't exit cleanly.  Call die().
-        WATCHDOG_PID=0
-        die 142 "Watchdog timer unable to terminate hung NHC process ${NHC_PID#-}."
+        NHC_WATCHDOG=0
+        die 142 "Watchdog timer unable to terminate hung $TASK process ${TASK_PID#-}."
     fi
     return 0
 }
@@ -582,12 +1146,12 @@ function nhcmain_set_watchdog() {
     if [[ $TIMEOUT -gt 0 ]]; then
         # Start watchdog timer process in its own session.
         set -m
-        eval nhcmain_watchdog_timer $TIMEOUT $((NHC_SID==0?NHC_PID:NHC_SID)) &
-        WATCHDOG_PID=$!
-        export WATCHDOG_PID
+        nhcmain_watchdog_timer $TIMEOUT $((NHC_SID==0?NHC_PID:NHC_SID)) &
+        export NHC_WATCHDOG=$!
         set +m
-        dbg "In ${BASHPID:-$$}:  Watchdog PID is $WATCHDOG_PID, NHC PID is $NHC_PID"
+        dbg "In ${BASHPID:-$$}:  Watchdog PID is $NHC_WATCHDOG, NHC PID is $NHC_PID"
     else
+        export NHC_WATCHDOG=0
         dbg "In ${BASHPID:-$$}:  No watchdog, NHC PID is $NHC_PID"
     fi
 }
@@ -625,8 +1189,9 @@ function nhcmain_detach() {
         set +m
     fi
 
-    syslog_flush
+    syslog -f
     if [[ "$RC" != "0" ]]; then
+        # FIXME:  Should this be a `die()` call?
         echo "ERROR Health check failed:  $MSG"
         exit $RC
     fi
@@ -640,33 +1205,51 @@ function nhcmain_detach() {
 }
 
 function nhcmain_run_checks() {
+    local CHECK_STR=""
+    local -i NC=0 W=1
+
     CHECKS=( )
     nhc_load_conf "$CONFFILE"
-    for ((CNUM=0; CNUM<${#CHECKS[*]}; CNUM++)); do
+
+    NC=${#CHECKS[*]}
+    for ((CNUM=0; CNUM<NC; CNUM++)); do
         CHECK="${CHECKS[$CNUM]}"
         CHECK_DIED=0
 
+        # Compute the field width and "check number" string
+        W=${#NC}
+        printf -v CHECK_STR "%0${W}d of %0${W}d" $((CNUM+1)) "$NC"
+
         # Run the check.
         if [[ "$NHC_CHECK_FORKED" == 0 ]] || mcheck "$CHECK" '/( |^)(export )?[A-Za-z_][A-Za-z0-9_]*=[^ =]/'; then
-            vlog "Running check:  \"$CHECK\""
+            vlog "Running check $CHECK_STR:  \"$CHECK\""
             eval $CHECK
             RET=$?
         else
             # Run the check in a separate forked process.
             eval $CHECK &
-            vlog "Running check:  \"$CHECK\" (forked PID $!)"
+            vlog "Running check $CHECK_STR:  \"$CHECK\" (forked PID $!)"
             wait $! >/dev/null 2>&1
             RET=$?
         fi
 
         # Check for failure.
-        if [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
+        if (( RET == 127 )); then
+            # An exit code of 127 means Bash couldn't find that check; probably a bad or missing `.nhc` file.
+            log "Node Health Check failed.  No such check \"${CHECK%% *}\" (missing/corrupt .nhc file?); check $CHECK_STR ($CHECK) returned $RET"
+            die $RET "No such check \"${CHECK%% *}\" (missing/corrupt .nhc file?); check $CHECK_STR ($CHECK) returned $RET"
+        elif (( RET == 126 )); then
+            # An exit code of 126 means Bash found the check (in theory) but couldn't execute it.  Permissions?  Mount flags?
+            log "Node Health Check failed.  Unable to run check \"${CHECK%% *}\" (permissions/mount flags?); check $CHECK_STR ($CHECK) returned $RET"
+            die $RET "Unable to run check \"${CHECK%% *}\" (permissions/mount flags?); check $CHECK_STR ($CHECK) returned $RET"
+        elif [[ "$RET" != "0" && "$NHC_CHECK_ALL" != "1" ]]; then
+            # Anything else is handled uniformly here.
             if [[ "$NHC_CHECK_FORKED" == "1" && "$RET" -gt 100 ]]; then
                 # The forked check did successfully call die(), so we don't have to.
                 exit $((RET-100))
             elif [[ "$CHECK_DIED" == "0" ]]; then
                 # If the check failed but didn't call die(), use this fallback.
-                log "Node Health Check failed.  Check $CHECK returned $RET"
+                log "Node Health Check failed.  Check $CHECK_STR ($CHECK) returned $RET"
                 die $RET "Check $CHECK returned $RET"
             fi
             return $RET
@@ -676,10 +1259,15 @@ function nhcmain_run_checks() {
     if [[ "$FAIL_CNT" > 0 && "$NHC_CHECK_ALL" == "1" ]]; then
         # One or more checks have failed.  Give final report and terminate.
         NHC_CHECK_ALL=0
-        log "ERROR:  $NAME:  $FAIL_CNT health checks failed."
-        syslog "$FAIL_CNT health checks failed."
-        [[ -n "$LOGFILE" ]] && oecho "ERROR:  $NAME:  $FAIL_CNT health checks failed."
-        syslog_flush
+        CHECK_STR="$FAIL_CNT health checks failed."
+        [[ -n "$LOGFILE" ]] \
+            && oecho "ERROR:  $NAME:  $CHECK_STR"
+        log "ERROR:  $NAME:  $CHECK_STR"
+
+        if (( NHC_FMT_JSON )); then
+            jsonify 'CHECK_STR' "$FAIL_CNT" "$CHECK_STR"
+        fi
+        syslog -f "$CHECK_STR"
         kill_watchdog
         exit $FAIL_CNT
     fi
@@ -687,22 +1275,30 @@ function nhcmain_run_checks() {
 
 function nhcmain_mark_online() {
     if [[ -n "$NHC_RM" && "$MARK_OFFLINE" -eq 1 ]]; then
-        eval $ONLINE_NODE "'$HOSTNAME'"
+        ($ONLINE_NODE "$HOSTNAME")
     fi
 }
 
 function nhcmain_finish() {
-    local ELAPSED
+    local -i ELAPSED=$((SECONDS-NHC_START_TS))
+    local _FIN_MSG
 
-    syslog_flush
-    ELAPSED=$((SECONDS-NHC_START_TS))
-    vlog "Node Health Check completed successfully (${ELAPSED}s)."
+    _FIN_MSG="Node Health Check completed successfully; ${#CHECKS[*]} passed in $ELAPSED second(s)."
+    vlog "$_FIN_MSG"
+    if (( NHC_FMT_JSON )); then
+        jsonify '_FIN_MSG' 0 "$_FIN_MSG"
+    fi
+    syslog -f "$_FIN_MSG"
     if [[ "$NHC_RM" == "sge" ]]; then
         echo "begin" >&$NHC_FD_OUT
         echo "$HOSTNAME:healthy:true" >&$NHC_FD_OUT
         echo "$HOSTNAME:diagnosis:HEALTHY" >&$NHC_FD_OUT
         echo "end" >&$NHC_FD_OUT
         return 0
+    fi
+    if [[ -n "$NHC_PIDFILE" ]]; then
+        dbg "Removing PID file \"$NHC_PIDFILE\""
+        rm -f "$NHC_PIDFILE" && unset NHC_PIDFILE
     fi
     kill_watchdog
     [[ $NHC_FD_OUT -eq 3 ]] && exec 1>&3- 2>&4-
@@ -711,7 +1307,8 @@ function nhcmain_finish() {
 }
 
 ### Script guts begin here.
-NHC_ARGS_LIST=( "$@" )
+declare -irx BASHVER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"
+declare -a NHC_ARGV=( "$0" "$@" )
 if [[ -n "$NHC_LOAD_ONLY" ]]; then
     # We're only supposed to define functions, not actually run anything.
     return 0 || exit 0
@@ -724,15 +1321,15 @@ trap 'die 130 "Terminated by signal SIGINT." ; exit 130' 2
 trap 'die 143 "Terminated by signal SIGTERM." ; exit 143' 15
 trap 'die 142 "Script timed out${CHECK:+ while executing \"$CHECK\"}." ; exit 142' 14
 
-nhcmain_init_env
-nhcmain_parse_cmdline "$@" || exit 10
-nhcmain_load_sysconfig
+nhcmain_init_env || nhcmain_load_sysconfig
+nhcmain_parse_cmdline "${NHC_ARGV[@]:1}" || exit 10
 nhcmain_finalize_env
 if [[ -n "$EVAL_LINE" ]]; then
     nhcmain_load_scripts
     eval $EVAL_LINE
     exit $?
 fi
+nhcmain_check_concurrency
 nhcmain_redirect_output
 nhcmain_check_conffile || exit 0
 if [[ "$NHC_RM" == "sge" ]]; then
@@ -748,11 +1345,10 @@ if [[ "$NHC_RM" == "sge" ]]; then
     if nhcmain_run_checks ; then
         nhcmain_finish
     fi
-    if [[ "$*" == *NHC_RM=sge* ]]; then
-        exec $0 "$@"
-    else
-        exec $0 "$@" NHC_RM=sge
+    if [[ "${NHC_ARGV[*]}" != *NHC_RM=sge* ]]; then
+        NHC_ARGV+=( 'NHC_RM=sge' )
     fi
+    exec $0 "${NHC_ARGV[@]}"
 else
     nhcmain_load_scripts
     nhcmain_set_watchdog

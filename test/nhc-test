@@ -24,7 +24,6 @@ function test_nhc_driver() {
     function dbg() { :; }
     function log() { :; }
     function syslog() { :; }
-    function syslog_flush() { :; }
 
     # Initialize standard environment.
     nhcmain_init_env
@@ -39,7 +38,7 @@ function test_nhc_driver() {
 
     # Check help output
     IFS=$'\n'
-    LINES=( $(nhcmain_help) )
+    LINES=( $(HOSTNAME=moo nhcmain_help) )
     IFS=$' \t\n'
     for ((i=0; i<${#LINES[*]}; i++)); do
         LINE="${LINES[$i]}"
@@ -104,30 +103,51 @@ function test_nhc_driver() {
     # Reset environment for testing purposes.
     PATH="$TOP_SRCDIR:$PATH"
     SYSCONFIGDIR="$TOP_SRCDIR"
-    LIBEXECDIR="$TOP_SRCDIR/helpers"
+    LIBEXECDIR="$TOP_SRCDIR"
+    STATEDIR="$TOP_SRCDIR"
     CONFDIR="$TOP_SRCDIR"
-    HELPERDIR="$LIBEXECDIR"
+    INCDIR="$CONFDIR/scripts"
+    HELPERDIR="$LIBEXECDIR/helpers"
+    LOGDIR="$STATEDIR/log"
+    RUNDIR="$STATEDIR/run"
+    CONFFILE="$CONFDIR/$NAME.conf"
     LOGFILE=" "
     NHC_RM="pbs"
-    export PATH SYSCONFIGDIR LIBEXECDIR CONFDIR HELPERDIR LOGFILE NHC_RM
+    SYSLOG_TAG="the-cow-goes-moo"
 
     # Finalize environment.  Make sure we get what we expect.
     nhcmain_finalize_env
-    plan 14 "nhcmain_finalize_env" && {
-        is $SYSCONFIGDIR $TOP_SRCDIR '$SYSCONFIGDIR unchanged'
-        is $LIBEXECDIR "$TOP_SRCDIR/helpers" '$LIBEXECDIR unchanged'
-        is $HELPERDIR $LIBEXECDIR '$HELPERDIR unchanged'
-        is $CONFDIR $TOP_SRCDIR '$CONFDIR unchanged'
-        is $CONFFILE "$TOP_SRCDIR/$NAME.conf" '$CONFFILE set correctly'
-        is $INCDIR "$CONFDIR/scripts" '$INCDIR default correct'
-        is $ONLINE_NODE "$LIBEXECDIR/node-mark-online" '$ONLINE_NODE set correctly'
-        is $OFFLINE_NODE "$LIBEXECDIR/node-mark-offline" '$OFFLINE_NODE set correctly'
-        unlike $LOGFILE '/[<>|&]/' '$LOGFILE contains no redirection'
+    plan 30 "nhcmain_finalize_env" && {
+        is "$SYSCONFIGDIR" "$TOP_SRCDIR" '$SYSCONFIGDIR unchanged'
+        is "$LIBEXECDIR" "$TOP_SRCDIR" '$LIBEXECDIR unchanged'
+        is "$STATEDIR" "$TOP_SRCDIR" '$STATEDIR unchanged'
+        is "$CONFDIR" "$TOP_SRCDIR" '$CONFDIR preserved correctly'
+        is "$INCDIR" "$CONFDIR/scripts" '$INCDIR preserved correctly'
+        is "$HELPERDIR" "$LIBEXECDIR/helpers" '$HELPERDIR preserved correctly'
+        is "$LOGDIR" "$STATEDIR/log" '$LOGDIR preserved correctly'
+        is "$RUNDIR" "$STATEDIR/run" '$RUNDIR preserved correctly'
+        is "$ONLINE_NODE" "$HELPERDIR/node-mark-online" '$ONLINE_NODE set correctly'
+        is "$OFFLINE_NODE" "$HELPERDIR/node-mark-offline" '$OFFLINE_NODE set correctly'
+        is "$CONFFILE" "$CONFDIR/$NAME.conf" '$CONFFILE set correctly'
+        unlike "$LOGFILE" '/[<>|&]/' '$LOGFILE contains no redirection'
         is $DEBUG 0 'Debugging off by default'
         is $SILENT 0 'Silent mode off by default'
         is $VERBOSE 0 'Verbose mode off by default'
         is $MARK_OFFLINE 1 'Nodes marked offline by default'
         cmp_ok ${TIMEOUT:-999999} "-le" 300 'Reasonable default script timeout'
+        isnt "$SYSLOG_IDENT" "$NAME" '$SYSLOG_IDENT default correct'
+        like "$SYSLOG_IDENT" "*$NAME*" '$SYSLOG_IDENT default should contain the context'
+        like "$SYSLOG_IDENT" "*nhc*" '$SYSLOG_IDENT default should contain "nhc"'
+        like "$SYSLOG_IDENT" "*\[[0-9]*\]" '$SYSLOG_IDENT default should contain the PID ($NHC_PID == '"$NHC_PID"')'
+        is "$SYSLOG_IDENT" "nhc(nhc-test)[$NHC_PID]" '$SYSLOG_IDENT exact content matches'
+        is "$SYSLOG_FAC" 'daemon' '$SYSLOG_FAC (facility) default correct'
+        is "$SYSLOG_LEVEL" 'err' '$SYSLOG_LEVEL default correct'
+        is "$SYSLOG_PRIO" "$SYSLOG_FAC.$SYSLOG_LEVEL" '$SYSLOG_PRIO default correct (priority is "facility.level")'
+        cmp_ok ${SYSLOG_SIZE:-9999999999} "-ge" 1024 'Reasonable message size limit default (1)'
+        cmp_ok ${SYSLOG_SIZE:-9999999999} "-lt" $((1024*1024*1024)) 'Reasonable message size limit default (2)'
+        is "$SYSLOG_CMD" "logger -p ${SYSLOG_PRIO} -S ${SYSLOG_SIZE} -t" '$SYSLOG_CMD was correctly composed'
+        is "$SYSLOG_TAG" 'the-cow-goes-moo' '$SYSLOG_TAG remains unmodified as set prior to function call'
+        unlike "$SYSLOG_CMD" "/$SYSLOG_TAG/" '$SYSLOG_CMD does not yet contain $SYSLOG_TAG'
     } ; unplan
 
     plan 1 "nhcmain_check_conffile" && {
@@ -150,7 +170,7 @@ function test_nhc_driver() {
     TIMEOUT=0
     plan 1 "nhcmain_set_watchdog" && {
         nhcmain_set_watchdog
-        is $WATCHDOG_PID 0 'Watchdog should be disabled'
+        is $NHC_WATCHDOG 0 'Watchdog should be disabled'
     } ; unplan
 
     # Test watchdog timer.
@@ -159,14 +179,19 @@ function test_nhc_driver() {
     disown $NHC_PID
     nhcmain_watchdog_timer 1 $NHC_PID &
     WATCHDOG_PID=$!
-    plan 3 "nhcmain_watchdog_timer" && {
+    plan 4 "nhcmain_watchdog_timer" && {
         kill -s 0 $NHC_PID >/dev/null 2>&1
         is $? 0 'Simulated NHC process exists'
         kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
         is $? 0 'Watchdog timer is running'
         sleep 2
+        ## We set the watchdog timer for 1s, so it should be dead after 2s
+        ###FIXME: Requires newer Bash### wait -fn $NHC_PID $WATCHDOG_PID >&/dev/null
+        wait $NHC_PID $WATCHDOG_PID
         kill -s 0 $NHC_PID >/dev/null 2>&1
-        isnt $? 0 'Simulated NHC process has been killed'
+        isnt $? 0 "Simulated NHC process $NHC_PID has been killed"
+        kill -s 0 $WATCHDOG_PID >/dev/null 2>&1
+        isnt $? 0 "NHC watchdog timer process $WATCHDOG_PID has exited"
     } ; unplan
 
     # Empty config file should result in no checks.
@@ -178,8 +203,12 @@ function test_nhc_driver() {
 }
 
 function test_checks() {
-    local CHECKTEST
+    local CHECKTEST DIE_MSG="" DIE_RC=""
     local -a TEST_SCRIPTS
+
+    # Instead of die() being empty, have it save the message and return code
+    # into global variables that can be referenced by our unit tests.
+    function die() { DIE_RC="$1"; DIE_MSG="${*:2}"; return $DIE_RC; }
 
     set +f
     TEST_SCRIPTS=( $SRCDIR/test_*.nhc )
@@ -187,6 +216,11 @@ function test_checks() {
     for CHECKTEST in "${TEST_SCRIPTS[@]}" ; do
         if [[ ! -s "$CHECKTEST" ]]; then
             continue
+        ### FIXME:  Should this be removed altogether?
+        #elif [[ $- == *x* ]]; then
+        #    if [[ "$CHECKTEST" == *'test_lbnl_file'* ]]; then
+        #        : FIXME DO NOT continue
+        #    fi
         fi
         . $CHECKTEST
         unplan

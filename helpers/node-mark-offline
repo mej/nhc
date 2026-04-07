@@ -63,12 +63,13 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
     OLD_NOTE_LEADER="${LINE[1]}"
     OLD_NOTE="${LINE[*]:2}"
     case "$STATUS" in
-        *'@'*|*'#'*|boot*|*-*|plnd*)
+        *'@'*|*'#'*|*-*)
             # These states aren't handled yet.
             echo "$0:  State \"$STATUS\" not yet handled; ignoring."
             exit 0
             ;;
-        alloc*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|resume*|resv*|undrain*)
+        # Node states: src/common/slurm_protocol_defs.c --> node_state_string()
+        alloc*|boot*|comp*|drain*|drng*|fail*|idle*|maint*|mix*|plnd*|resume*|resv*|undrain*)
             case "$STATUS" in
                 drain*|drng*|fail*|maint*)
                     # If the node is already offline, and there is no old note, and
@@ -77,10 +78,51 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
                         echo "$0:  Not offlining $HOSTNAME:  Already offline with no note set."
                         exit 0
                     fi
+                    if [[ "$OLD_NOTE_LEADER" == "Reboot" && "$OLD_NOTE" == "ASAP" ]]; then
+                        echo "$0:  Not offlining $HOSTNAME:  Pending reboot."
+                        exit 0
+                    fi
+                    ;;
+                boot*)
+                    # Offline node after reboot if vanilla `scontrol reboot` was
+                    # called, so jobs can't run until NHC onlines the node.
+                    # Note: This won't happen while node is waiting to boot,
+                    # because $STATUS would show MIX@ or ALLOC@, not BOOT.
+                    # See src/common/slurm_protocol_defs.c-->node_state_string()
+                    SHOW_NODE_OUTPUT="$($SLURM_SCONTROL show node $HOSTNAME)"
+                    if [[ $SHOW_NODE_OUTPUT == *"State=REBOOT"* ]]; then
+                        MSG="Temporarily offlining $HOSTNAME after reboot until NHC can online it"
+                        echo "$0:  $MSG"
+                        $SLURM_SCONTROL update State=DRAIN NodeName=$HOSTNAME Reason="$LEADER $MSG"
+                        exit 0
+                    fi
+
+                    # If `Reboot ASAP` has been cleared, then the node is
+                    # already set to stay in DRAIN until NHC onlines it, so exit
+                    if [[ "$OLD_NOTE_LEADER" != "Reboot" && "$OLD_NOTE" != "ASAP" ]]; then
+                        echo "$0:  $HOSTNAME already set to remain offline after reboot until NHC onlines it"
+                        exit 0
+                    fi
+                    ;;
+                *"*")
+                    UPTIME=( $(cat /proc/uptime) )
+                    UPTIME_SEC="${UPTIME[0]%.*}"
+                    if (( UPTIME_SEC < 600 )); then
+                        echo "$0: Node not responding, unexpectedly rebooted, ignoring"
+                        exit 0
+                    fi
                     ;;
             esac
+            # `scontrol reboot asap` will set the node state to REBOOT+DRAIN and
+            # reason to `Reboot ASAP`. Then, after boot, and after NHC runs
+            # once, Slurm will set the node base state to IDLE. If reason ==
+            # `Reboot ASAP`, Slurm will also clear the DRAIN flag. We want
+            # NHC to clear the DRAIN flag, not Slurm, so delete the
+            # `Reboot ASAP` reason by not preserving it below.
+            # See https://slurm.schedmd.com/scontrol.html --> reboot
+
             # If there's an old note that wasn't set by NHC, preserve it.
-            if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+            if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" && "$OLD_NOTE_LEADER" != "Reboot" && "$OLD_NOTE" != "ASAP" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
             fi

@@ -45,6 +45,10 @@ trap 'echo "Terminated by signal SIGHUP." ; exit 129' 1
 trap 'echo "Terminated by signal SIGINT." ; exit 130' 2
 trap 'echo "Terminated by signal SIGTERM." ; exit 143' 15
 
+function die() {
+    return 0
+}
+
 function eecho() {
     echo "$@" >&2
 }

@@ -4,13 +4,39 @@
 # 01 April 2013
 #
 
+# Settings for how NHC invokes `stat(1)` and what data it receives back
+# FIXME:  This whole thing is just itching to be refactored using hashmaps!
 STAT_CMD='/usr/bin/stat'
 STAT_FMT_ARGS='-c'
+STAT_FMT_STR_DEFAULT=$'0%04a\f%b\f%B\f0x%D\f0x%08f\f%g\f%G\f%h\f%i\f%m\f%n\f%s\f0x%04t\f0x%04T\f%u\f%U\f%W\f%X\f%Y\f%Z'
+STAT_FMT_STR=''
+STAT_FMT_FIELDS_DEFAULT=( perm blocks blksize devno mode gid group nlinks inode mntpnt realname size major minor uid user btime atime mtime ctime )
+STAT_FMT_FIELDS=( )
+if [[ "${OSTYPE,,}" == *'linux'* ]]; then
+    if [[ -s "/etc/selinux/config" ]]; then
+        source "/etc/selinux/config"
+    elif selinuxenabled >&/dev/null; then
+        SELINUX=enforcing
+    else
+        ### FIXME:  What else?
+        SELINUX=''
+    fi
+
+    if [[ -n "$SELINUX" && "$SELINUX" != 'disabled' ]]; then
+        # Only default to requesting SELinux context data on SELinux-enabled Linux hosts.
+        STAT_FMT_STR_DEFAULT+=$'\f%C'
+        STAT_FMT_FIELDS_DEFAULT+=( context )
+    fi
+fi
 NHC_STAT_FILES=( )
-NHC_STAT_MODE=( )
+
+# `stat(1)` output fields, indexed by position in NHC_STAT_FILES array
+NHC_STAT_PERM=( )
 NHC_STAT_BLOCKS=( )
 NHC_STAT_BLKSIZE=( )
+NHC_STAT_CONTEXT=( )
 NHC_STAT_DEVNO=( )
+NHC_STAT_MODE=( )
 NHC_STAT_GID=( )
 NHC_STAT_GROUP=( )
 NHC_STAT_NLINKS=( )
@@ -22,58 +48,59 @@ NHC_STAT_MAJOR=( )
 NHC_STAT_MINOR=( )
 NHC_STAT_UID=( )
 NHC_STAT_USER=( )
-NHC_STAT_ATIME=( )
-NHC_STAT_MTIME=( )
-NHC_STAT_CTIME=( )
+
+# Inode timestamps, if active/supported, are:
+NHC_STAT_BTIME=( )     # "Birth" time; i.e., the *actual* "creation" timestamp
+NHC_STAT_ATIME=( )     # "Access" time; often disabled for performance reasons
+NHC_STAT_MTIME=( )     # "Modification" time; when the file was last written
+NHC_STAT_CTIME=( )     # "Change" time; when the file's **inode** was last updated
 
 # Pull stat() data for a file and store in cache.
 function nhc_file_stat() {
     local FNAME="$1" VAR="$2" ERR="$3"
+    local CMD="$STAT_CMD" FARG="$STAT_FMT_ARGS" FMT="${STAT_FMT_STR:-${STAT_FMT_STR_DEFAULT}}" IFS
     local -a STINFO=( )
-    local IFS STAT_STR="" RET i
+    local COL='' ENTRY='' STATOUT=''
+    local -i RC=0 idx col
+
+    if [[ ${#STAT_FMT_FIELDS[*]} -eq 0 ]]; then
+        STAT_FMT_FIELDS=( "${STAT_FMT_FIELDS_DEFAULT[@]}" )
+    fi
 
     # Search cache for filename
-    for ((i = 0; i < ${#NHC_STAT_FILES[*]}; i++)); do
-        if [[ "$FNAME" == "${NHC_STAT_FILES[$i]}" ]]; then
-            eval $VAR=$i
+    for ((idx = 0; idx < ${#NHC_STAT_FILES[*]}; idx++)); do
+        if [[ "$FNAME" == "${NHC_STAT_FILES[$idx]}" ]]; then
+            printf -v "$VAR" '%d' $idx
             return 0
         fi
     done
 
     # If we make it here, it's not in the cache.
-    IFS=$'\f'
-    STINFO=( $($STAT_CMD $STAT_FMT_ARGS $'%a\f%b\f%B\f%D\f%g\f\"%G\"\f%h\f%i\f%m\f%N\f%s\f%t\f%T\f%u\f\"%U\"\f%X\f%Y\f%Z' "$FNAME") )
-    RET=$?
-    IFS=$' \t\n'
-
-    if [[ $RET -ne 0 ]]; then
-        eval $ERR="${STINFO[*]}"
-        return $RET
+    dbg "Running stat command:  \"$CMD\" \"$FARG\" \"${FMT//[[:space:]]/ }\" \"$FNAME\""
+    STATOUT=$("$CMD" "$FARG" "$FMT" "$FNAME" 2>&1)
+    RC=$?
+    if [[ $RC -ne 0 ]]; then
+        if [[ -n "$ERR" ]]; then
+            # $ERR holds the name of the variable into which to write the command's output in case of error.
+            printf -v "$ERR" '%s' "${STATOUT//$'\n'/\\n}"
+        fi
+        return $RC
     fi
-    NHC_STAT_FILES[$i]="$FNAME"
-    NHC_STAT_MODE[$i]="0${STINFO[0]}"
-    NHC_STAT_BLOCKS[$i]="${STINFO[1]}"
-    NHC_STAT_BLKSIZE[$i]="${STINFO[2]}"
-    NHC_STAT_DEVNO[$i]="0x${STINFO[3]}"
-    NHC_STAT_GID[$i]="${STINFO[4]}"
-    NHC_STAT_GROUP[$i]="${STINFO[5]}"
-    NHC_STAT_GROUP[$i]="${NHC_STAT_GROUP[$i]##\"}"
-    NHC_STAT_GROUP[$i]="${NHC_STAT_GROUP[$i]%%\"}"
-    NHC_STAT_NLINKS[$i]="${STINFO[6]}"
-    NHC_STAT_INODE[$i]="${STINFO[7]}"
-    NHC_STAT_MNTPNT[$i]="${STINFO[8]}"
-    NHC_STAT_REALNAME[$i]="${STINFO[9]}"
-    NHC_STAT_SIZE[$i]="${STINFO[10]}"
-    NHC_STAT_MAJOR[$i]="0x${STINFO[11]}"
-    NHC_STAT_MINOR[$i]="0x${STINFO[12]}"
-    NHC_STAT_UID[$i]="${STINFO[13]}"
-    NHC_STAT_USER[$i]="${STINFO[14]}"
-    NHC_STAT_USER[$i]="${NHC_STAT_USER[$i]##\"}"
-    NHC_STAT_USER[$i]="${NHC_STAT_USER[$i]%%\"}"
-    NHC_STAT_ATIME[$i]="${STINFO[15]}"
-    NHC_STAT_MTIME[$i]="${STINFO[16]}"
-    NHC_STAT_CTIME[$i]="${STINFO[17]}"
-    eval $VAR=$i
+
+    IFS=$'\f'   ### FIXME:  Use ${US} (unit separator, ^_, 0x1f) instead?
+    STINFO=( $STATOUT )
+    IFS=$' \t\n'
+    NHC_STAT_FILES[$idx]="$FNAME"
+
+    for ((col = 0; col < ${#STAT_FMT_FIELDS[*]}; col++)); do
+        COL="${STAT_FMT_FIELDS[col]^^}"
+        ENTRY="NHC_STAT_${COL}[$idx]"
+        printf -v "$ENTRY" '%s' "${STINFO[col]}"
+        dbg "Stat entry $idx, field #$col:  stat($FNAME).${STAT_FMT_FIELDS[col]}() => \"${STINFO[col]}\" => NHC_STAT_${COL}[$idx] == \"${!ENTRY}\""
+    done
+    NHC_STAT_SIZEBLKS[$idx]=$(( NHC_STAT_BLOCKS[idx] * NHC_STAT_BLKSIZE[idx] ))
+
+    printf -v "$VAR" '%d' $idx
     return 0
 }
 
@@ -150,37 +177,51 @@ function check_file_contents() {
 # filenames may be specified.  The check fails if any one of the
 # supplied arguments to the "test" command returns false.
 function check_file_test() {
-    local OP ARG RESULT
-    local NEG=0
-    local -a FLAGS=( ) ARGS=( )
+    local ARG OP
+    local -i NEG=0 RESULT=0
+    local -a ARGS=( ) FLAGS=( )
 
-    for ARG in "$@" ; do
-        case "$ARG" in
-            -[abcdefghkprstuwxOGLSN]) FLAGS[${#FLAGS[*]}]="$ARG" ;;
-            -!) NEG=1 ;;
-            -*) die 1 "$FUNCNAME:  Syntax error:  Invalid/unsupported operator \"$ARG\"." ; return 1 ;;
-            *) ARGS[${#ARGS[*]}]="$ARG" ;;
+    OPTIND=1
+    while getopts ':!GLNOSbcdefghkprstuwx' OPTION ; do
+        case "$OPTION" in
+            !) NEG=1 ;;
+            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            \?) die 1 "$FUNCNAME:  Invalid/unsupported option:  -$OPTARG" ; return 1 ;;
+            *) FLAGS+=( "-$OPTION" ) ;;
         esac
     done
-    if [[ ${#FLAGS[*]} -eq 0 || ${#ARGS[*]} -eq 0 ]]; then
-        die 1 "$FUNCNAME:  Syntax error:  Missing parameters."
+    shift $((OPTIND-1))
+
+    for ARG in "$@" ; do
+        if [[ "${ARG//[\*\?\[]}" != "$ARG" || "$ARG" == *[+@\!\?\*]'('* ]]; then
+            set +f
+            ARGS+=( $ARG )
+            set -f
+        else
+            ARGS+=( "$ARG" )
+        fi
+    done
+
+    if [[ ${#FLAGS[*]} -eq 0 ]]; then
+        die 1 "$FUNCNAME:  Syntax error:  At least 1 valid 'test' operator is required."
+        return 1
+    elif [[ ${#ARGS[*]} -eq 0 ]]; then
+        die 1 "$FUNCNAME:  Syntax error:  At least 1 valid 'test' argument (usually file(s)/dir(s)) is required."
         return 1
     fi
     for OP in "${FLAGS[@]}" ; do
         for ARG in "${ARGS[@]}" ; do
-            eval test $OP "$ARG"
+            eval test $OP \'$ARG\'
             RESULT=$?
-            if [[ $RESULT -ne 0 ]]; then
-                if [[ $NEG == 1 ]]; then
-                    return 0
-                else
-                    die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
-                    return 1
-                fi
+            # In normal mode, all tests must return true (0); even 1 false test is a failure.
+            # In negated mode, all tests must return false; if even 1 returns true, the check fails.
+            if (( (NEG == 1 && RESULT == 0) || (NEG != 1 && RESULT != 0) )); then
+                die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
+                return 1
             fi
         done
     done
-    if [[ $NEG == 1 ]]; then
+    if (( RESULT == 0 && NEG == 1 )); then
         die 1 "$FUNCNAME:  $OP $ARG returned $RESULT."
         return 1
     else
@@ -190,26 +231,32 @@ function check_file_test() {
 
 # Check various aspects of the results of stat() on a file.
 function check_file_stat() {
-    local DEVNO="" GROUP="" CTIME_NEWER="" CTIME_OLDER="" MINOR="" USERID=""
-    local FGID="" MTIME_NEWER="" MTIME_OLDER="" MAJOR="" FUID="" MODE_IS=""
-    local MODE_MATCHES=""
-    local FNAME IDX RET ERR
+    local CTXT="" DEVNO="" FGID="" GROUP="" MINOR="" USERID="" MAJOR="" FUID=""
+    local MODE_IS="" MODE_MATCHES="" PERM_IS="" PERM_MATCHES=''
+    local BTIME_NEWER="" BTIME_OLDER="" CTIME_NEWER="" CTIME_OLDER="" MTIME_NEWER="" MTIME_OLDER=""
+    local DSKSIZE FNAME FSIZE MSG=''
+    local -i RC=0 IDX=-1
 
     nhc_common_get_unix_time   # Needed for mtime/ctime checks
 
     OPTIND=1
-    while getopts ":D:G:M:N:O:T:U:d:g:m:n:o:t:u:" OPTION ; do
+    while getopts ":B:D:G:M:N:O:P:S:T:U:b:c:d:g:m:n:o:p:s:t:u:" OPTION ; do
         case "$OPTION" in
+            B) BTIME_NEWER="$OPTARG" ;;
             D) DEVNO="$OPTARG" ;;
             G) GROUP="$OPTARG" ;;
             M) MODE_MATCHES="$OPTARG" ;;
+            P) PERM_MATCHES="$OPTARG" ;;
             N) CTIME_NEWER="$OPTARG" ;;
             O) CTIME_OLDER="$OPTARG" ;;
             T) MINOR="$OPTARG" ;;
             U) USERID="$OPTARG" ;;
+            b) BTIME_OLDER="$OPTARG" ;;
+            c) CTXT="$OPTARG" ;;
             d) DEVNO="$OPTARG" ;;
             g) FGID="$OPTARG" ;;
             m) MODE_IS="$OPTARG" ;;
+            p) PERM_IS="$OPTARG" ;;
             n) MTIME_NEWER="$OPTARG" ;;
             o) MTIME_OLDER="$OPTARG" ;;
             t) MAJOR="$OPTARG" ;;
@@ -221,13 +268,36 @@ function check_file_stat() {
     shift $((OPTIND-1))
 
     for FNAME in "$@" ; do
-        nhc_file_stat "$FNAME" IDX ERR
-        RET=$?
-        if [[ $RET -ne 0 ]]; then
-            die 1 "$FUNCNAME:  stat($FNAME) returned $RET:  $ERR"
+        IDX=-1
+        MSG=''
+        nhc_file_stat "$FNAME" IDX MSG
+        RC=$?
+        if [[ $RC -ne 0 ]]; then
+            die 1 "$FUNCNAME:  stat($FNAME) returned $RC:  $MSG"
             return 1
         fi
-    
+        dbg "nhc_file_stat() returned record index #${IDX} for $FNAME (${NHC_STAT_FILES[IDX]} => ${NHC_STAT_REALNAME[IDX]})"
+
+        if [[ -n "$BTIME_NEWER" ]]; then
+            if [[ -z "${NHC_STAT_BTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_BTIME[$IDX]} -lt $((SECONDS-BTIME_NEWER)) ]]; then
+                # File should be newer than $BTIME_NEWER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" birth (creation) time is not newer than ${BTIME_NEWER}s"
+                return 1
+            fi
+        fi
+        if [[ -n "$BTIME_OLDER" ]]; then
+            if [[ -z "${NHC_STAT_BTIME[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_BTIME[$IDX]} -ge $((SECONDS-BTIME_OLDER)) ]]; then
+                # File should be older than $BTIME_OLDER seconds, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" birth (creation) time is not older than ${BTIME_OLDER}s"
+                return 1
+            fi
+        fi
         if [[ -n "$CTIME_NEWER" ]]; then
             if [[ -z "${NHC_STAT_CTIME[$IDX]}" ]]; then
                 die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
@@ -314,7 +384,7 @@ function check_file_stat() {
                 return 1
             elif [[ ${NHC_STAT_MODE[$IDX]} -ne $MODE_IS ]]; then
                 # File permissions should exactly equal $MODE_IS, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be $MODE_IS"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has mode ${NHC_STAT_MODE[$IDX]}; should be $MODE_IS"
                 return 1
             fi
         fi
@@ -324,7 +394,27 @@ function check_file_stat() {
                 return 1
             elif [[ $((NHC_STAT_MODE[IDX] & MODE_MATCHES)) -ne $MODE_MATCHES ]]; then
                 # File permissions should include those specified in $MODE_MATCHES, but they don't.  Flag it.
-                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_MODE[$IDX]}; should be at least $MODE_MATCHES"
+                die 1 "$FUNCNAME:  File \"$FNAME\" has mode ${NHC_STAT_MODE[$IDX]}; should be at least $MODE_MATCHES"
+                return 1
+            fi
+        fi
+        if [[ -n "$PERM_IS" ]]; then
+            if [[ -z "${NHC_STAT_PERM[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ ${NHC_STAT_PERM[$IDX]} -ne $PERM_IS ]]; then
+                # File permissions should exactly equal $PERM_IS, but they don't.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_PERM[$IDX]}; should be $PERM_IS"
+                return 1
+            fi
+        fi
+        if [[ -n "$PERM_MATCHES" ]]; then
+            if [[ -z "${NHC_STAT_PERM[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ $((NHC_STAT_PERM[IDX] & PERM_MATCHES)) -ne $PERM_MATCHES ]]; then
+                # File permissions should include those specified in $PERM_MATCHES, but they don't.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" has permissions ${NHC_STAT_PERM[$IDX]}; should be at least $PERM_MATCHES"
                 return 1
             fi
         fi
@@ -355,6 +445,19 @@ function check_file_stat() {
             elif [[ "${NHC_STAT_USER[$IDX]}" != "$USERID" ]]; then
                 # File should be owned by user $USERID, but it's not.  Flag it.
                 die 1 "$FUNCNAME:  File \"$FNAME\" username is \"${NHC_STAT_USER[$IDX]}\"; should be \"${USERID}\""
+                return 1
+            fi
+        fi
+        if [[ -n "$CTXT" ]]; then
+            if [[ "${OSTYPE,,}" != *'linux'* ]]; then
+                die 1 "$FUNCNAME:  SELinux context validation is not supported on the $OSTYPE OS"
+                return 1
+            elif [[ -z "${NHC_STAT_CONTEXT[$IDX]}" ]]; then
+                die 1 "$FUNCNAME:  Incomplete/empty stat() info returned for $FNAME"
+                return 1
+            elif [[ "${NHC_STAT_CONTEXT[$IDX]}" != "$CTXT" ]]; then
+                # File's SELinux context should be set to $CTXT, but it's not.  Flag it.
+                die 1 "$FUNCNAME:  File \"$FNAME\" SELinux context is \"${NHC_STAT_CONTEXT[$IDX]}\"; should be \"${CTXT}\""
                 return 1
             fi
         fi

@@ -160,9 +160,9 @@ function nhc_fs_dfi_gather_data() {
 # New syntax:  check_fs_mount [ -0 ] [ -r ] [ -s src ] [ -t fstype ] [ -o options ] [ -O mount_options ] [ -e cmd ] [ -E cmd ] -f fs
 function check_fs_mount() {
     local FS="$1" SRC="$2" TYPE="$3" OPTIONS="$4"
-    local REMOUNT=0 NONFATAL=0 MOUNT_OPTS="" ACTION="" FOUND_ACTION=""
+    local REMOUNT=0 NONFATAL=0 MOUNT_OPTS="" MSG='' ACTION="" FOUND_ACTION=""
     local -a AUTOFS_LIST FS_LIST SRC_LIST TYPE_LIST OPTIONS_LIST
-    local i FOUND MSG
+    local -i FOUND RC=0 i
 
     if [[ "${FS##/}" != "$FS" ]]; then
         # First parameter starts with a '/'.  Use the old syntax.
@@ -265,8 +265,16 @@ function check_fs_mount() {
 
         # If we get here, the filesystem is either missing (empty $MSG) or mounted incorrectly (with $MSG).
         if [[ -z "$MSG" && ! -d "$FS" ]]; then
-            [[ "$SHELL" != ":" ]] && mkdir -p -m 0755 "$FS"
-            MSG="$FUNCNAME:  $FS not mounted; directory $FS missing (auto-fixed)"
+            MSG="$FUNCNAME:  $FS not mounted; directory $FS missing"
+            if [[ "$SHELL" != ":" ]]; then
+                mkdir -p -m 0755 "$FS"
+                RC=$?
+                if [[ -d "$FS" ]]; then
+                    MSG+=' (auto-fixed)'
+                else
+                    MSG+=' (unable to auto-fix; `mkdir` failed with exit code '"$RC"')'
+                fi
+            fi
             if [[ "$REMOUNT" == "1" ]]; then
                 ${SHELL:-/bin/bash} -c "$MOUNT_CMD${MOUNT_OPTS:+ -o '$MOUNT_OPTS'} '$FS'" &
             fi

@@ -67,10 +67,15 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             ;;
         *@)
             # Onlining a node will cancel a pending reboot, so prevent this
-            echo "$0:  Not onlining $HOSTNAME: Reboot is pending."
+            echo "$0:  Not onlining $HOSTNAME:  Reboot is pending."
             exit 0
             ;;
-        boot*|down*|drain*|drng*|fail*|maint*)
+        maint*)
+            # Resuming nodes in this state is an "Invalid node state transition"
+            echo "$0:  Resuming from state \"$STATUS\" is an invalid node state transition; ignoring."
+            exit 0
+            ;;
+        boot*|down*|drain*|drng*|fail*)
             # If there is no old note, and we've not been told to ignore that, do not online the node.
             if [[ "$OLD_NOTE_LEADER" == "none" && "$IGNORE_EMPTY_NOTE" != "1" ]]; then
                 echo "$0:  Not onlining $HOSTNAME:  No note set."

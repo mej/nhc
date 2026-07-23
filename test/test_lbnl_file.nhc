@@ -123,7 +123,7 @@ plan $((3+5+5+3+9+6+8+12+22)) "lbnl_file.nhc" && {
     #fi
 
     # Check file stats and compare to expected values
-    TEST_STATS=( `/usr/bin/stat -c '0%04a %b %B 0x%D %g %h %i %m %s 0x%04t 0x%04T %u %Y %Z' /` )
+    TEST_STATS=( `/usr/bin/stat -c '0%04a %b %B 0x%D 0x%08f %g %h %i %m %s 0x%04t 0x%04T %u %Y %Z' /` )
     check_file_stat -p 0123 "/"
     is $? 1 'stat() exact permissions, unlikely value'
     check_file_stat -p ${TEST_STATS[0]} "/"
@@ -140,39 +140,39 @@ plan $((3+5+5+3+9+6+8+12+22)) "lbnl_file.nhc" && {
     ### TODO:  Complete mode in hex
     check_file_stat -g 31415 "/"
     is $? 1 'stat() GID, unlikely value'
-    check_file_stat -g ${TEST_STATS[4]} "/"
+    check_file_stat -g ${TEST_STATS[5]} "/"
     is $? 0 'stat() GID, correct value'
-    ### TODO:  Link count [5]
-    ### TODO:  Inode number [6]
-    ### TODO:  Mountpoint [7]
-    ### TODO:  Size [8]
+    ### TODO:  Link count [6]
+    ### TODO:  Inode number [7]
+    ### TODO:  Mountpoint [8]
+    ### TODO:  Size [9]
     check_file_stat -t 0xff "/"
     is $? 1 'stat() device major number, unlikely value'
-    check_file_stat -t ${TEST_STATS[9]} "/"
+    check_file_stat -t ${TEST_STATS[10]} "/"
     is $? 0 'stat() device major number, correct value'
     check_file_stat -T 123 "/"
     is $? 1 'stat() device minor number, unlikely value'
-    check_file_stat -T ${TEST_STATS[10]} "/"
+    check_file_stat -T ${TEST_STATS[11]} "/"
     is $? 0 'stat() device minor number, correct value'
     check_file_stat -u 31415 "/"
     is $? 1 'stat() UID, unlikely value'
-    check_file_stat -u ${TEST_STATS[11]} "/"
+    check_file_stat -u ${TEST_STATS[12]} "/"
     is $? 0 'stat() UID, correct value'
-    check_file_stat -n $((SECONDS-TEST_STATS[12]-86400)) "/"
+    check_file_stat -n $((SECONDS-TEST_STATS[13]-86400)) "/"
     is $? 1 'stat() mtime newer than 1 day later'
-    check_file_stat -n $((SECONDS-TEST_STATS[12]+86400)) "/"
+    check_file_stat -n $((SECONDS-TEST_STATS[13]+86400)) "/"
     is $? 0 'stat() mtime newer than 1 day earlier'
-    check_file_stat -o $((SECONDS-TEST_STATS[12]-86400)) "/"
+    check_file_stat -o $((SECONDS-TEST_STATS[13]-86400)) "/"
     is $? 0 'stat() mtime newer than 1 day later'
-    check_file_stat -o $((SECONDS-TEST_STATS[12]+86400)) "/"
+    check_file_stat -o $((SECONDS-TEST_STATS[13]+86400)) "/"
     is $? 1 'stat() mtime newer than 1 day earlier'
-    check_file_stat -N $((SECONDS-TEST_STATS[13]-86400)) "/"
+    check_file_stat -N $((SECONDS-TEST_STATS[14]-86400)) "/"
     is $? 1 'stat() ctime newer than 1 day later'
-    check_file_stat -N $((SECONDS-TEST_STATS[13]+86400)) "/"
+    check_file_stat -N $((SECONDS-TEST_STATS[14]+86400)) "/"
     is $? 0 'stat() ctime newer than 1 day earlier'
-    check_file_stat -O $((SECONDS-TEST_STATS[13]-86400)) "/"
+    check_file_stat -O $((SECONDS-TEST_STATS[14]-86400)) "/"
     is $? 0 'stat() ctime newer than 1 day later'
-    check_file_stat -O $((SECONDS-TEST_STATS[13]+86400)) "/"
+    check_file_stat -O $((SECONDS-TEST_STATS[14]+86400)) "/"
     is $? 1 'stat() ctime newer than 1 day earlier'
 
 } ; unplan

@@ -44,7 +44,7 @@ function array_pop() {
     #eval END='$((${#'"$ANAME"'[*]}-1))'
     #for ((i=0; i < ${COUNT:-1}; i++)); do
     #    j=$((END-i))
-    #    eval 'NEWARRAY+=( "${'"$ANAME"'[$j]}" )'
+    #    eval 'NEWARRAY+=( "${'"$ANAME"'[j]}" )'
     #    eval unset "$ANAME"'['"$j"']'
     #done
     if [[ -n "$VARNAME" ]]; then
@@ -112,7 +112,7 @@ function array_split() {
 ### Example:  array_join ',' SOMEARRAY SOMEVAR
 function array_join() {
     local SEP="$1" ANAME="$2" OUTVAR="$3"
-    local SAVEIFS="$IFS" TMP=""
+    local IFS TMP=""
     local -i i CNT
 
     if [[ ${#SEP} -le 1 ]]; then
@@ -122,11 +122,10 @@ function array_join() {
         else
             eval echo '"${'"$ANAME"'[*]}"'
         fi
-        IFS="$SAVEIFS"
     else
         eval 'TMP="${'"$ANAME"'[0]}" CNT="${#'"$ANAME"'[*]}"'
         for ((i=1; i < CNT; i++)); do
-            eval 'TMP+="$SEP${'"$ANAME"'[$i]}"'
+            eval 'TMP+="$SEP${'"$ANAME"'[i]}"'
         done
         if [[ -n "$OUTVAR" ]]; then
             eval "$OUTVAR"'="$TMP"'
@@ -144,20 +143,20 @@ function strtidy() {
     OPTIND=1
     while getopts ":12C:OW:clmo:s:tw" OPTION ; do
         case "$OPTION" in
-            1) WS=' ' ;;
-            2) WS=$' \t' ;;
-            C) CCHAR="$OPTARG" ;;
-            O) OUT=1 ;;
-            W) WS="$OPTARG" ;;
-            c) RM_COMMENTS=1 ;;
-            l) TRIM_LEAD=1 ;;
-            m) MERGE_WS=1 ;;
-            o) OUTVAR="$OPTARG" ;;
-            s) SNAME="$OPTARG" ;;
-            t) TRIM_TRAIL=1 ;;
-            w) TRIM_LEAD=1 TRIM_TRAIL=1 ;;
-            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+            '1') WS=' ' ;;
+            '2') WS=$' \t' ;;
+            'C') CCHAR="$OPTARG" ;;
+            'O') OUT=1 ;;
+            'W') WS="$OPTARG" ;;
+            'c') RM_COMMENTS=1 ;;
+            'l') TRIM_LEAD=1 ;;
+            'm') MERGE_WS=1 ;;
+            'o') OUTVAR="$OPTARG" ;;
+            's') SNAME="$OPTARG" ;;
+            't') TRIM_TRAIL=1 ;;
+            'w') TRIM_LEAD=1 TRIM_TRAIL=1 ;;
+            ':') die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -168,22 +167,12 @@ function strtidy() {
         STR="$1"
     fi
 
-    if [[ $TRIM_LEAD -eq 1 ]]; then
-        STR="${STR##[$WS]}"
-    fi
-    if [[ $TRIM_TRAIL -eq 1 ]]; then
-        STR="${STR%%[$WS]}"
-    fi
-    if [[ $RM_COMMENTS -eq 1 ]]; then
-        STR="${STR%%\#*}"
-    fi
-    if [[ $MERGE_WS -eq 1 ]]; then
-        STR="${STR//+([$WS])/ }"
-    fi
+    (( TRIM_LEAD == 1 ))   && STR="${STR##[$WS]}"
+    (( TRIM_TRAIL == 1 ))  && STR="${STR%%[$WS]}"
+    (( RM_COMMENTS == 1 )) && STR="${STR%%\#*}"
+    (( MERGE_WS == 1 ))    && STR="${STR//+([$WS])/ }"
 
-    if [[ $OUT -eq 1 ]]; then
-        echo "$STR"
-    fi
+    (( OUT == 1 )) && echo "$STR"
     if [[ -n "$OUTVAR" ]]; then
         printf -v "$OUTVAR" '%s' "$STR"
     fi
@@ -707,7 +696,7 @@ function nhc_common_get_unix_time() {
 
 # Run a subcommand with a timeout
 function nhc_cmd_with_timeout() {
-    local -i NHC_TO=0 RC=0 RETPID=0 SUBPID=0 WDTPID=0
+    local -i NHC_TO=0 RC=0 SUBPID=0 WDTPID=0
 
     if [[ "$1" == +([0-9]) ]]; then
         export NHC_TO=$1
@@ -716,9 +705,9 @@ function nhc_cmd_with_timeout() {
         export NHC_TO=$TIMEOUT
     fi
     dbg "$FUNCNAME():  Executing \"$*\" with $NHC_TO-second timeout."
-    "$@" &
+    "$@" <&0 2>&1 &
     SUBPID=$!
-    nhcmain_watchdog_timer "$NHC_TO" "$SUBPID" "$1" &
+    nhcmain_watchdog_timer "$NHC_TO" "$SUBPID" "$1" </dev/null >&/dev/null &
     WDTPID=$!
     dbg "$FUNCNAME():  Waiting on subprocess $SUBPID (\"$1\"); watchdog timer is $WDTPID...."
     wait $SUBPID
@@ -728,6 +717,295 @@ function nhc_cmd_with_timeout() {
         kill_watchdog $WDTPID
     fi
     dbg "$FUNCNAME():  Command \"$*\" returned $RC."
+    return $RC
+}
+
+# Parse through a list of lines (e.g., file contents, command output, etc.) and look for matches to specified strings, with optional per-match custom messages and conditionals.
+function nhc_common_find_matches() {
+    local -  CHECKNAME='' CMD='' IFS INPUT_FILE='' LINE='' MSG='' OUTPUT_FILE='' SRC='' TIMER=''
+    local -n EXECV INPUT_VAR OUTPUT_VAR RESULT
+    local -i ALL=0 CFM_RETVAL=0 CFM_START_TS=$SECONDS CFM_TIMEOUT=5 LINENUM=0 MATCH_CNT=0 \
+        MATCHES_OUT=0 NEG_MATCH_CNT=0 NONFATAL=0 RC=0 i j
+    local -a CMD_LIST=( ) COND=( ) COND_SUBST=( ) INPUT_LINES=( ) LINES=( ) OUTPUT_LINES=( ) MATCHES=( ) MATCHED=( ) MSGS=( ) \
+        RESULT_OUT=( )
+
+    function __cfm_subst() {
+        local -n STR="$1"
+        local VAR='' VAL=''
+
+        shift
+        while (( $# >= 2 )); do
+            VAR="$1" VAL="$2"
+            STR="${STR//\%$VAR/$VAL}"
+            shift 2
+        done
+    }
+
+    # NOTE:  Option -m may be given any number of times; -M and/or -c options must appear the same number of times, and in the
+    #        same order, or not at all.  Defaults will always be used if -M/-c is not given at all.  To specify the default message
+    #        string or conditional should be used for specific matches, pass an empty argument to -M or -c (e.g., -M '' or -c '')
+    #        at the corresponding position in order in the argument list.
+    # Example:  Given match strings mstr1, mstr2, and mstr3, with corresponding custom messages msg1 and msg3 and conditional cond2,
+    #           the options and arguments could be passed in any of the following orders:
+    #               -m mstr1 -m mstr2 -m mstr3 -M msg1 -M '' -M msg3 -c '' -c cond2 -c ''
+    #               -m mstr1 -M msg1 -c '' -m mstr2 -M '' -c cond2 -m mstr3 -M msg3 -c ''
+    #               -M msg1 -c '' -m mstr1 -M '' -c cond2 -m mstr2 -M msg3 -c '' -m mstr3
+    OPTIND=1
+    while getopts ":0C:E:I:M:O:R:ac:e:f:m:o:r:s:t:xz" OPTION ; do
+        case "$OPTION" in
+            '0') NONFATAL=1 ;;                                                # Return results without calling die().
+            'C') CHECKNAME="$OPTARG" ;;                                       # Name of "wrapper" check to pretend to be
+            'E') if [[ "${OPTARG}" == '('*')' ]]; then                        # Actual array syntax for execv()-style command+args
+                     eval 'CMD_LIST='"${OPTARG}"                              # (e.g., -E '("cmd" "arg1" "arg2")').
+                 elif [[ "${EXECV@a}" != *'a'* ]]; then                       # Name of array containing execv()-style command+args
+                     EXECV="$OPTARG"
+                 fi ;;
+            'I') [[ "${INPUT_VAR@a}" != *'a'* ]] && INPUT_VAR="$OPTARG" ;;    # Instead of a file/command, parse input from array.
+            'M') MSGS+=( "$OPTARG" ) ;;                                       # Optional per-match custom message string
+            'O') [[ "${OUTPUT_VAR@a}" != *'a'* ]] && OUTPUT_VAR="$OPTARG" ;;  # Save file/command lines into named array variable.
+            'R') [[ "${RESULT@a}" != *'a'* ]] && RESULT="$OPTARG" ;;          # Save result ("${RC}" "${MSG}") into named variable.
+            'a') ALL=1 ;;                                                     # Check all matches; don't short-circuit.
+            'c') COND+=( "$OPTARG" ) ;;                                       # Optional per-match conditional using regex+parens
+            'e') CMD="$OPTARG" ;;                                             # Command line to execute to generate input data.
+            'f') INPUT_FILE="$OPTARG" ;;                                      # Input file; if CMD also given, use file as stdin.
+            'm') MATCHES+=( "$OPTARG" ) ;;                                    # Match string to look for; pass once per mstr.
+            'o') OUTPUT_FILE="$OPTARG" ;;                                     # Save array of parsed lines to this output file.
+            'r') CFM_RETVAL="$OPTARG" ;;
+            's') SRC="$OPTARG" ;;                                             # Data source (%c in MSGS); default is file/command.
+            't') CFM_TIMEOUT="$OPTARG" ;;
+            'x') if [[ $- != *x* ]]; then set -x ; trap 'set +x' RETURN ; fi ;;
+            'z') MATCHES_OUT=1 ;;                                             # Limit OUTPUT_VAR/OUTPUT_FILE to only matching lines
+            ':') die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    if [[ -z "$CHECKNAME" ]]; then
+        CHECKNAME="${FUNCNAME[0]}"
+    elif [[ "$CHECKNAME" == '-' ]]; then
+        CHECKNAME="${FUNCNAME[1]}"
+    elif [[ "$CHECKNAME" == [0-9] ]]; then
+        CHECKNAME="${FUNCNAME[$CHECKNAME]}"
+    fi
+
+    # Local variable fallbacks for nameref variables (in case they're not specified or are the wrong type).
+    [[ "${EXECV@a}" == *'a'* ]] || EXECV=CMD_LIST
+    [[ "${INPUT_VAR@a}" == *'a'* ]] || INPUT_VAR=INPUT_LINES
+    [[ "${OUTPUT_VAR@a}" == *'a'* ]] || OUTPUT_VAR=OUTPUT_LINES
+    [[ "${RESULT@a}" == *'a'* ]] || RESULT=RESULT_OUT
+    # Initialize the output variables in case they already contain data.
+    OUTPUT_VAR=( ) RESULT=( 0 )
+
+    # Convert CMD to EXECV[] array or vice versa
+    if [[ ${#EXECV[*]} -gt 0 ]]; then
+        CMD="${EXECV[*]}"
+    elif [[ -n "$CMD" ]]; then
+        EXECV=( $CMD )
+    else
+        EXECV=( "$@" )
+        CMD="${EXECV[*]}"
+    fi
+
+    # Sanity checks on input arguments and options
+    if [[ -z "$INPUT_FILE" && -z "$CMD" && ${#INPUT_VAR[*]} -eq 0 ]]; then
+        RC=1 MSG="$CHECKNAME:  Syntax error:  No data source specified"
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "$MSG"
+        return $RC
+    elif [[ -n "$CFM_TIMEOUT" && $CFM_TIMEOUT -gt $TIMEOUT ]]; then
+        RC=1 MSG="$CHECKNAME:  Check timeout $CFM_TIMEOUT exceeds NHC timeout $TIMEOUT"
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "$MSG"
+        return $RC
+    elif (( ${#MATCHES[*]} < ${#MSGS[*]} )); then
+        RC=1 MSG="$CHECKNAME:  Message count ($(( ${#MSGS[*]} / 2 ))) must not exceed match string count ($(( ${#MATCHES[*]} / 2 )))."
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "$MSG"
+        return $RC
+    elif (( ${#MATCHES[*]} < ${#COND[*]} )); then
+        RC=1 MSG="$CHECKNAME:  Conditional count ($(( ${#COND[*]} / 2 ))) must not exceed match string count ($(( ${#MATCHES[*]} / 2 )))."
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "$MSG"
+        return $RC
+    fi
+
+    # Initialize a parallel array for tracking which matches have been found.
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        if [[ "${MATCHES[i]:0:1}" == '!' ]]; then
+            MATCHED[i]=1
+            (( NEG_MATCH_CNT++ ))
+        else
+            MATCHED[i]=0
+        fi
+    done
+
+    if (( ${#COND[*]} > 0 )); then
+        COND_SUBST=( '#' '${#BASH_REMATCH[*]}' '@' '"${BASH_REMATCH[*]}"' )
+        for ((i = 0; i < 10; i++)); do
+            COND_SUBST+=( $i '"${BASH_REMATCH['"$i"']}"' )
+        done
+        for ((i = 0; i < ${#COND[*]}; i++)); do
+            __cfm_subst "COND[$i]" "${COND_SUBST[@]}"
+        done
+    fi
+
+    # FIXME:  We can't do this as a pipeline because the contents of
+    # the while loop will execute in a subshell, and all our variable
+    # values will get lost.
+    # nhc_cmd_with_timeout $CFM_TIMEOUT "${EXECV[@]}" | while read LINE ; do
+    #
+    # Once we can drop support for RHEL4 and 5, we can use "coproc"
+    # For now, this means we have to run the command and grab all its
+    # output all in 1 go, so commands with lengthy output must be
+    # avoided.
+    IFS=$'\n'
+    if [[ "${INPUT_VAR@a}" == *'a'* && ${#INPUT_VAR[*]} > 0 ]]; then
+        [[ -z "$SRC" ]] && SRC='${'"${!INPUT_VAR}"'[]} array data'
+        LINES=( "${INPUT_VAR[@]}" )
+        RC=0
+    elif [[ ${#EXECV[*]} -gt 0 ]]; then
+        SRC="${SRC:-'$CMD' command output}"
+        LINES=( $(nhc_cmd_with_timeout $CFM_TIMEOUT "${EXECV[@]}" < "${INPUT_FILE:-/dev/null}") )
+        RC=$?
+    elif [[ -n "$INPUT_FILE" ]]; then
+        SRC="${SRC:-'$INPUT_FILE' file contents}"
+        LINES=( $(< "$INPUT_FILE") )
+        RC=$?
+    else
+        RC=1 MSG="$CHECKNAME:  No input data source specified."
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "${MSG}"
+        return $RC
+    fi
+    if (( MATCHES_OUT )); then
+        if [[ -n "$OUTPUT_FILE" ]]; then
+            # Truncate now so we can append later.
+            : > "$OUTPUT_FILE"
+        fi
+    else
+        OUTPUT_VAR=( "${LINES[@]}" )
+        if [[ -n "$OUTPUT_FILE" ]]; then
+            printf '%s\n' "${OUTPUT_VAR[@]}" > "$OUTPUT_FILE"
+            unset OUTPUT_FILE
+        fi
+    fi
+    IFS=$' \t\n'
+
+    if (( RC >= 128 || RC != ${CFM_RETVAL:-${RC}} )); then
+        if (( SECONDS >= CFM_START_TS + CFM_TIMEOUT && RC == 143 )); then
+            # A return code of 143 (128+15) means that the process received SIGTERM,
+            # probably from our command watchdog timer.  Detect that and make it clearer.
+            RC=1 MSG="$CHECKNAME:  TIMEOUT after ${CFM_TIMEOUT}s for \"$CMD\"; subprocess terminated."
+            RESULT=( $RC "$MSG" )
+            (( NONFATAL == 0 )) && die $RC "${MSG}"
+            return $RC
+        elif (( RC >= 128 )); then
+            RC=1 MSG="$CHECKNAME:  \"$CMD\" terminated by signal $((RC-128))."
+            RESULT=( $RC "$MSG" )
+            (( NONFATAL == 0 )) && die $RC "${MSG}"
+            return $RC
+        fi
+        MSG="$CHECKNAME:  $RC${CFM_RETVAL:+ (expected $CFM_RETVAL)} returned by \"$CMD\"."
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "${MSG}"
+        return $RC
+    fi
+    if [[ ${#MATCHES[*]} -gt 0 ]]; then
+        # Iterate through $LINES[] array to gather process data.
+        for ((LINENUM = 0; LINENUM < ${#LINES[*]}; LINENUM++)); do
+            LINE="${LINES[LINENUM]}"
+            for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+                if [[ -n "${COND[i]}" ]]; then
+                    # If there's a conditional, pre-populate the BASH_REMATCH array with the current line,
+                    # followed by each word in the line, so that glob matches can use the conditional too.
+                    # Regex match strings will replace this content anyway during `mcheck_regexp()`.
+                    BASH_REMATCH=( "${LINE}" ${LINE} )
+                    eval "function __cfm_cond() { local - IFS=\$' \t\n'; ${COND[i]}; }"
+                else
+                    function __cfm_cond() { :; }
+                fi
+                if [[ "${MATCHES[i]:0:1}" == '!' ]]; then
+                    # Match expression is negated.  Fail if the line matches this expression.
+                    if mcheck "${LINE}" "${MATCHES[i]:1}"; then
+                        (( MATCHES_OUT )) && OUTPUT_VAR+=( "${LINE}" )
+                        [[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "${LINE}" >> "$OUTPUT_FILE"
+                        (( RC++ ))
+                        MSG=${MSGS[i]:-\"%m\" matched at line %l of \"%c\"}
+                        __cfm_subst MSG 'm' "${MATCHES[i]:1}" 'l' "$((LINENUM+1))" 'L' "${LINE//[\"\`\$]}" 'c' "$SRC" 't' "${COND[i]}"
+                        MSG="${CHECKNAME}:  $MSG."
+                        if (( ALL == 0 )); then
+                            RESULT=( $RC "$MSG" )
+                            (( NONFATAL == 0 )) && die $RC "$MSG"
+                            return $RC
+                        fi
+                    fi
+                elif [[ ${MATCHED[i]} -eq 0 ]] && mcheck "${LINE}" "${MATCHES[i]}"; then
+                    MATCHED[i]=1
+                    ((MATCH_CNT++))
+                    (( MATCHES_OUT )) && OUTPUT_VAR+=( "${LINE}" )
+                    [[ -n "$OUTPUT_FILE" ]] && printf '%s\n' "${LINE}" >> "$OUTPUT_FILE"
+                    if ! __cfm_cond; then
+                        # Match expression matched, but conditional failed.  Fail.
+                        (( RC++ ))
+                        MSG=${MSGS[i]:-Conditional %t failed at %c line %l (\"%m\" matched \"%L\")}
+                        __cfm_subst MSG 'm' "${MATCHES[i]}" 'l' "$((LINENUM+1))" 'L' "${LINE//[\"\`\$]}" 'c' "$SRC" 't' "${COND[i]}"
+                        MSG="${CHECKNAME}:  $MSG."
+                        if (( ALL == 0 )); then
+                            RESULT=( $RC "$MSG" )
+                            (( NONFATAL == 0 )) && die $RC "$MSG"
+                            return $RC
+                        fi
+                    fi
+                    if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
+                        # All match expression(s) are positive and have
+                        # matched successfully.  Stop processing output.
+                        break 2
+                    fi
+                fi
+            done
+        done
+
+        # None of the negated matches matched, so add them to our success count.
+        ((MATCH_CNT += NEG_MATCH_CNT))
+    fi
+
+    if (( ALL == 1 && RC > 0 )); then
+        # At least one negated match expression matched.  Return.
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "$MSG"
+        return $RC
+    elif (( MATCH_CNT == ${#MATCHES[*]} )); then
+        # All matches (some positive, some negative) were successful.  Return.
+        return 0
+    fi
+
+    # At least one expression failed to match.  Locate the first such expression.
+    if (( MATCH_CNT == 0 && ${#MATCHES[*]} == 1 )); then
+        # Special case for cleaner output.
+        RC=1
+        MSG=${MSGS[0]:-\"%m\" failed to match %c}
+        __cfm_subst MSG 'm' "${MATCHES[0]}" 'c' "$SRC"
+        MSG="$CHECKNAME:  $MSG."
+        RESULT=( $RC "$MSG" )
+        (( NONFATAL == 0 )) && die $RC "${MSG}"
+        return $RC
+    fi
+
+    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
+        if (( ${MATCHED[i]} == 0 )); then
+            RC=$(( ${#MATCHES[*]} - MATCH_CNT ))
+            MSG=${MSGS[i]:-\"%m\" failed to match %c (%f patterns failed)}
+            __cfm_subst MSG 'm' "${MATCHES[i]}" 'c' "$SRC" 'f' "$RC/${#MATCHES[*]}"
+            MSG="$CHECKNAME:  $MSG."
+            RESULT=( $RC "$MSG" )
+            (( NONFATAL == 0 )) && die $RC "${MSG}"
+            return $RC
+        fi
+    done
+    MSG="$CHECKNAME:  No unmatched expressions found for $SRC output but $CHECKNAME() failed to terminate."
+    RESULT=( $RC "$MSG" )
+    die $RC "${MSG}"
     return $RC
 }
 

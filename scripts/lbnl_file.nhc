@@ -108,68 +108,23 @@ function nhc_file_stat() {
 # given ($2-).  The check fails if any of the supplied expressions
 # fail to match the file's contents.  Matching is done line by line.
 function check_file_contents() {
-    local FILENAME="$1"
-    local LINE LINENUM=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
-    local -a MATCHES MATCHED
+    local FILENAME="$1" MATCH=''
+    local -a MATCHES=( )
 
-    # Create an array of all matches for which we must search.
-    shift
-    MATCHES=( "$@" )
-
-    # Initialize a parallel array for tracking which matches have been found.
-    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-        if [[ "${MATCHES[$i]:0:1}" = '!' ]]; then
-            MATCHED[$i]=1
-            ((NEG_MATCH_CNT++))
-        else
-            MATCHED[$i]=0
-        fi
-    done
-
-    # Read the file line by line.
-    while read LINE ; do
-        ((LINENUM++))
-        for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-            if [[ ${MATCHED[$i]} -eq 1 ]]; then
-                if [[ "${MATCHES[$i]:0:1}" = '!' ]] && mcheck "$LINE" "${MATCHES[$i]:1}" ; then
-                    # Match expression is negated.  Fail if the line matches this expression.
-                    die 1 "$FUNCNAME:  File \"$FILENAME\" line $LINENUM matches \"${MATCHES[$i]:1}\"."
-                    return 1
-                fi
-            elif mcheck "$LINE" "${MATCHES[$i]}" ; then
-                MATCHED[$i]=1
-                ((MATCH_CNT++))
-                if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
-                    # All match expression(s) are positive and have
-                    # matched successfully.  Stop reading file.
-                    return 0
-                fi
-            fi
+    # Legacy syntax
+    if [[ -e "$FILENAME" && -r "$FILENAME" && $# -ge 2 ]]; then
+        # Create an array of all matches for which we must search.
+        shift
+        for MATCH in "$@" ; do
+            MATCHES+=( '-m' "$MATCH" )
         done
-    done <"$FILENAME"
-
-    # None of the negated matches matched, so add them to our success count.
-    ((MATCH_CNT += NEG_MATCH_CNT))
-    if [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
-        # All matches (some positive, some negative) were successful.  Return.
-        return 0
+        nhc_common_find_matches -f "$FILENAME" "${MATCHES[@]}"
+        return $?
     fi
 
-    # At least one expression failed to match.  Locate the first such expression.
-    if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
-        # Special case for cleaner output.
-        die 1 "$FUNCNAME:  File \"$FILENAME\" failed to match \"${MATCHES[0]}\"."
-        return 1
-    fi
-
-    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-        if [[ ${MATCHED[$i]} == 0 ]]; then
-            die 1 "$FUNCNAME:  File \"$FILENAME\" matched $MATCH_CNT/${#MATCHES[*]} patterns.  First failed match:  \"${MATCHES[$i]}\"."
-            return 1
-        fi
-    done
-    die 2 "No unmatched expressions found for \"$FILENAME\" but ${FUNCNAME[0]}() failed to terminate."
-    return 2
+    # New syntax matches that of check_cmd_output() exactly.
+    nhc_common_find_matches "$@"
+    return $?
 }
 
 # Check various attributes of one or more files using bash's built-in

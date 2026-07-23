@@ -1,6 +1,6 @@
 # Tests for common.nhc
 
-plan $((22+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+8)) "common.nhc" && {
+plan $((23+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+24+8)) "common.nhc" && {
     is "`type -t array_push 2>&1`" 'function' 'array_push() loaded properly'
     is "`type -t array_pop 2>&1`" 'function' 'array_pop() loaded properly'
     is "`type -t array_unshift 2>&1`" 'function' 'array_unshift() loaded properly'
@@ -22,6 +22,7 @@ plan $((22+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+8)) "common.nhc" && {
     is "`type -t nhc_common_unparse_count 2>&1`" 'function' 'nhc_common_unparse_count() loaded properly'
     is "`type -t nhc_common_get_unix_time 2>&1`" 'function' 'nhc_common_get_unix_time() loaded properly'
     is "`type -t nhc_cmd_with_timeout 2>&1`" 'function' 'nhc_cmd_with_timeout() loaded properly'
+    is "`type -t nhc_common_find_matches 2>&1`" 'function' 'nhc_common_find_matches() loaded properly'
     is "`type -t nhc_common_get_max_sys_uid 2>&1`" 'function' 'nhc_common_get_max_sys_uid() loaded properly'
 
     typeset -a TA=( ) A1=( ) A2=( ) A3=( )
@@ -369,6 +370,61 @@ plan $((22+11+11+13+11+28+9+7+15+6+7+4+6+18+7+19+2+8)) "common.nhc" && {
     nhc_common_get_unix_time
     ok '(( (SECONDS <= UNIXTIME+OLDSECS+5) && (SECONDS >= UNIXTIME+OLDSECS-5) ))' \
         "\$SECONDS ($SECONDS) should now reflect \`time_t\` value (roughly $UNIXTIME+$OLDSECS +/- 5s)"
+
+    # Needed to bypass sanity check on timeout values.
+    export TIMEOUT=99999
+
+    declare -i EC=0
+    declare -agx CMDA=( ) OUTA=( ) RES=( ) TMPA=( 'line1' 'line2' 'line3' )
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -e 'echo -e "line1\nline2\nline3"'
+    is $? 0 "Multiple match strings vs. command output (success)"
+    CMDA=( 'echo' '-e' 'line1\nline2\nline3' )
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -E CMDA
+    is $? 0 "Multiple match strings vs. named execv()-style command array variable contents (success)"
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -E '("echo" "-e" "line1\nline2\nline3")'
+    is $? 0 "Multiple match strings vs. literal execv()-style command array contents (success)"
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -I TMPA -O OUTA
+    is $? 0 "Multiple match strings vs. array contents (success)"
+    is ${#OUTA[*]} ${#TMPA[*]} "Without -z, input and output arrays should be identical"
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -f <(echo -e "line1\nline2\nline3")
+    is $? 0 "Multiple match strings vs. input file (success)"
+    nhc_common_find_matches -t 1 -m '/line1/' -m '/line2/' -m '/line3/' -O OUTA -e cat -f <(echo -e "line1\nline2\nline3")
+    is $? 0 "Multiple match strings vs. command with stdin file (success)"
+    is "${OUTA[*]}" 'line1 line2 line3' "Output array should now contain the 3 lines of output"
+    nhc_common_find_matches -t 1 -m '!/line1/' -m '!/line2/' -m '!/line3/' -I TMPA -zO OUTA
+    is $? 1 "Multiple match string failures should only return 1 by default"
+    is ${#OUTA[*]} 1 "Normally, output array in matches-only mode should contain the line that matched"
+    nhc_common_find_matches -t 1 -a -m '!/line1/' -m '!/line2/' -m '!/line3/' -I TMPA -zO OUTA
+    is $? 3 "Multiple match string failures with -a should return all failures"
+    is ${#OUTA[*]} 3 "With -a (ALL mode), output array in matches-only mode should contain all lines that matched"
+    CMDA=( 'echo' 'Output line 4' )
+    nhc_common_find_matches -t 1 -m '/^(Output) (line) (4)$/' -c '[[ %3 == "4" ]]' -E CMDA -zO OUTA
+    is $? 0 "Single match string (success) with conditional (success)"
+    is ${#OUTA[*]} 1 "Output array should contain the line that matched"
+    nhc_common_find_matches -t 1 -m '/^(Output) (line) (4)$/' -c '[[ %1 == "Moo." ]]' -R RES -E CMDA -zO OUTA
+    EC=$?
+    is $EC 1 "Single match string (success) with conditional (failure)"
+    is ${#OUTA[*]} 1 "Output array should contain the line that matched even though the conditional failed"
+    is $EC ${RES[0]} "First element of result array should match the return value"
+    is "$DIE_MSG" "${RES[1]}" "Second element of result array should match the error message"
+
+    TMPA=( {0..9} )
+    nhc_common_find_matches -t 1 -I TMPA -M 'Missing 1' -m 1 -c ':' -M 'Missing 2' -m 2 -c ':' -M 'Missing 3' -m 3 -c ':' \
+        -M 'Missing 4' -m '/^(4)$/' -c '(( %# == 2 ))' -M 'Missing 5' -m 5 -c '(( %1 == 5 ))' -M 'Missing 6' -m 6 -c ':' \
+        -M 'Missing 7' -m '/^(7)$/' -c '[[ %1 -ge 4 ]]' -M 'Missing 8' -m '*' -c ':' -M 'Missing 9' -m 9 -c ':'
+    is $? 0 "Numerous match strings with conditionals and messages (success)"
+
+    # Make sure certain error conditions are kicked out informatively
+    nhc_common_find_matches -m '*' -m '!*'
+    is $? 1 "Missing data source should barf"
+    like "$DIE_MSG" '*No * specified' "No input data?  No dice!"
+
+    nhc_common_find_matches -t 9999999 -m '/bogus/' -m 'nope' -e 'moo --moo=moo moo_moo_mcmoo'
+    is $? 1 'Timeout exceeding that of `nhc` itself should barf'
+    like "$DIE_MSG" '*Check timeout * exceeds NHC timeout *'
+
+    nhc_common_find_matches -M 'Messages without match strings' -M 'should not work!' -e bob
+    like "$DIE_MSG" '*Message count * must not * match string *' "Messages without match strings are not valid"
 
     if [[ $- == *x* ]]; then
         # There seems to be a bash bug.  It doesn't handle process substitution

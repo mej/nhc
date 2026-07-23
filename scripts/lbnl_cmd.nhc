@@ -7,139 +7,8 @@
 # Check the output of a command for one or more matching strings.  A
 # required return code may also be supplied.
 function check_cmd_output() {
-    local CMD_TIMEOUT=5 CMD_RETVAL CHECKNAME="$FUNCNAME" OUTPUT_VAR CMD_START_TS=$SECONDS
-    local IFS PID TIMER RET CMD MSG
-    local LINENUM=0 MATCH_CNT=0 NEG_MATCH_CNT=0 i
-    local -a CMD_LIST LINES MATCHES MATCHED MSGS
-
-    OPTIND=1
-    while getopts ":C:M:O:e:m:r:t:" OPTION ; do
-        case "$OPTION" in
-            C) CHECKNAME="$OPTARG" ;;  # Used for writing wrapper checks
-            O) OUTPUT_VAR="$OPTARG" ;;  # Used for writing wrapper checks
-            M) MSGS+=( "$OPTARG" ) ;;  # Used for writing wrapper checks
-            e) CMD="$OPTARG" ;;
-            m) MATCHES+=( "$OPTARG" ) ;;
-            r) CMD_RETVAL="$OPTARG" ;;
-            t) CMD_TIMEOUT="$OPTARG" ;;
-            :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
-        esac
-    done
-    shift $((OPTIND-1))
-
-    if [[ -n "$CMD" ]]; then
-        CMD_LIST=( $CMD )
-    else
-        CMD_LIST=( "$@" )
-        CMD="${CMD_LIST[*]}"
-    fi
-
-    if [[ -z "${CMD_LIST[*]}" ]]; then
-        die 1 "$CHECKNAME:  Syntax error:  No command specified"
-        return 1
-    elif [[ -n "$CMD_TIMEOUT" && $CMD_TIMEOUT -gt $TIMEOUT ]]; then
-        die 1 "$CHECKNAME:  Command timeout $CMD_TIMEOUT exceeds NHC timeout $TIMEOUT"
-        return 1
-    elif (( ${#MATCHES[*]} < ${#MSGS[*]} )); then
-        die 1 "$CHECKNAME:  Message count ($(( ${#MSGS[*]} / 2 ))) must not exceed match string count ($(( ${#MATCHES[*]} / 2 )))."
-        return 1
-    fi
-
-    # Initialize a parallel array for tracking which matches have been found.
-    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-        if [[ "${MATCHES[$i]:0:1}" == '!' ]]; then
-            MATCHED[$i]=1
-            ((NEG_MATCH_CNT++))
-        else
-            MATCHED[$i]=0
-        fi
-    done
-
-    # FIXME:  We can't do this as a pipeline because the contents of
-    # the while loop will execute in a subshell, and all our variable
-    # values will get lost.
-    # nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}" | while read LINE ; do
-    #
-    # Once we can drop support for RHEL4 and 5, we can use "coproc"
-    # For now, this means we have to run the command and grab all its
-    # output all in 1 go, so commands with lengthy output must be
-    # avoided.
-    IFS=$'\n'
-    LINES=( $(nhc_cmd_with_timeout $CMD_TIMEOUT "${CMD_LIST[@]}") )
-    RET=$?
-    if [[ -n "$OUTPUT_VAR" ]]; then
-        eval "$OUTPUT_VAR"'=( "${LINES[@]}" )'
-    fi
-    IFS=$' \t\n'
-
-    if [[ ${#MATCHES[*]} -gt 0 ]]; then
-        # Iterate through $LINES[] array to gather process data.
-        for ((LINENUM = 0; LINENUM <= ${#LINES[*]}; LINENUM++)); do
-            for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-                if [[ "${MATCHES[$i]:0:1}" == '!' ]]; then
-                    # Match expression is negated.  Fail if the line matches this expression.
-                    if mcheck "${LINES[$LINENUM]}" "${MATCHES[$i]:1}" ; then
-                        MSG=${MSGS[$i]:-\"%m\" matched at line %l of \"%c\"}
-                        MSG=${MSG//\%m/${MATCHES[$i]:1}}
-                        MSG=${MSG//\%l/$((LINENUM+1))}
-                        MSG=${MSG//\%L/${LINES[$LINENUM]//[\"\`\$]}}
-                        MSG=${MSG//\%c/$CMD}
-                        die 1 "$CHECKNAME:  $MSG."
-                        return 1
-                    fi
-                elif [[ ${MATCHED[$i]} -eq 0 ]] && mcheck "${LINES[$LINENUM]}" "${MATCHES[$i]}" ; then
-                    MATCHED[$i]=1
-                    ((MATCH_CNT++))
-                    if [[ $MATCH_CNT == ${#MATCHED[*]} ]]; then
-                        # All match expression(s) are positive and have
-                        # matched successfully.  Stop processing output.
-                        break
-                    fi
-                fi
-            done
-        done
-
-        # None of the negated matches matched, so add them to our success count.
-        ((MATCH_CNT += NEG_MATCH_CNT))
-    fi
-
-    if [[ $RET -ne ${CMD_RETVAL:-0} ]]; then
-        if [[ $SECONDS -ge $((CMD_START_TS+CMD_TIMEOUT)) && $RET -eq 143 ]]; then
-            # A return code of 143 (128+15) means that the process received SIGTERM,
-            # probably from our command watchdog timer.  Detect that and make it clearer.
-            die 1 "$CHECKNAME:  TIMEOUT after ${CMD_TIMEOUT}s for \"$CMD\"; subprocess terminated."
-            return 1
-        fi
-        die 1 "$CHECKNAME:  $RET${CMD_RETVAL:+ (expected $CMD_RETVAL)} returned by \"$CMD\"."
-        return 1
-    elif [[ $MATCH_CNT == ${#MATCHES[*]} ]]; then
-        # All matches (some positive, some negative) were successful.  Return.
-        return 0
-    fi
-
-    # At least one expression failed to match.  Locate the first such expression.
-    if [[ $MATCH_CNT == 0 && ${#MATCHES[*]} == 1 ]]; then
-        # Special case for cleaner output.
-        MSG=${MSGS[0]:-\"%m\" failed to match \"%c\" output}
-        MSG=${MSG//\%m/${MATCHES[0]}}
-        MSG=${MSG//\%c/$CMD}
-        die 1 "$CHECKNAME:  $MSG."
-        return 1
-    fi
-
-    for ((i = 0; i < ${#MATCHES[*]}; i++)); do
-        if [[ ${MATCHED[$i]} == 0 ]]; then
-            MSG=${MSGS[$i]:-\"%m\" failed to match \"%c\" output (%f patterns failed)}
-            MSG=${MSG//\%m/${MATCHES[$i]}}
-            MSG=${MSG//\%c/$CMD}
-            MSG=${MSG//\%f/$((${#MATCHES[*]}-MATCH_CNT))/${#MATCHES[*]}}
-            die 1 "$CHECKNAME:  $MSG."
-            return 1
-        fi
-    done
-    die 2 "No unmatched expressions found for command \"$CMD\" output but $CHECKNAME() failed to terminate."
-    return 2
+    nhc_common_find_matches "$@"
+    return $(( $? > 0 ? 1 : 0 ))
 }
 
 # Execute a command and evaluate only its return code.  Output is
@@ -151,13 +20,14 @@ function check_cmd_status() {
     local CMD_TIMEOUT=5 CMD_RETVAL PID TIMER RET CHECKNAME="$FUNCNAME" CMD_START_TS=$SECONDS
 
     OPTIND=1
-    while getopts ":C:r:t:" OPTION ; do
+    while getopts ":C:r:t:x" OPTION ; do
         case "$OPTION" in
-            C) CHECKNAME="$OPTARG" ;;  # INTERNAL USE ONLY
-            r) CMD_RETVAL="$OPTARG" ;;
-            t) CMD_TIMEOUT="$OPTARG" ;;
-            :) die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+            'C') CHECKNAME="$OPTARG" ;;  # INTERNAL USE ONLY
+            'r') CMD_RETVAL="$OPTARG" ;;
+            't') CMD_TIMEOUT="$OPTARG" ;;
+            'x') if [[ $- != *x* ]]; then set -x ; trap 'set +x' RETURN ; fi ;;
+            ':') die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))
@@ -194,16 +64,17 @@ function check_cmd_dmesg() {
     local -i i
 
     OPTIND=1
-    while getopts ":M:O:e:m:r:t:" OPTION ; do
+    while getopts ":M:O:e:m:r:t:x" OPTION ; do
         case "$OPTION" in
-            M) MSGS+=( '-M' "$OPTARG" ) ;;
-            O) OUTVAR="$OPTARG" ;;
-            e) CMD="$OPTARG" ;;
-            m) MATCHES+=( '-m' "$OPTARG" ) ;;
-            r) CMD_RETVAL="$OPTARG" ;;
-            t) CMD_TIMEOUT="$OPTARG" ;;
-            :) die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
-            \?) die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+            'M') MSGS+=( '-M' "$OPTARG" ) ;;
+            'O') OUTVAR="$OPTARG" ;;
+            'e') CMD="$OPTARG" ;;
+            'm') MATCHES+=( '-m' "$OPTARG" ) ;;
+            'r') CMD_RETVAL="$OPTARG" ;;
+            't') CMD_TIMEOUT="$OPTARG" ;;
+            'x') if [[ $- != *x* ]]; then set -x ; trap 'set +x' RETURN ; fi ;;
+            ':') die 1 "$FUNCNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$FUNCNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
         esac
     done
     shift $((OPTIND-1))

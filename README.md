@@ -1,21 +1,28 @@
 # LBNL Node Health Check (NHC)
 
-[![Join the chat at https://gitter.im/mej/nhc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mej/nhc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![GitHub Release](https://img.shields.io/github/v/release/mej/nhc)](https://github.com/mej/nhc/releases)<!--
+[![Build Status](https://img.shields.io/github/actions/workflow/status/mej/nhc/ci.yml)](https://github.com/mej/nhc/actions)
+[![License](https://img.shields.io/github/license/mej/nhc)](https://github.com/mej/nhc/blob/master/LICENSE) -->
+[![Issues](https://img.shields.io/github/issues/mej/nhc)](https://github.com/mej/nhc/issues)
+[![Pull Requests](https://img.shields.io/github/issues-pr/mej/nhc)](https://github.com/mej/nhc/pulls)
+[![Last Commit](https://img.shields.io/github/last-commit/mej/nhc)](https://github.com/mej/nhc/commits)
+<!-- [![LOC](https://img.shields.io/tokei/lines/github/mej/nhc)](https://github.com/mej/nhc) -->
 
 TORQUE, Slurm, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly.  Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them.  This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.
 
-Though many sites have created their own scripts to serve this function, the vast majority are one-off efforts with little attention paid to extensibility, flexibility, reliability, speed, or reuse.  Developers at [Lawrence Berkeley National Laboratory](http://www.lbl.gov/) created this project in an effort to change that.  LBNL Node Health Check (NHC) has several design features that set it apart from most home-grown solutions:
- * Reliable - To prevent single-threaded script execution from causing hangs, execution of subcommands is kept to an absolute minimum, and a watchdog timer is used to terminate the check if it runs for too long.
- * Fast - Implemented almost entirely in native `bash` (2.x or greater).  Reducing pipes and subcommands also cuts down on execution delays and related overhead.
- * Flexible - Anything which can be described in a shell function can be a check.  Modules can also populate cache data and reuse it for multiple checks.
+Though many sites have created their own scripts to serve this function, the vast majority have historically been one-off efforts &ndash; usually site-specific &ndash; with little attention paid to extensibility, flexibility, reliability, speed, or reuse.  Developers at [Lawrence Berkeley National Laboratory](https://www.lbl.gov/) created this project in an effort to change that.  LBNL Node Health Check (NHC) has several design features that set it apart from most home-grown solutions:
+ * Reliable - To prevent single-threaded script execution from causing hangs, execution of subcommands is kept to an absolute minimum, and a watchdog timer is used to terminate checks, as well as `nhc` itself, if it runs for too long.
+ * Fast - Implemented almost entirely in native `bash` (4.3 or greater).  Eliminating pipes and subcommands wherever possible also cuts down on execution delays and related overhead (e.g., context switching).
+ * Flexible - Anything which can be described in a shell function<sup>[1](#footnotes)</sup> can be a check.  Modules can also populate cache data and reuse it for multiple checks.
  * Extensible - Its modular functional interface makes writing new checks easy.  Just drop modules into the scripts directory, then add your checks to the config file!
- * Reusable - Written to be ultra-portable and can be used directly from a resource manager or scheduler, run via cron, or even spawned centrally (e.g., via `pdsh`).  The configuration file syntax allows for all compute nodes to share a single configuration.
+ * Reusable - Written to be ultra-portable and can be used directly from a resource manager or scheduler, run via cron, or even launched by hand from a control/config-management host (e.g., via `clush` or `pdsh`).  The configuration file syntax allows for all compute nodes to share a single configuration.
 
-In a typical scenario, the NHC driver script is run periodically on each compute node by the resource manager client daemon (e.g., `pbs_mom`).  It loads its configuration file to determine which checks are to be run on the current node (based on its hostname).  Each matching check is run, and if a failure is encountered, NHC will exit with an error message describing the problem.  It can also be configured to mark nodes offline so that the scheduler will not assign jobs to bad nodes, reducing the risk of system-induced job failures.  NHC can also log errors to the syslog (which is often forwarded to the master node).  Some resource managers are even able to use NHC as a pre-job validation tool, keeping scheduled jobs from running on a newly-failed node, and/or a post-job cleanup/checkup utility to remove nodes from the scheduler which may have been adversely affected by the just-completed job.
+In a typical scenario, the NHC driver script is run periodically on each compute node by the resource manager client daemon (e.g., `slurmd`, `pbs_mom`) and/or the centralized RM/scheduler controller daemon (e.g., `slurmctld`, `pbs_server`).  It loads its configuration file to determine which checks are to be run on the current node (based on its hostname).  Each matching check is run, and if a failure is encountered, NHC will exit with an error message describing the problem.  It can also be configured to mark nodes offline so that the scheduler will not assign jobs to bad nodes, reducing the risk of system-induced job failures.  NHC can also log errors to the syslog (which is often forwarded to the master node).  Some resource managers are even able to use NHC as a pre-job validation tool, keeping scheduled jobs from running on a newly-failed node, and/or a post-job cleanup/checkup utility to remove nodes from the scheduler which may have been adversely affected by a prior job.
+
+Begun in late 2010, LBNL NHC has 15 years of [development](https://github.com/mej/nhc/tree/dev), [testing](https://github.com/mej/nhc/tree/dev/test), and [real-world production deployments](https://techcommunity.microsoft.com/blog/azurehighperformancecomputingblog/automated-hpcai-compute-node-health-checks-integrated-with-the-slurm-scheduler/3113454) under its belt.  Now that it's again under active development on Github, lots of new features have gone in.  Additionally, efforts continue to rework and update portions of code that could benefit from modernization, especially with respect to newer features of Bash!  (Backward compatibility is still important, and we still maintain our commitment to support the 2-3 most recent RHEL releases still supported by the vendor!)
 
 
 ## Table of Contents (by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
-
 <!--ts-->
    * [Getting Started](#getting-started)
       * [Installation](#installation)
@@ -97,13 +104,12 @@ In a typical scenario, the NHC driver script is run periodically on each compute
 
 
 ## Getting Started
-
-The following instructions will walk you through downloading and installing LBNL NHC, configuring it for your system, testing the configuration, and implementing it for use with the TORQUE resource manager.
+The following instructions will walk you through downloading and installing LBNL NHC, configuring it for your system, testing the configuration, and deploying it in production using [Slurm](https://slurm.schedmd.com/), PBS ([TORQUE](https://adaptivecomputing.com/cherry-services/torque-resource-manager/), [PBS Pro](https://altair.com/pbs-professional), et al.), Somebody's Grid Engine (SGE and its "offspring"), and (sorta) IBM Spectrum LSF (formerly Platform LSF).  If you don't see your particular scheduler/RM of choice, please feel free to reach out to the [NHC Users' List](mailto:nhc@lbl.gov); and as always, contributions are [very, very spiffy](https://github.com/mej/nhc/pulls)!
 
 
 ### Installation
-
-Pre-built RPM packages for Red Hat Enterprise Linux versions 6, 7, and 8 are made available with each release along with the source tarballs.  The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/).  Simply download the appropriate RPM for your compute nodes' RHEL/OEL/AlmaLinux/Rocky version.
+<!-- Pre-built RPM packages for Red Hat Enterprise Linux versions 8, 9, and 10 are made available with each release along with the source tarballs. -->
+The latest release, as well as prior releases, can be found [on GitHub](https://github.com/mej/nhc/releases/); simply download the appropriate RPM for your hosts'/nodes' RHEL/OEL/AlmaLinux/Rocky version.  For RedHat/RPM-based platforms, the pre-packaged RPMs included with each release should "just work."  If not, you can also try building from the SRPM (`rpmbuild --rebuild` *`srpm`*)
 
 The previous NHC Yum repository was supplied by LBNL, mostly to make the task of reporting download counts up to DOE easier, and is thus no longer available to us (obviously).  If you have a suggestion for an alternative or could host one yourself, please [let the team know](mailto:nhc-devel@lbl.gov)!
 
@@ -128,7 +134,6 @@ Whether you use RPMs or install from source, the script will be installed as `/u
 
 
 ### Sample Configuration
-
 The default configuration supplied with LBNL NHC is intended to be more of an overview of available checks than a working configuration.  It's essentially impossible to create a default configuration that will work out-of-the-box for any host and still do something useful.  But there are some basic checks which are likely to apply, with some modifications of boundary values, to most systems.  Here's an example `nhc.conf` which shouldn't require too many tweaks to be a solid starting point:
 
 ```bash
@@ -164,7 +169,6 @@ Obviously you'll need to adjust the CPU and memory numbers, but this should get 
 
 
 #### Config File Auto-Generation
-
 Instead of starting with a basic sample configuration and building on it, as of version 1.4.1, the `nhc-genconf` utility is supplied with NHC which uses the same shell code as NHC itself to query various attributes of your system (CPU socket/core/thread counts, RAM size, swap size, etc.) and automatically generate an initial configuration file based on its scan.  Simply invoke `nhc-genconf` on each system where NHC will be running.  By default, this will create the file `/etc/nhc/nhc.conf.auto` which can then be renamed (or used directly via NHC's `-c` option), tweaked, and deployed on your system!
 
 Normally the config file which `nhc-genconf` creates will use the hostname of the node on which it was run at the beginning of each line.  This is to allow multiple files to be merged and sorted into a single config that will work across your system.  However, you may wish to provide a custom match expression to prefix each line; this may be done via the `-H` option (e.g., `-H host1` or `-H '*'`).
@@ -174,41 +178,50 @@ The scan also includes BIOS information obtained via the `dmidecode` command.  T
 It can be incredibly tedious, especially for large, well-established heterogeneous or multi-generational clusters to gather up all the different types of hardware that exist in your system and write the appropriate NHC config file rules, match expressions, etc.  The following commands might come in handy for aggregating the results of `nhc-genconf` across a large group of nodes:
 
 ```
-# wwsh ssh 'n*' "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
+# clush -ba "/usr/sbin/nhc-genconf -H '*' -c -"
  OR
 # pdsh -a "/usr/sbin/nhc-genconf -H '*' -c -" | dshbak -c
 ```
 
 
 ### Testing
-
-As of version 1.2 (and higher), NHC comes with a built-in set of fairly extensive unit tests.  Each of the check functions is tested for proper functionality; even the driver script (`/usr/sbin/nhc` itself) is tested!  To run the unit tests, use the `make test` command at the top of the source tree.  You should see something like this:
+NHC comes with a built-in set of fairly extensive unit tests.  Each module has an associated file of unit tests for the checks it supplies.  The driver script (`/usr/sbin/nhc` itself) is also tested!  To run the unit tests, use the `make test` command at the top of the source tree.  You should see something like this:
 
 ```bash
 # make test
 make -C test test
-make[1]: Entering directory `/home/mej/svn/lbnl/nhc/test'
+make[1]: Entering directory '/home/mej/git/nhc/test'
 Running unit tests for NHC:
 nhcmain_init_env...ok 6/6
-nhcmain_finalize_env...ok 14/14
+nhcmain_help...ok 8/8
+nhcmain_parse_cmdline...ok 16/16
+nhcmain_finalize_env...ok 30/30
 nhcmain_check_conffile...ok 1/1
 nhcmain_load_scripts...ok 6/6
 nhcmain_set_watchdog...ok 1/1
+nhcmain_watchdog_timer...ok 4/4
 nhcmain_run_checks...ok 2/2
-common.nhc...ok 18/18
-ww_fs.nhc...ok 61/61
-ww_hw.nhc...ok 65/65
-ww_job.nhc...ok 2/2
-ww_nv.nhc...ok 4/4
-ww_ps.nhc...ok 32/32
-All 212 tests passed.
-make[1]: Leaving directory `/home/mej/svn/lbnl/nhc/test'
+common.nhc...ok 229/229
+lbnl_cmd.nhc...ok 33/33
+lbnl_dmi.nhc...ok 45/45
+lbnl_file.nhc...ok 73/73
+lbnl_fs.nhc...ok 99/99
+lbnl_hw.nhc...ok 107/107
+lbnl_job.nhc...ok 2/2
+lbnl_moab.nhc...ok 3/3
+lbnl_net.nhc...ok 30/30
+lbnl_nv.nhc...ok 4/4
+lbnl_ps.nhc...ok 116/116
+All 815 tests passed.
+make[1]: Leaving directory '/home/mej/git/nhc/test'
 #
 ```
 
 If everything works properly, all the unit tests should pass.  Any failures represent a problem that should be reported to the [NHC Users' Mailing List](mailto:nhc@lbl.gov)!
 
 Before adding the node health check to your resource manager (RM) configuration, it's usually prudent to do a test run to make sure it's installed/configured/running properly first.  To do this, simply run `/usr/sbin/nhc` with no parameters.  Successful execution will result in no output and an exit code of 0.  If this is what you get, you're done testing!  Skip to the next section.
+
+> **NOTE:**  When doing test runs of NHC, troubleshooting, and so forth, it's often useful to run ALL checks (to see how many fail in total) and see output similar to what would end up in the log by default.
 
 If you receive an error, it will look similar to the following:
 
@@ -248,12 +261,10 @@ Once the configuration has been modified, try running `/usr/sbin/nhc` again.  Co
 
 
 ### Implementation
-
 Instructions for putting NHC into production depend entirely on your use case.  We can't possibly hope to delineate them all, but we'll cover some of the most common.
 
 
 #### Slurm Integration
-
 Add the following to `/etc/slurm.conf` (or `/etc/slurm/slurm.conf`, depending on version) on your master node **AND** your compute nodes (because, even though the `HealthCheckProgram` only runs on the nodes, your `slurm.conf` file must be the same across your entire system):
 
 ```
@@ -267,8 +278,7 @@ For optimal support of Slurm, NHC version 1.3 or higher is recommended.  Prior v
 
 
 #### TORQUE Integration
-
-NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/6-1-2/adminGuide/torque.htm#topics/torque/12-troubleshooting/computeNodeHealthCheck.htm).  The configuration used here at LBNL is as follows:
+NHC can be executed by the `pbs_mom` process at job start, job end, and/or regular intervals (irrespective of whether or not the node is running job(s)).  More detailed information on how to configure the `pbs_mom` health check can be found in the [TORQUE Documentation](http://docs.adaptivecomputing.com/torque/6-1-2/adminGuide/torque.htm#topics/torque/12-troubleshooting/computeNodeHealthCheck.htm).  A sample configuration I have used in the past that worked well is as follows:
 
 ```bash
 $node_check_script /usr/sbin/nhc
@@ -277,8 +287,6 @@ $down_on_error 1
 ```
 
 This causes `pbs_mom` to launch `/usr/sbin/nhc` every 5 "MOM intervals" (45 seconds by default), when starting a job, and when a job completes (or is terminated).  Failures will cause the node to be marked as "down."
-
-> **NOTE:** Some concern has been expressed over the possibility for "OS jitter" caused by NHC.  NHC was designed to keep jitter to an absolute minimum, and the implementation goes to extreme lengths to reduce and eliminate as many potential causes of jitter as possible.  No significant jitter has been experienced so far (and similar checks at similar intervals are used on _extremely_ jitter-sensitive systems); however, increase the interval to `80` instead of `5` for once-hourly checks if you suspect NHC-generated jitter to be an issue for your system.  Alternatively, some sites have configured NHC to detect running jobs and simply exit (or run fewer checks); that works too!
 
 In addition, NHC will by default mark the node "offline" (i.e., `pbsnodes -o`) and add a note (viewable with `pbsnodes -ln`) specifying the failure.  Once the failure has been corrected and NHC completes successfully, it will remove the note it set and clear the "offline" status from the node.  In order for this to work, however, each node must have "operator" access to the TORQUE daemon.  Unfortunately, the support for wildcards in `pbs_server` attributes is limited to replacing the host, subdomain, and/or domain portions with asterisks, so for most setups this will likely require omitting the entire hostname section.  The following has been tested and is known to work:
 
@@ -296,11 +304,10 @@ Another possible caveat to this functionality is that it only works if the canon
 
 This will cause the offline/online helpers to use the shorter hostname when invoking `pbsnodes`.  This will NOT, however, change how the hostnames are matched in the NHC configuration, so you'll still need to use FQDN matching there.
 
-It's also important to note here that NHC will only set a note on nodes that don't already have one (and aren't yet offline) or have one set by NHC itself; also, it will only online nodes and clear notes if it sees a note that was set by NHC.  It looks for the string "NHC:" in the note to distinguish between notes set by NHC and notes set by operators.  If you use this feature, and you need to mark nodes offline manually (e.g., for testing), setting a note when doing so is strongly encouraged.  (You can do this via the `-N` option, like this:  `pbsnodes -o -N 'Testing stuff' n0000 n0001 n0002`)  There was a bug in versions prior to 1.2.1 which would cause it to treat nodes with no notes the same way it treats nodes with NHC-assigned notes.  This _should_ be fixed in 1.2.1 and higher, but you never know....
+It's also important to note here that NHC will only set a note on nodes that don't already have one (and aren't yet offline) or have one set by NHC itself; also, it will only online nodes and clear notes if it sees a note that was set by NHC.  It looks for the string "NHC:" in the note to distinguish between notes set by NHC and notes set by operators.  If you use this feature, and you sometimes need to mark nodes offline manually (e.g., for testing), setting a note when doing so is strongly encouraged.  (You can do this via the `-N` option, like this:  `pbsnodes -o -N 'Testing stuff' n0000 n0001 n0002`.)
 
 
 #### Grid Engine Integration
-
 Sun Grid Engine (SGE) has had a somewhat "colorful"
 [history](https://en.wikipedia.org/wiki/Oracle_Grid_Engine#History)
 over the years.  It has evolved and changed hands numerous times, and
@@ -326,7 +333,6 @@ work in its entirety if you're a user of one of those products!
 
 
 #### Periodic Execution
-
 The original method for doing this was to employ a simple `crontab` entry, like this one:
 
 ```
@@ -336,13 +342,13 @@ MAILTO=operators@your.com
 
 Annoyingly, this would result in an e-mail being sent every 5 minutes if one of the health checks fails.  It was for this very reason that the contributed `nhc.cron` script was originally written.  However, even though it avoids the former technique's flood of e-mail when a problem arose, it still had no clean way of dealing with multiple contexts and could not be set up to do periodic reminders of issues.  Additionally, it would fail to notify if a new problem was detected before or at the same time the old problem was resolved.
 
-Version 1.4.1 introduces a vastly superior option:  `nhc-wrapper`.  This tool will execute `nhc`<sup>[1](#footnotes)</sup> and record the results.  It then compares the results to the output of the previous run, if present, and will ignore results that are identical to those previously obtained.  Old results can be set to expire after a given length of time (and thus re-reported).  Results may be echoed to stdout or sent via e-mail.  Once an unrecognized command line option or non-option argument is encountered, it and the rest of the command line arguments are passed to the wrapped program intact.
+Version 1.4.1 introduced an alternative that addresses these issues:  `nhc-wrapper`.  This tool will execute `nhc`<sup>[2](#footnotes)</sup> and record the results.  It then compares the results to the output of the previous run, if present, and will ignore results that are identical to those previously obtained.  Old results can be set to expire after a given length of time (and thus re-reported).  Results may be echoed to stdout or sent via e-mail.  Once an unrecognized command line option or non-option argument is encountered, it and the rest of the command line arguments are passed to the wrapped program intact.
 
 This tool will typically be run via `cron(8)`.  It can be used to wrap distinct contexts of NHC in a manner identical to NHC itself (i.e., specified via executable name or command line arg); also, unlike the old `nhc.cron` script, this one does a comparison of the results rather than only distinguishing between the presence/absence of output, and those results can have a finite lifespan.
 
 `nhc-wrapper` also offers another option for periodic execution:  looping (`-L`).  When launched from a terminal or `inittab`/`init.d` entry in looping mode, `nhc-wrapper` will execute a loop which runs the wrapped program (e.g., `nhc`) at a time interval you supply.  It attempts to be smart about interpreting your intent as well, calculating sleep times after subprogram execution (i.e., the interval is from start time to start time, not end time to start time) and using nice, round execution times when applicable (i.e., based on 00:00 local time instead of whatever random time the wrapper loop happened to be entered).  For example, if you ask it to run every 5 minutes, it'll run at :00, :05, :10, :15, etc.  If you ask for every 4 hours, it'll run at 00:00, 04:00, 08:00, 12:00, 16:00, and 20:00 exactly--regardless of what time it was when you originally launched `nhc-wrapper`!
 
-This allows the user to run `nhc-wrapper` in a terminal to keep tabs on it while still running checks at predictable times (just like `crond` would).  It also has some flags to provide timestamps (`-L t`) and/or ASCII horizontal rulers (`-L r`) between executions; clearing the screen (`-L c`) before each execution (`watch`-style) is also available.
+This allows the user to run `nhc-wrapper` in a terminal (like a `tmux`/`screen` session) to keep tabs on it while still running checks at predictable times (just like `crond` would).  It also has some flags to provide timestamps (`-L t`) and/or ASCII horizontal rulers (`-L r`) between executions; clearing the screen (`-L c`) before each execution (`watch`-style) is also available.
 
 
 **_Examples:_**
@@ -382,49 +388,125 @@ Or for something quieter and more `cron`-like:
 # /usr/sbin/nhc-wrapper -L 1h -M root -X 12h
 ```
 
+> **NOTE:** High-performance computing has historically been dominated by large-scale, tightly coupled applications (e.g., climate modeling, Adaptive Mesh Refinement (AMR)).  At scale, any delays in computation or communication can have a ripple effect across the entire job, potentially impacting job performance.  This impact is typically referred to as "OS jitter," and its significance varies from none to "in the noise" to "my job is suddenly 8% slower and exceeding its wallclock limit!"  More recently, highly partitionable jobs (also known as "map/reduce," "big data," "divide-and-conquer," or more traditionally, "embarassingly parallel") have taken over a significant portion of HPC systems' resources; this is especially true in the past few years as Artificial Intelligence/Machine Learning (AI/ML) &ndash; which is not particularly new in the world of computing &ndash; has exploded thanks to the availability and relative simplicity of modern Large Language Models (LLMs)
+>
+> Some concern has been expressed over the possibility for "OS jitter" caused by NHC.  NHC was designed to keep jitter to an absolute minimum, and the implementation goes to extreme lengths to reduce/eliminate as many potential causes of jitter as possible.  No significant jitter has been experienced so far (and similar checks at similar intervals are used on _extremely_ jitter-sensitive systems); however, increase the interval to `3600` seconds instead of `300` (Slurm) or `80` instead of `5` (TORQUE/PBS) for once-hourly checks if you suspect NHC-generated jitter to be an issue for your system.  Alternatively, some sites have configured NHC to detect running jobs and simply exit (or run fewer checks); that works too!
+
 
 ## Configuration
+By this point, using some combination of sample configs, `nhc-genconf`, etc., you should have a basic working configuration.  In this section, we'll go more in-depth into how NHC is configured, including global environment settings, command-line invocation, configuration file syntax, modes of operation, how individual checks are matched against a node's hostname, and what checks are already available in the NHC distribution for your immediate use.
 
-Now that you have a basic working configuration, we'll go more in-depth into how NHC is configured, including command-line invocation, configuration file syntax, modes of operation, how individual checks are matched against a node's hostname, and what checks are already available in the NHC distribution for your immediate use.
+Configuration of NHC is generally done in one of 3 ways:  passing option flags and/or configuration (i.e., environment) variables on the command line, setting variables and specifying checks in the configuration file (_`confdir`_`/`_`name`_`.conf` by default), and/or setting variables in the sysconfig initialization file(s) (`/etc/sysconfig/nhc` and/or `/etc/sysconfig/<context>` by default).  The latter work(s) essentially the same as any other sysconfig file (it is directly sourced into NHC's `bash` session using the `.` operator), so this document does not go into great detail about using it.  The following sections discuss the other mechanisms.
 
-Configuration of NHC is generally done in one of 3 ways:  passing option flags and/or configuration (i.e., environment) variables on the command line, setting variables and specifying checks in the configuration file (`/etc/nhc/nhc.conf` by default), and/or setting variables in the sysconfig initialization file (`/etc/sysconfig/nhc` by default).  The latter works essentially the same as any other sysconfig file (it is directly sourced into NHC's `bash` session using the `.` operator), so this document does not go into great detail about using it.  The following sections discuss the other two mechanisms.
+
+### Global/Default Environment Settings
+    After some discussions with a colleague, I realized that the existing
+    handling of configuration info from the environment (e.g., `CONFDIR`)
+    made it difficult for a non-`root` user to point an installation of NHC
+    at their own home directory (or anywhere else, really), due at least in
+    part to the lack of a clean way of altering default locations without
+    invoking `nhc` with a bunch of command line settings every time or
+    modifying the `nhc` script itself directly.
+
+    The aforementioned coworker had actually gone to the trouble of writing
+    up an entire Confluence page detailing all the pain they'd had to go
+    through to get a simple homedir-local NHC installation fully functional,
+    and I just couldn't prepare a release without addressing that mess.  So
+    using their (awesome!) document as a roadmap, I went to work fixing
+    things.
+
+    (It's worth noting that this is a largely self-inflicted wound; I made
+    the decision years ago that I wanted to avoid the typical `autotools`
+    scenario where everything had to be a `*.in` file if the `autoconf`-
+    and/or `automake`-based variables needed to be expanded in it.  If
+    `nhc` had to be generated from `nhc.in`, it would be impossible to run
+    the `nhc` script directly from a Git clone or extracted tarball, nor
+    could the `nhc` file itself be committed to the SCM repository.  The
+    downside of avoiding `nhc.in` is the inability to use `./configure`
+    settings in the installed script....)
+
+    NHC already tends to accept pre-existing values in the environment;
+    however, since a lot of the primary location variables (like `INCDIR`,
+    `CONFDIR`, etc.) are not namespaced and could be prone to conflicts,
+    they cannot safely be set in the general environment.  (In other words,
+    setting `INCDIR` in your `~/.bashrc` file might conflict with other
+    software, whereas it's highly unlikely any other package would care
+    about `NHC_INCDIR`, for example.)  Nor can NHC safely use a pre-existing
+    environment setting for these variables, as they might be intended for
+    use by a different program.  NHC has historically `unset` them at
+    startup for this reason.
+
+    So here's my attempt to fully address all of the above:  `nhc` will now
+    look for a handful of configuration variables from the environment, all
+    of which start with `NHC_CFG_` for proper namespacing, that act as
+    overrides; they take precedence over settings from all other
+    configuration sources, apart from the command line. These can be safely
+    set in places like `/etc/bashrc` and/or
+    `~/.bashrc` without the risk of impacting other programs.
+
+    The recognized variables are:
+    - `NHC_CFG_GLOBAL` - The complete path- and filename to a global
+      settings file, used instead of `/etc/sysconfig/nhc`
+    - `NHC_CFG_PREFIX` - Assume `autoconf`-style layout with
+    `--prefix=<value>`
+    - `NHC_CFG_SYSCONFIGDIR` - Override default `SYSCONFIGDIR` value
+    (OS-dependent)
+    - `NHC_CFG_LIBEXECDIR` - Override default `LIBEXECDIR` value
+    (OS-dependent)
+    - `NHC_CFG_CONFDIR` - Override default `CONFDIR` value (`/etc/nhc`)
+    - `NHC_CFG_INCDIR` - Override default `INCDIR` value
+    (`$CONFDIR/scripts`)
+    - `NHC_CFG_HELPERDIR` - Override default `HELPERDIR` value
+    (`$LIBEXECDIR/nhc`)
+
+
+
+
+### NHC Contexts
+Over the years, NHC has gained more and more capabilities, increasing its usefulness and flexibility.  While its original purpose was focused solely on providing a portable, non-site-specific tool that filled the role of a compute node health check program/script in PBS/[TORQUE](https://adaptivecomputing.com/cherry-services/torque-resource-manager/) and [Slurm](https://slurm.schedmd.com/), more recent versions have gained checks and features that facilitate its use on standalone servers, cluster infrastructure nodes, and more.  In my [MoabCon 2014](https://www.hpcwire.com/off-the-wire/adaptive-computing-announces-moabcon-2014-conference/) talk [Health Checking beyond the Node](https://drive.google.com/file/d/1gXVmiZkaK06KO2zLTIScxAk6cgm3WwKy/view), I introduced the concept of "contexts" in NHC as part of the overview of NHC 1.4.  While even the initial release of NHC supported using a single configuration file for multiple hosts, it offered no way to simply and cleanly maintain entirely distinct configurations on a single host.
+
+In NHC, a "context" is a set of configuration settings and checks with a unique name.  This name, referenced throughout this document (as well as in `nhc` itself) as `$NAME` (or `${NAME}`...they're the same thing), is the complete name of the context, the default context name being, of course, **`nhc`**.  The initial value for the name of the context actually comes from how the script was invoked; i.e., if you run `nhc` using the name `nhc-oob`, the default context (the context name at startup) will be `nhc-oob` instead of just `nhc`.  The context name can also be specified on the command line, using either an [option](#options) (e.g., `nhc -n `*`context`*) or a [variable/value argument](#variablevalue-arguments) (e.g., `nhc -av NAME=nhc-all`).  (Technically speaking, there are a few other ways to set this, but they get very complicated very quickly, so they are undocumented and left as an exercise to any reader allergic to any of the preceeding techniques.)
+
+If the notion of running one thing but "invoking" it as another thing is new to you, there are a few ways to accomplish this.  The most common, and the option we recommend for use with NHC, is to [`link(2)`](https://man7.org/linux/man-pages/man2/link.2.html) or [`symlink(2)`](https://man7.org/linux/man-pages/man2/symlink.2.html) (at the shell prompt, these map to `ln` and `ln -s`, respectively) the context name you want to the `nhc` script itself.  In the above examples, this could be accomplished using `ln -s nhc /usr/sbin/nhc-oob` and `ln -s nhc /usr/sbin/nhc-all`.  These would allow you to run `nhc-oob ...` and/or `nhc-all ...` directly; `nhc` will be launched by the shell and will handle the rest itself.  Another technique is to use the [`execve(2)`](https://man7.org/linux/man-pages/man2/execve.2.html) system call, one of the standardized and friendlier `libc`-provided wrappers (see [`exec(3)`](https://man7.org/linux/man-pages/man3/exec.3.html) for details), or equivalent functionality/interfaces in higher-level languages (e.g., [`nix::unistd::execve()`](https://docs.rs/nix/latest/nix/unistd/fn.execve.html) in [Rust](https://rust-lang.org) or [`os.execve()`](https://docs.python.org/3/library/os.html#os.execve) in [Python 3](https://www.python.org/)).
 
 
 ### Command-Line Invocation
-
-From version 1.3 onward, NHC supports a subset of command-line options and arguments in addition to the configuration and sysconfig files.  A few specific settings have CLI options associated with them as shown in the table below; additionally, any configuration variable which is valid in the configuration or sysconfig file may also be passed on the command line instead.
+NHC supports command-line options and arguments, in addition to the configuration and sysconfig files, that can be used to easily specify a subset of configuration settings at invocation time.  A few specific settings have CLI options associated with them as shown in the table below; additionally, any configuration variable which is valid in the configuration or sysconfig file may also be passed on the command line instead, but all such settings must occur **AFTER** all options/flags have been specified.
 
 
 #### Options
-
 | **Command-Line Option** | **Equivalent Configuration Variable** | **Purpose** |
 | ----------------------- | ------------------------------------- | ----------- |
-| `-D` _`confdir`_ | `CONFDIR=`_`confdir`_ | Use config directory _`confdir`_ (default: `/etc/`_`name`_) |
-| `-a` | `NHC_CHECK_ALL=1` | Run ALL checks; don't exit on first failure (useful for `cron`-based monitoring) |
+| `-D` _`confdir`_ | `CONFDIR=`_`confdir`_ | Use config directory _`confdir`_ (default: `/etc/nhc`) |
+| `-V` | N/A | Display NHC version info and exit.  Additional `-V`(s) show progressively more info (currently Verson String, Runtime Setup, Path Settings) |
+| `-a` | `NHC_CHECK_ALL=1` | Run all checks assigned to this host in the config file; i.e., don't stop running checks if one fails.  Returns the total number of failed checks |
 | `-c` _`conffile`_ | `CONFFILE=`_`conffile`_ | Load config from _`conffile`_ (default: _`confdir`_`/`_`name`_`.conf`) |
 | `-d` | `DEBUG=1` | Activate debugging output |
 | `-e` _`check`_ | `EVAL_LINE=`_`check`_ | Evaluate _`check`_ and exit immediately based on its result |
 | `-f` | `NHC_CHECK_FORKED=1` | Run each check in a separate background process (_EXPERIMENTAL_) |
 | `-h` | N/A | Show command line help |
+| `-j` | `NHC_FMT_JSON=1` | Format `syslog()` messages as JSON objects |
 | `-l` _`logspec`_ | `LOGFILE=`_`logspec`_ | File name/path or BASH-syntax directive for logging output (`-` for `STDOUT`) |
+| `-m` _`host`_ | `NHC_HOST=` | Use explicit hostname of _`host`_ rather than reading it from kernel |
 | `-n` _`name`_ | `NAME=`_`name`_ | Set program name to _`name`_ (default: `nhc`); see -D & -c |
+| `-p` | `NHC_FAIL_PERM=1` | In case of failure, mark node "permanently" offline (i.e., NHC will not attempt to online the node)
 | `-q` | `SILENT=1` | Run quietly |
+| `-r` _`prog`_ | `NHC_RM=`_`prog`_ | Use _`prog`_ as the resource manager (default: `none`); currently supported:  `none`, `slurm`, `pbs`, `sge`, `lsf` |
 | `-t` _`timeout`_ | `TIMEOUT=`_`timeout`_ | Use timeout of _`timeout`_ seconds (default: 30) |
 | `-v` | `VERBOSE=1` | Run verbosely (i.e., show check progress) |
+| `-x` | N/A | Run in eXtreme debug/trace mode (same as `bash -x`) |
 
-> **NOTE:** Due to the use of the `getopts bash` built-in, and the limitations thereof, POSIX-style bundling of options (e.g., `-da`) is NOT supported, and all command-line options MUST PRECEDE any additional variable/value-type arguments!
+<!-- NO LONGER TRUE:  > **NOTE:** Due to the use of the `getopts bash` built-in, and the limitations thereof, POSIX-style bundling of options (e.g., `-da`) is NOT supported, and all command-line options MUST PRECEDE any additional variable/value-type arguments! -->
 
 
 #### Variable/Value Arguments
-
 Instead of, or possibly in addition to, the use of command-line options, NHC accepts configuration via variables specified on the command line.  Simply pass any number of _`VARIABLE=value`_ arguments on the command line, and each variable will be set to its respective value immediately upon NHC startup.  This happens before the sysconfig file is loaded, so it can be used to alter such values as `$SYSCONFIGDIR` (`/etc/sysconfig` by default) which would normally be unmodifiable.
 
 It's important to note that while command-line configuration directives will override NHC's built-in defaults for various variables, variables set in the configuration file (see below) will NOT be overridden.  The config file takes precedence over the command line, in contrast to most other CLI tools out there (and possibly contrary to user expectation) due to the way `bash` deals with variables and initialization.  If you want the command line to take precedence, you'll need to test the value of the variable in the config file and only alter it if the current value matches NHC's built-in default.
 
 
 #### Example Invocations
-
-Most sites just run `nhc` by itself with no options when launching from a resource manager daemon.  However, when running from cron or manually at the command line, numerous other possible scenarios exist for invoking NHC in various ways.  Here are some real-world examples.
+Many sites just run `nhc` by itself with no options when launching from a workload/resource manager daemon; however, numerous other possible scenarios exist for invoking NHC in various ways.  Here are some real-world examples.
 
 To run in debug mode, either of the following two command lines may be used:
 ```
@@ -437,6 +519,11 @@ To run for testing purposes in debug mode with no timeout and with node online/o
 # nhc -d -t 0 MARK_OFFLINE=0
 ```
 
+When the need arises for debugging or troubleshooting, NHC offers a few different mechanisms to provide additional detail on its actions.  For someone familiar with NHC internals and Bash scripting, the typical practice of gradually adding verbosity can sometimes be unnecessary.  By combining NHC's options with Bash's tracing features, it's possible to get readable progress, debugging output, and expansion tracing all at the same time and still have readable results.  This method has the added advantage of splitting out the tracing output to a separate file which can then be attached to a GitHub Issue or e-mail.  To run all checks, display each check before it runs, direct output to the terminal, and activate debugging and tracing:
+```
+# BASH_XTRACEFD=33 33>/tmp/nhc-trace-test.out nhc -xdavl-
+```
+
 To force use of Slurm as the resource manager and use a sysconfig path in `/opt`:
 ```
 # nhc NHC_RM=slurm SYSCONFIGDIR=/opt/etc/sysconfig
@@ -447,72 +534,27 @@ NHC can also be invoked with the `-e` option to run a specific single check rath
 # nhc -e 'check_fs_mount_rw -t lustre -s "fs[0-9]:/export/fs/scratch[12]" -e "/sbin/service rlustre restart" -f /net/scratch1 /net/scratch2'
 ```
 
-To run NHC out-of-band (e.g., from cron) with the name `nhc-oob` (which will load its config from `/etc/sysconfig/nhc-oob` and `/etc/nhc/nhc-oob.conf`):
+To run NHC out-of-band (e.g., from cron) with the context name "nhc-oob" (which will load its config from `/etc/sysconfig/nhc-oob` and `/etc/nhc/nhc-oob.conf`):
 ```
 # nhc -n nhc-oob
 ```
-> **NOTE**:  As an alternative, you may symlink `/usr/sbin/nhc-oob` to `nhc` and run `nhc-oob` instead.  This will accomplish the same thing.
+> **NOTE**:  As an alternative, you can symlink `/usr/sbin/nhc-oob` to `nhc` and run `nhc-oob` instead.  This will accomplish the same thing.
 
 
-### Configuration File Syntax
+### Configuration Variables
+NHC uses shell/environment variables for all configuration settings, and those settings can be specified or altered in a number of locations depending on where that setting will be used.  Many aspects of NHC's behavior can be modified through the use of configuration (environment) variables, including a number of the commands and behaviors used in the various checks and helper scripts NHC employs.
 
-The configuration file is fairly straight-forward.  Stored by default in `/etc/nhc/nhc.conf`, the file is plain text and recognizes the traditional `#` introducer for comments.  Any line that starts with a `#` (with or without leading whitespace) is ignored.  Blank lines are also ignored.
+There are, however, some variables which can only be specified "early" (i.e., not in a configuration file).  Options for setting these values are:
+* via global/default environment settings (e.g., `$NHC_CFG_GLOBAL`, `$NHC_CFG_SYSCONFIGDIR`)
+* in the file specified as the value of `$NHC_CFG_GLOBAL`, if any
+* in the global system config file for all NHC contexts, `/etc/sysconfig/nhc` (more specifically,  _`$SYSCONFIGDIR`_`/nhc`)
+* in the global system config file for the current context, `/etc/sysconfig/$NAME` (more specifically, _`$SYSCONFIGDIR`_`/`_`NAME`_) (e.g., `/etc/sysconfig/minimal-nhc-checks` for the "minimal-nhc-checks" context)
+* via command-line [options](#options) and flags (e.g., `-l <target>` sets `$LOGFILE`, see `nhc -h` or [above](#options) for list)
+* via [Variable/Value Arguments](#variablevalue-arguments) specified at the **end** of the `nhc` command line, after all options/flags (e.g., `nhc -avl- NHC_RM=none`)
 
-Examples:
-```bash
-# This is a comment.
-       # This is also a comment.
+This restriction can occur for obvious reasons, like with `CONFFILE` &ndash; you can't tell `nhc` to use config file B while it's already using config file A &ndash; as well as for less obvious reasons, like with `TIMEOUT` &ndash; because every non-blank-non-comment line in the config is considered a "check" for execution purposes, and while the config file line setting `TIMEOUT` gets loaded before the watchdog timer is launched, it gets **executed** afterward.
 
-# This line and the previous one will both be ignored.
-```
-
-Configuration lines contain a **target** specifier, the separator string `||`, and the **check** command.  The target specifies which hosts should execute the check; only nodes whose hostname matches the given target will execute the check on that line.  All other nodes will ignore it and proceed to the next check.
-
-A check is simply a shell command.  All NHC checks are bash functions defined in the various included files in `/etc/nhc/scripts/*.nhc`, but in actuality any valid shell command that properly returns success or failure will work.  This documentation and all examples will only reference bash function checks.  Each check can take zero or more arguments and is executed exactly as seen in the configuration.
-
-As of version 1.2, configuration variables may also be set in the config file with the same syntax.  This makes it easy to alter specific settings, commands, etc. globally or for individual hosts/hostgroups!
-
-Example:
-```bash
-    * || SOMEVAR="value"
-    * || check_something
-*.foo || another_check 1 2 3
-```
-
-
-### Match Strings
-
-As noted in the last section, the first item on each line of the NHC configuration file specifies the **target** for the check which will follow.  When NHC runs on a particular host, it reads and parses each line of the configuration file, comparing the hostname of the host (taken from the `$HOSTNAME` variable) with the specified target expression; if the target matches, the check will be saved for later execution.  Lines whose targets don't match the current host are ignored completely.  The target is expressed in the form of a **match string** -- an NHC expression that allows for exact string matches or a variety of dynamic comparison methods.  Match strings are a very important concept and are used throughout NHC, not just for check targets, but as parameters to individual checks as well, so it's important that users fully understand how they work.
-
-There are multiple forms of **match string** supported by NHC.  The default style is a **glob**, also known as a **wildcard**.  bash will determine if the hostname of the node (specifically, the contents of `/proc/sys/kernel/hostname`) matches the supplied glob expression (e.g., `n*.viz`) and execute only those checks which have matching target expressions.  If the hostname does not match the glob, the corresponding check is ignored.
-
-The second method for specifying host matches is via **regular expression**.  Regex targets must be surrounded by slashes to identify them as regular expressions.  The internal regex matching engine of bash is used to compare the hostname to the given regular expression.  For example, given a target of `/^n00[0-5][0-9]\.cc2$/`, the corresponding check would execute on `n0017.cc2` but not on `n0017.cc1` or `n0083.cc2`.
-
-The third form of match string (supported in NHC versions 1.2.2 and later) is **node range expressions** similar to those used by `pdsh`, Warewulf, and other open source HPC tools.  (_Please note that not all expressions supported by other tools will work in NHC due to limitations in `bash`._)  The match expression is placed in curly braces and specifies one or more comma-separated node name ranges, and the corresponding check will only execute on nodes which fall into at least one of the specified ranges.  Note that only one range expression is supported per range, and commas within ranges are not supported.  So, for example, the target `{n00[00-99].phys,n000[0-4].bio}` would cause its check to execute on `n0030.phys`, `n0099.phys`, and `n0001.bio`, but not on `n0100.phys` nor `n0005.bio`.  Expressions such as `{n[0-3]0[00-49].r[00-29]}` and `{n00[00-29,54,87].sci}` are not supported (though the latter may be written instead as `{n00[00-29].sci,n0054.sci,n0087.sci}`).
-
-Match strings of any form (glob/wildcard, regular expression, node range, or external) can be negated.  This simply means that a match string which would otherwise have matched will instead fail to match, and vice versa (i.e., the boolean result of the match is inverted).  To negate any match string, simply prefix it (before the initial type character, if any) with an exclamation mark (`!`).  For example, to run a check on all but the I/O nodes, you could use the expression:  `!io*`
-
-Examples:
-```
-                *  || valid_check1
-              !ln* || valid_check2
-       /n000[0-9]/ || valid_check3
-    !/\.(gpu|htc)/ || valid_check4
-      {n00[20-39]} || valid_check5
-!{n03,n05,n0[7-9]} || valid_check6
-   {n00[10-21,23]} || this_target_is_invalid
-```
-
-Throughout the rest of the documentation, we will refer to this concept as a **match string** (or abbreviated **mstr**).  Anywhere a match string is expected, either a glob, a regular expression surrounded by slashes, or node range expression in braces, possibly with a leading `!` to negate it, may be specified.
-
-
-### Supported Variables
-
-As mentioned above, version 1.2 and higher support setting/changing shell variables within the configuration file.  Many aspects of NHC's behavior can be modified through the use of shell variables, including a number of the commands in the various checks and helper scripts NHC employs.
-
-There are, however, some variables which can only be specified in `/etc/sysconfig/nhc`, the global initial settings file for NHC.  This is typically for obvious reasons (e.g., you can't change the path to the config file from within the config file!).
-
-The table below provides a list of the configuration variables which may be used to modify NHC's behavior; those which won't work in a config file (only sysconfig or command line) are marked with an asterisk ("*"):
+The table below provides a list of the configuration variables which may be used to modify NHC's behavior.  Words in all capital letters preceded by a dollar sign (e.g., `$NAME`) refer to other configuration variables in this table; notably, the `$NAME` variable is the name of the context in which the `nhc` instance is running.  Those variables that won't work in a config file (only the "early" config sources as listed above) are marked with an asterisk ("*"):
 
 | **Variable Name** | **Default Value** | **Purpose** |
 | ----------------- | ----------------- | ----------- |
@@ -574,6 +616,8 @@ The table below provides a list of the configuration variables which may be used
 | *TIMEOUT | `30` | Watchdog timer (in seconds) |
 | VERBOSE | `0` | Set to `1` to display each check line before it's executed |
 
+> **NOTE**:  The exact set of variables recognized by a particular NHC installation depends on which `*.nhc` files have been installed into NHC's "includes directory," `$INCDIR` (defaults to `${CONFDIR}/scripts`), so the above table may not match up 100% exactly with your specific setup.
+
 **Example usage:**
 ```bash
        * || export PATH="$PATH:/opt/torque/bin:/opt/torque/sbin"
@@ -585,8 +629,57 @@ The table below provides a list of the configuration variables which may be used
 ```
 
 
-### Detached Mode
+### Configuration File Syntax
+The configuration file is fairly straight-forward.  Stored by default in `/etc/nhc/nhc.conf`, the file is plain text and recognizes the traditional `#` introducer for comments.  Any line that starts with a `#` (with or without leading whitespace) is ignored.  Blank lines are also ignored.
 
+Examples:
+```bash
+# This is a comment.
+       # This is also a comment.
+
+# This line and the previous one will both be ignored.
+```
+
+Configuration lines contain a **target** specifier, the separator string `||`, and the **check** command.  The target specifies which hosts should execute the check; only nodes whose hostname matches the given target will execute the check on that line.  All other nodes will ignore it and proceed to the next check.
+
+A check is simply a shell command.  All NHC checks are bash functions defined in the various included files in `/etc/nhc/scripts/*.nhc`, but in actuality any valid shell command that properly returns success or failure will work.  This documentation and all examples will only reference bash function checks.  Each check can take zero or more arguments and is executed exactly as seen in the configuration.
+
+As of version 1.2, configuration variables may also be set in the config file with the same syntax.  This makes it easy to alter specific settings, commands, etc. globally or for individual hosts/hostgroups!
+
+Example:
+```bash
+    * || export SOMEVAR="value"
+    * || check_something
+*.foo || another_check 1 2 3
+```
+
+
+### Match Strings
+As noted in the last section, the first item on each line of the NHC configuration file specifies the **target** for the check which will follow.  When NHC runs on a particular host, it reads and parses each line of the configuration file, comparing the hostname of the host (taken from the `$HOSTNAME` variable) with the specified target expression; if the target matches, the check will be saved for later execution.  Lines whose targets don't match the current host are ignored completely.  The target is expressed in the form of a **match string** -- an NHC expression that allows for exact string matches or a variety of dynamic comparison methods.  Match strings are a very important concept and are used throughout NHC, not just for check targets, but as parameters to individual checks as well, so it's important that users fully understand how they work.
+
+There are multiple forms of **match string** supported by NHC.  The default style is a **glob**, also known as a **wildcard**.  bash will determine if the hostname of the node (specifically, the contents of `/proc/sys/kernel/hostname`) matches the supplied glob expression (e.g., `n*.viz`) and execute only those checks which have matching target expressions.  If the hostname does not match the glob, the corresponding check is ignored.
+
+The second method for specifying host matches is via **regular expression**.  Regex targets must be surrounded by slashes to identify them as regular expressions.  The internal regex matching engine of bash is used to compare the hostname to the given regular expression.  For example, given a target of `/^n00[0-5][0-9]\.cc2$/`, the corresponding check would execute on `n0017.cc2` but not on `n0017.cc1` or `n0083.cc2`.
+
+The third form of match string (supported in NHC versions 1.2.2 and later) is **node range expressions** similar to those used by `pdsh`, Warewulf, and other open source HPC tools.  (_Please note that not all expressions supported by other tools will work in NHC due to limitations in `bash`._)  The match expression is placed in curly braces and specifies one or more comma-separated node name ranges, and the corresponding check will only execute on nodes which fall into at least one of the specified ranges.  Note that only one range expression is supported per range, and commas within ranges are not supported.  So, for example, the target `{n00[00-99].phys,n000[0-4].bio}` would cause its check to execute on `n0030.phys`, `n0099.phys`, and `n0001.bio`, but not on `n0100.phys` nor `n0005.bio`.  Expressions such as `{n[0-3]0[00-49].r[00-29]}` and `{n00[00-29,54,87].sci}` are not supported (though the latter may be written instead as `{n00[00-29].sci,n0054.sci,n0087.sci}`).
+
+Match strings of any form (glob/wildcard, regular expression, node range, or external) can be negated.  This simply means that a match string which would otherwise have matched will instead fail to match, and vice versa (i.e., the boolean result of the match is inverted).  To negate any match string, simply prefix it (before the initial type character, if any) with an exclamation mark (`!`).  For example, to run a check on all but the I/O nodes, you could use the expression:  `!io*`
+
+Examples:
+```
+                *  || valid_check1
+              !ln* || valid_check2
+       /n000[0-9]/ || valid_check3
+    !/\.(gpu|htc)/ || valid_check4
+      {n00[20-39]} || valid_check5
+!{n03,n05,n0[7-9]} || valid_check6
+   {n00[10-21,23]} || this_target_is_invalid
+```
+
+Throughout the rest of the documentation, we will refer to this concept as a **match string** (or abbreviated **mstr**).  Anywhere a match string is expected, either a glob, a regular expression surrounded by slashes, or node range expression in braces, possibly with a leading `!` to negate it, may be specified.
+
+
+### Detached Mode
 Version 1.2 and higher support a feature called "detached mode."  When this feature is activated on the command line or in `/etc/sysconfig/nhc` (by setting `DETACHED_MODE=1`), the `nhc` process will immediately fork itself.  The foreground (parent) process will immediately return success.  The child process will run all the checks and record the results in `$RESULTFILE` (default:  `/var/run/nhc.status`).  The next time `nhc` is executed, just before forking off the child process (which will again run the checks in the background), it will load the results from `$RESULTFILE` from the last execution.  Once the child process has been spawned, it will then return the previous results to its caller.
 
 The advantage of detached mode is that any hangs or long-running commands which occur in the checks will not cause the resource manager daemon (e.g., `pbs_mom`) to block.  Sites that use home-grown health check scripts often use a similar technique for this very reason -- it's non-blocking.
@@ -597,7 +690,6 @@ For this reason, when using detached mode, periodic checks are HIGHLY recommende
 
 
 ### Built-in Checks
-
 _In the documentation below, parameters surrounded by square brackets ([like this]) are **optional**.  All others are **required**._
 
 The LBNL Node Health Check distribution supplies the following checks:
@@ -1266,7 +1358,6 @@ _**Example** (mark the node bad on rogue user processes)_:  `check_ps_userproc_l
 
 
 ## Customization
-
 Once you've fully configured NHC to run the built-in checks you need for your nodes, you're probably at the point where you've thought of something else you wish it could do but currently can't.  NHC's design makes it very easy to create additional checks for your site and have NHC load and use them at runtime.  This section will detail how to create new checks, where to place them, and what NHC will do with them.
 
 While technically a "check" can be anything the `nhc` driver script can execute, for consistency and extensibility purposes (as well as usefulness to others), we prefer and recommend that checks be shell functions defined in a distinct, namespaced `.nhc` file.  The instructions contained in this section will assume that this is the model you wish to use.
@@ -1275,12 +1366,11 @@ While technically a "check" can be anything the `nhc` driver script can execute,
 
 
 ### Writing Checks
-
-The first decision to be made is what to name your check file.  As mentioned above, check files live (by default; see the `$INCDIR` and `$CONFDIR` [configuration variables](#supported-variables)) in `/etc/nhc/scripts/` and are named _`something`_`.nhc`<sup>[2](#footnotes)</sup>.  A file containing utility and general-purpose functions called `common.nhc` can be found here.  All other files placed here by the upstream package follow the naming convention _`siteid_class`_`.nhc` (e.g., the NHC project's file containing hardware checks is named `lbnl_hw.nhc`).  Your _`siteid`_ can be anything you'd like (other than `lbnl`, obviously) but should be recognizable.  The _`class`_ should refer to the subsystem or conceptual group of things you'll be monitoring.
+The first decision to be made is what to name your check file.  As mentioned above, check files live (by default; see the `$INCDIR` and `$CONFDIR` [configuration variables](#supported-variables)) in `/etc/nhc/scripts/` and are named _`something`_`.nhc`<sup>[3](#footnotes)</sup>.  A file containing utility and general-purpose functions called `common.nhc` can be found here.  All other files placed here by the upstream package follow the naming convention _`siteid_class`_`.nhc` (e.g., the NHC project's file containing hardware checks is named `lbnl_hw.nhc`).  Your _`siteid`_ can be anything you'd like (other than `lbnl`, obviously) but should be recognizable.  The _`class`_ should refer to the subsystem or conceptual group of things you'll be monitoring.
 
 For purposes of this example, we'll pretend we're from John Sheridan University, using site abbreviation "`jsu`," and we want to write checks for our "`stuff`."
 
-Your `/etc/nhc/scripts/jsu_stuff.nhc` file should start with a header which provides a summary of what will be checked, the name and e-mail of the author, possibly the date or other useful information, and any copyright or license restrictions you are placing on the file<sup>[3](#footnotes)</sup>.  It should look something like this:
+Your `/etc/nhc/scripts/jsu_stuff.nhc` file should start with a header which provides a summary of what will be checked, the name and e-mail of the author, possibly the date or other useful information, and any copyright or license restrictions you are placing on the file<sup>[4](#footnotes)</sup>.  It should look something like this:
 
 ```bash
 # NHC -- John Sheridan University's Checks for Stuff
@@ -1351,16 +1441,14 @@ Next time NHC runs, it will automatically pick up your new check(s)!
 
 
 ### Tips and Best Practices for Checks
-
 Several of the philosophies and underlying principles which governed the design and implementation of the LBNL Node Health Check project were mentioned above in the [Introduction](#lbnl-node-health-check-nhc).  Certain code constructs were used to fulfill these principles which are not typical for the average run-of-the-mill shell script, largely because things which must be highly performant tend not to be written as shell scripts.  Why?  Two reasons:  (1) It doesn't have a lot of the fancier, more complex features of the dedicated (i.e., non-shell) scripting languages; and (2) Many script authors don't know of many of the features bash _does_ offer because they're used so infrequently.  It can be somewhat of a vicious cycle/feedback loop when nobody bothers to learn something specifically because no one else is using it.
 
-So why was bash chosen for this project?  Simple:  it's everywhere.  If you're running Linux, it's almost guaranteed to be there<sup>[4](#footnotes)</sup>.  The same cannot be said of any other scripting or non-compiled language (not even PERL or Python).  And forcing everyone to write their checks in C or another compiled language would raise the barrier to entry and reduce the number of sites for which NHC could be useful.  Since half the point is getting more places using a common tool (or at least a common framework), that would defeat the purpose.  Thus, bash made the most sense.
+So why was bash chosen for this project?  Simple:  it's everywhere.  If you're running Linux, it's almost guaranteed to be there<sup>[5](#footnotes)</sup>.  The same cannot be said of any other scripting or non-compiled language (not even PERL or Python).  And forcing everyone to write their checks in C or another compiled language would raise the barrier to entry and reduce the number of sites for which NHC could be useful.  Since half the point is getting more places using a common tool (or at least a common framework), that would defeat the purpose.  Thus, bash made the most sense.
 
 The important question, then, becomes how to make bash scripts more efficient.  And the solution is clear:  do as much as possible with native bash constructs instead of shelling out to subcommands like `sed`, `awk`, `grep`, and the other common UNIX swashbucklers.  The more one investigates the features bash provides, the more one finds how many of its long-held features tend to go unused and just how much one truly _is_ able to do without the need to fork-and-exec.  In this section, several aspects of common shell script constructs (plus 1 or 2 not-so-common ones) will be reviewed along with ways to improve efficiency and avoid subcommands whenever possible.
 
 
 #### Arrays
-
 Arrays are an important tool in any sufficiently-capable scripting language.  Bash has had support for arrays for quite some time; recent versions even add associative array support (i.e., string-based indexing, akin to hashes in PERL).  To maintain compatibility, associative arrays are not currently used in NHC, but traditional arrays are used quite heavily.  Though a complete tutorial on arrays in bash is beyond the scope of this document, a brief "cheat sheet" is probably a good idea.  So here you go:
 
 | Syntax | Purpose |
@@ -1379,7 +1467,6 @@ Several examples of array-based techniques will appear in the following sections
 
 
 #### File I/O
-
 When using the command prompt, most of us reach for things like `cat` or `less` when we need to view the contents of a file; thus, our inclination tends to be to reach for the same tools when writing shell scripts.  `cat`, however, is not a bash built-in, so a fork-and-exec is required to spawn `/bin/cat` just so it can read a file and return the contents.  This overhead is negligible for interactive shell usage, and may be a non-issue for many shell-scripting scenarios, but for efficiency-critical scenarios like NHC, we can and should do better!
 
 File input and output (either truncate or append) are both natively supported by bash using the (mostly) well-known [Redirection Operators](https://www.gnu.org/software/bash/manual/html_node/Redirections.html).  Rather than reading data from files into variables (arrays or scalars) using command substitution (i.e., the \`\` and `$()` operators), use redirection operators to pull the contents of the file into the variable.  One technique for doing this is to redirect to the `read` built-in.  So instead of this:
@@ -1424,7 +1511,6 @@ As an aside...  Knowing these tricks may also be helpful in other situations.  I
 
 
 #### Line Parsing and Loops
-
 While certainly not as capable as [PERL](http://www.perl.org/) at text processing, the shell does offer some seldom-used features to facilitate the processing of line-oriented input.  By default, the shell splits things up based on whitespace (i.e., space characters, tabs, and newlines) to distinguish each "word" from the next.  This is why quoting must be used to join arguments which contain spaces to allow them to be treated as single parameters.  As with many aspects of the shell, however, this behavior can be customized, allowing for different delimiter characters to be applied to input (typically file I/O).  Since character-delimited files are commonplace in UNIX, this idiom is quite frequently useful when shell scripting.
 
 One easily-recognized example would be `/etc/passwd`.  It is both line-oriented and colon-delimited.  Parsing its contents is often useful for shell scripts, but most which need this data tend to use `awk` or `cut` to pull the appropriate fields.  Direct splitting and parsing of this file can be done in native bash without the use of subcommands:
@@ -1488,7 +1574,6 @@ By resetting `$IFS` to contain only a newline character, we can easily split the
 
 
 #### Text Transformations
-
 Bash got a regular expression matching operator in version 3, but it still lacks regex-based transforms.  However, with a minimum of extra effort, glob-based transforms can often provide the necessary functionality.
 
 The following basic variable transformations are available:
@@ -1519,7 +1604,6 @@ There are infinitely more, of course, but these should get you thinking along th
 
 
 #### Matching
-
 Matching input data against potential or expected patterns is common to all programming, and NHC is no exception.  As previously mentioned, however, bash 2.x did not have regular expression matching capability.  To abstract this out, NHC's `common.nhc` file (loaded automatically by `nhc` when it runs) provides the `mcheck_regexp()`, `mcheck_range()`, and `mcheck_glob()` functions which return 0 (i.e., bash's "true" or "success" value) if the first argument matches the pattern provided as the second argument.  To allow for a single matching interface to support all styles of matching, the `mcheck()` function is also provided.  If the pattern is surrounded by slashes (e.g., `/pattern/`), `mcheck()` will attempt a regular expression match; if the pattern is surrounded by braces (e.g., `{pattern}`), a range match is attempted; otherwise, it attempts a glob match.  (For older bash versions which lack the regex matching operator, `egrep` is used instead...which unfortunately will mean additional subshells.)  The `mcheck()` function is used to implement the pattern matching of the first field in `nhc.conf` as well as all other occurrences of [match strings (a.k.a. `mstr`s)](#match-strings) used as check parameters throughout the configuration file.
 
 For consistency with NHC's built-in checks, it is recommended that user-supplied checks which require matching functionality do so by simply calling <code>mcheck <em>string</em> <em>expression</em></code> and evaluating the return value.  If true (i.e., 0), _`string`_ did match the `/regex/`, `{range}`, external match expression, or glob supplied as _`expression`_.  If false, the match failed.
@@ -1529,11 +1613,12 @@ See the earlier section on [Match Strings](#match-strings) for details.
 ----
 
 ###### Footnotes
+[1]:  Technically speaking, a "check" can be literally any valid Bash command line.  Config file lines are just `eval`'d one-by-one in order.  By convention, checks are shell functions because they're the best, most efficient way to group commands together, give them a name, and execute them without leaving the current Bash process.  Recall that, for several reasons, NHC avoids subshells and subprogram execution to the greatest extent possible; shell functions enable this to happen in a sane way.
 
-[1]:  Actually, nhc-wrapper will strip "-wrapper" off the end of its name and execute whatever remains, or you can specify a subprogram directly using the -P option on the nhc-wrapper command line.  It was intentionally written to be somewhat generic in its operation so as to be potentially useful in wrapping other utilities.
+[2]:  Actually, `nhc-wrapper` will strip "`-wrapper`" off the end of its name and execute whatever remains, or you can specify a subprogram directly using the `-P` option on the `nhc-wrapper` command line.  It was intentionally written to be somewhat generic in its operation so as to be potentially useful in wrapping other utilities.
 
-[2]:  Previously, _any_ file in that directory got loaded __regardless__ of extension.  **This is no longer the case**, so use of the `.nhc` extension is now **required**.  This change was made to avoid loading `*.nhc.rpmnew` files, for example.
+[3]:  Previously, _any_ file in that directory got loaded __regardless__ of extension.  **This is no longer the case**, so use of the `.nhc` extension is now **required**.  This change was made to avoid loading `*.nhc.rpmnew` files, for example.
 
-[3]:  If you don't specify otherwise, all checks made available publicly or directly to the NHC development team are copyrighted by the author and licensed as specified in the [BSD-3/LBNL-BSD license](https://github.com/mej/nhc/LICENSE) used by NHC.
+[4]:  If you don't specify otherwise, all checks made available publicly or directly to the NHC development team are copyrighted by the author and licensed as specified in the [BSD-3/LBNL-BSD license](https://github.com/mej/nhc/LICENSE) used by NHC.
 
-[4]:  Well, okay...  If you're running enough of Linux that it can function as a compute node.  Bootstrap images and other embedded/super-minimal cases aren't really applicable to NHC anyway.
+[5]:  Well, okay...  If you're running enough of Linux that it can function as a compute node.  Bootstrap images and other embedded/super-minimal cases aren't really applicable to NHC anyway.

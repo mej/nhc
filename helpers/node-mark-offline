@@ -12,17 +12,22 @@
 # which were not placed by NHC.  If these checks pass, the node is
 # marked offline with the note supplied.
 
-IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}"
+declare -ix IGNORE_EMPTY_NOTE="${IGNORE_EMPTY_NOTE:-0}" NHC_FAIL_PERM="${NHC_FAIL_PERM:-0}"
 LEADER="NHC:"
 
-echo "`date '+%Y%m%d %H:%M:%S'` $0 $*"
+printf '%(%Y%m%d %H:%M:%S)T [%s] %s %s\n' -1 "$NHC_RM" "$0" "$*"
 
 HOSTNAME="$1"
 shift
 NOTE="$*"
 
+### Rien
+if [[ -z "$NHC_RM" || "$NHC_RM" == "none" ]]; then
+    echo "$0:  No resource manager configured; nothing to do."
+    exit -1
+
 ### PBS (TORQUE)
-if [[ "$NHC_RM" == "pbs" ]]; then
+elif [[ "$NHC_RM" == "pbs" ]]; then
     PBSNODES="${PBSNODES:-pbsnodes}"
     PBSNODES_LIST_ARGS="${PBSNODES_LIST_ARGS:--n -l all}"
     PBSNODES_OFFLINE_ARGS="${PBSNODES_OFFLINE_ARGS:--o -N}"
@@ -45,6 +50,8 @@ if [[ "$NHC_RM" == "pbs" ]]; then
             if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
+            elif (( NHC_FAIL_PERM )); then
+                LEADER="${LEADER%:} (perm):"
             fi
             ;;
     esac
@@ -125,6 +132,8 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" && "$OLD_NOTE_LEADER" != "Reboot" && "$OLD_NOTE" != "ASAP" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
+            elif (( NHC_FAIL_PERM )); then
+                LEADER="${LEADER%:} (perm):"
             fi
             echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
@@ -174,6 +183,8 @@ elif [[ "$NHC_RM" == "lsf" ]]; then
             if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
                 LEADER="$OLD_NOTE_LEADER"
                 NOTE="$OLD_NOTE"
+            elif (( NHC_FAIL_PERM )); then
+                LEADER="${LEADER%:} (perm):"
             fi
             echo "$0:  Marking $STATUS $HOSTNAME offline:  $LEADER $NOTE"
             exec $LSF_BADMIN $LSF_OFFLINE_ARGS "$LEADER $NOTE" $HOSTNAME

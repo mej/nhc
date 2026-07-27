@@ -26,7 +26,7 @@
 # other to do so.
 #
 #
-# Copyright (c) 2016-2021, Michael Jennings <mej@eterm.org>
+# Copyright (c) 2016-2026, Michael Jennings <mej@eterm.org>
 # No additional restrictions apply; see LICENSE for terms.
 #
 
@@ -640,13 +640,14 @@ function nhcmain_init_env() {
     if [[ -z "$BASHPID" || "$BASHPID" != "$NHC_PID" ]]; then
         unset BASHPID
     fi
+    NHC_FAIL_PERM=0
     NHC_START_TS=0
     NHC_WATCHDOG=0
     FAIL_CNT=0
     FORCE_SETSID=1
     NHC_FORCED_SESSION=0
     export PATH PS4 SYSCONFIGDIR LIBEXECDIR STATEDIR CONFDIR HOSTNAME HOSTNAME_S RET LOGGER_TEXT
-    export NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
+    export NHC_FAIL_PERM NHC_PID NHC_START_TS NHC_WATCHDOG FAIL_CNT FORCE_SETSID NHC_FD_OUT NHC_FD_ERR
 
     # Users may override this in /etc/sysconfig/nhc.
     NAME=${0/#*\/}
@@ -692,9 +693,11 @@ $UNDERLINE
  -d                Activate debugging output (i.e., DEBUG=1)
  -e <check>        Evaluate check line <check> and exit immediately
  -f                Run checks in forked subprocesses (i.e., NHC_CHECK_FORKED=1)
+ -j                Format syslog() messages as JSON (i.e., NHC_FMT_JSON=1)
  -l <logspec>      Log output to <logspec> (i.e., LOGFILE=<logspec>)
  -m <host>         Masquerade as <host> (i.e., NHC_HOST=<host>), not "$HOSTNAME"
  -n <name>         Set program name to <name> (default: nhc); see -D & -c above
+ -p                Failure offlines node "permanently" (i.e., NHC_FAIL_PERM=1)
  -q                Run quietly (i.e., SILENT=1)
  -r <prog>         Force use of <prog> (or "none") as RM (i.e., NHC_RM=<prog>)
  -t <timeout>      Use timeout of <timeout> seconds (default: 30)
@@ -723,27 +726,28 @@ function nhcmain_parse_cmdline() {
     local OPTION SAVE_SCD="$SYSCONFIGDIR"
 
     OPTIND=1
-    while getopts ":D:Vac:de:fhjl:m:n:qr:t:vx" OPTION ; do
+    while getopts ":D:Vac:de:fhjl:m:n:pqr:t:vx" OPTION ; do
         case "$OPTION" in
-            D) CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
-            V) ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
-            a) NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
-            c) CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
-            d) DEBUG=1 ; dbg "Debugging activated via -d option." ;;
-            e) EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
-            f) NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
-            h) nhcmain_help ; exit 0 ;;
-            j) NHC_FMT_JSON=1 ; dbg "Syslog messages will be generated in JSON." ;;
-            l) LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
-            m) NHC_HOST="$OPTARG" ; dbg "Hostname will be set to $NHC_HOST." ;;
-            n) NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
-            q) SILENT=1 ; dbg "Silent mode activated via -q option." ;;
-            r) NHC_RM="$OPTARG" ; dbg "Resource manager set to $NHC_RM." ;;
-            t) TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
-            v) VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
-            x) set -x ; dbg "BASH tracing active." ;;
-            :) nhcmain_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
-            \?) nhcmain_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
+            'D') CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            'V') ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
+            'a') NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
+            'c') CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
+            'd') DEBUG=1 ; dbg "Debugging activated via -d option." ;;
+            'e') EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
+            'f') NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
+            'h') nhcmain_help ; exit 0 ;;
+            'j') NHC_FMT_JSON=1 ; dbg "Syslog messages will be generated in JSON." ;;
+            'l') LOGFILE="$OPTARG" ; dbg "\$LOGFILE set to $LOGFILE." ;;
+            'm') NHC_HOST="$OPTARG" ; dbg "Hostname will be set to $NHC_HOST." ;;
+            'n') NAME="$OPTARG" ; dbg "\$NAME set to $NAME." ;;
+            'p') NHC_FAIL_PERM=1 ; dbg "Failure will offline node permanently." ;;
+            'q') SILENT=1 ; dbg "Silent mode activated via -q option." ;;
+            'r') NHC_RM="$OPTARG" ; dbg "Resource manager set to $NHC_RM." ;;
+            't') TIMEOUT="$OPTARG" ; dbg "Timeout set to $TIMEOUT." ;;
+            'v') VERBOSE=1 ; dbg "Verbose mode activated via -v option." ;;
+            'x') set -x ; dbg "BASH tracing active." ;;
+            ':') nhcmain_help ; eecho "$NAME:  ERROR:  Option -$OPTARG requires an argument." ; return 8 ;;
+            '?') nhcmain_help ; eecho "$NAME:  ERROR:  Invalid option:  -$OPTARG" ; return 9 ;;
         esac
     done
     shift $((OPTIND-1))

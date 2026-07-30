@@ -60,8 +60,10 @@ readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
     NHC_BOOL_CLANG=( [0]='false' [1]='true' ) \
     NHC_BOOL_YESNO=( [0]='no' [1]='yes' ) \
     NHC_BOOL_ONOFF=( [0]='off' [1]='on' ) \
-    NHC_BOOL_ISNOT=( [0]='not ' [1]='' ) \
+    NHC_BOOL_UNSET=( [0]='unset' [1]='set' ) \
+    NHC_BOOL_ISNOT=( [0]='is not' [1]='is' ) \
     NHC_BOOL_ISN_T=( [0]="isn't" [1]='is' ) \
+    NHC_BOOL_ARNOT=( [0]='are not' [1]='are' ) \
     NHC_BOOL_ARENT=( [0]="aren't" [1]='are' )
 
 
@@ -431,52 +433,45 @@ function nhcmain_version_info() {
         else
             NM="${BASH_SOURCE[0]##?(*/)?(-)}(${NAME})"
         fi
-        echo
-
-        # Not sure exactly how to label this; "runtime identity" seems good enough for now, but is it clear enough?
-        printf '%20s  %s running as %s:%s (real %s:%s) with %d groups\n' \
-                'Runtime Identity:' "$NM[${NHC_PID}]" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
-        printf '%20s  %s-%s for %s %s on host %s (%s) - Level %d, Subs %d, Depth %d\n' \
-                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" "$HOSTNAME" "$MACHTYPE" \
-                "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))
-    fi
-
-    if (( VERINFO >= 3 )); then
-        # Any transforms or other shenanigans required to facilitate the stuff below...
         if (( DETACHED_MODE == 0 )); then
             # If it's false, unset it completely so we can use conditional parameter expansion
             unset DETACHED_MODE
         fi
         echo
 
-        printf '%20s  Host %s (%s)  RM "%s"  LIBEXECDIR="%s" SYSCONFIGDIR="%s"  STATEDIR="%s"\n' \
-                "System Setup:" "$HOSTNAME_S" "$HOSTNAME" "$NHC_RM" "$LIBEXECDIR" "$SYSCONFIGDIR" "$STATEDIR"
-        printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s" LOGDIR="%s" RUNDIR="%s"\n' \
-                "Package Setup:" "$CONFDIR" "$HELPERDIR" "$INCDIR" "$LOGDIR" "$RUNDIR"
+        # Not sure exactly how to label this; "runtime identity" seems good enough for now, but is it clear enough?
+        printf '%20s  %s running on %s (%s) as %s:%s (real %s:%s) with %d groups\n' \
+                'Runtime Identity:' "$NM[${NHC_PID}]" "$HOSTNAME_S" "$HOSTNAME" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
+        printf '%20s  %s-%s for %s %s on %s - Level %d, Subs %d, Depth %d\n' \
+                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" \
+                "$MACHTYPE" "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))
+        printf '%20s  Context "%s" RM "%s" CONFFILE "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
+                "Runtime Config:" "$NAME" "$NHC_RM" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
+                "${NHC_BOOL_ONOFF[${#DETACHED_MODE}]^^}" "${NHC_DETACHED:+ (from $NHC_DETACHED)}" \
+                "${DETACHED_MODE:+, data ${NHC_BOOL_ISNOT[DETACHED_MODE_FAIL_NODATA]}required}"
+        printf '%20s  ALL=%s FORKED=%s  SID %d (%sforced)  MARK_OFFLINE=%s ONLINE_NODE="%s" OFFLINE_NODE="%s"\n' \
+                "Check Handling:" "$NHC_CHECK_ALL" "$NHC_CHECK_FORKED" "$NHC_SID" \
+                "${NHC_BOOL_ISNOT[(NHC_FORCED_SESSION == 0 ? 0 : 1)]}" "$MARK_OFFLINE" "$ONLINE_NODE" "$OFFLINE_NODE"
+    fi
+
+    if (( VERINFO >= 3 )); then
+        echo
 
         #printf '%20s  (NHC_CFG_)GLOBAL="%s" SYSCONFIGDIR="%s" LIBEXECDIR="%s" CONFDIR="%s" INCDIR="%s" HELPERDIR="%s"\n' \
         #        "NHC_CFG_* Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" "${NHC_CFG_LIBEXECDIR-<unset>}" \
         #        "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}"
         printf -v S ' %s' 'NHC_CFG_'{SYSCONFIG,LIBEXEC,STATE}'DIR="%s"'
-        printf '%20s  NHC_CFG_GLOBAL="%s"'"$S"'\n' \
-                "Init Env Overrides:" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" \
+        printf '%20s  NHC_CFG_PREFIX="%s" NHC_CFG_GLOBAL="%s"'"$S"'\n' \
+                "Init Env Overrides:" "${NHC_CFG_PREFIX-<unset>}" "${NHC_CFG_GLOBAL-<unset>}" "${NHC_CFG_SYSCONFIGDIR-<unset>}" \
                 "${NHC_CFG_LIBEXECDIR-<unset>}" "${NHC_CFG_STATEDIR-<unset>}"
         printf -v S ' %s' 'NHC_CFG_'{CONF,INC,HELPER,LOG,RUN}'DIR="%s"'
         printf '%20s  '"${S:1}"'\n' '' "${NHC_CFG_CONFDIR-<unset>}" "${NHC_CFG_INCDIR-<unset>}" "${NHC_CFG_HELPERDIR-<unset>}" \
                 "${NHC_CFG_LOGDIR-<unset>}" "${NHC_CFG_RUNDIR-<unset>}"
 
-        printf '%20s  Context "%s" Config "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
-                "Invocation Details:" "$NAME" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
-                "${NHC_BOOL_ONOFF[${#DETACHED_MODE}]^^}" "${NHC_DETACHED:+ (from $NHC_DETACHED)}" \
-                "${DETACHED_MODE:+, data ${NHC_BOOL_ISNOT[DETACHED_MODE_FAIL_NODATA]}required}"
-        printf '%20s  LOGFILE="%s" RESULTFILE="%s"\n' \
-                "Results/Reporting:" "$LOGFILE" "$RESULTFILE"
-        printf '%20s  SYSLOG_CMD="%s" SYSLOG_IDENT="%s" SYSLOG_TAG="%s"\n' \
-                "System Logging:" "$SYSLOG_CMD" "$SYSLOG_IDENT" "$SYSLOG_TAG"
-        printf '%20s  ALL=%s FORKED=%s  SID %d (%sforced)  MARK_OFFLINE=%s ONLINE_NODE="%s" OFFLINE_NODE="%s"\n' \
-                "Check Handling:" "$NHC_CHECK_ALL" "$NHC_CHECK_FORKED" "$NHC_SID" \
-                "${NHC_BOOL_ISNOT[(NHC_FORCED_SESSION == 0 ? 0 : 1)]}" "$MARK_OFFLINE" "$ONLINE_NODE" "$OFFLINE_NODE"
-        echo
+        printf '%20s  LIBEXECDIR="%s" SYSCONFIGDIR="%s" LOGDIR="%s" STATEDIR="%s"\n' \
+                "System Directories:" "$LIBEXECDIR" "$SYSCONFIGDIR" "$LOGDIR" "$STATEDIR"
+        printf '%20s  CONFDIR="%s" HELPERDIR="%s" INCDIR="%s" RUNDIR="%s"\n' \
+                "NHC Directories:" "$CONFDIR" "$HELPERDIR" "$INCDIR" "$RUNDIR"
     fi
 
     return 0
@@ -659,9 +654,10 @@ function nhcmain_init_env() {
     fi
 
     # Disable pathname expansion by default so no unintended globbing happens.
-    # We'll turn it back on only where, and only for as long as, we need it.
+    # We'll re-enable it here and there, but only where, and for as long as, it's needed.
     set -f
-    # Activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
+    # Check for aliases even though NHC is not an interactive Bash instance; also,
+    # activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
     shopt -s expand_aliases extglob 2>/dev/null
 
     # Return TRUE (0) iff the global settings have already been read in.

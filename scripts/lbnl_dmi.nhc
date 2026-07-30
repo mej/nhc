@@ -12,6 +12,26 @@ DMI_TYPE_HANDLES=( )
 DMI_DATA=( )
 DMI_RAW_DATA=( )
 
+# Hashmap for access to all IDs and values in /sys/devices/virtual/dmi/id/*
+declare -A DMI_IDS=( )
+
+function nhc_dmi_ids_gather_data() {
+    cd /sys/devices/virtual/dmi/id
+    if [[ $- == *'f'* ]]; then
+        set +f;
+    fi
+    for ID in *; do
+        if [[ ! -f "${ID}" ]]; then
+            continue
+        fi
+        VAL="$(< ${ID})"
+        DMI_IDS["${ID}"]="${VAL}"
+    done
+    cd -
+    set -f
+}
+
+
 # Read hardware information from DMI via "dmidecode" command.
 function nhc_dmi_gather_data() {
     local HANDLE TYPE STR WS WSCOUNT LEADER
@@ -205,7 +225,7 @@ function check_dmi_raw_data_match() {
         shift
     fi
     MATCH="$*"
-        
+
     if [[ ${#DMI_RAW_DATA[*]} -eq 0 ]]; then
         nhc_dmi_gather_raw_data
     fi

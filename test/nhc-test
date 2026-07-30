@@ -96,7 +96,7 @@ function test_nhc_driver() {
         is "$CONFFILE" '' 'CONFFILE="" resets $CONFFILE to empty'
         nhcmain_parse_cmdline -n >/dev/null 2>&1
         is $? 8 'Missing parameters results in error'
-        nhcmain_parse_cmdline -p >/dev/null 2>&1
+        nhcmain_parse_cmdline '-!' >/dev/null 2>&1
         is $? 9 'Unknown command line option results in error'
     } ; unplan
 

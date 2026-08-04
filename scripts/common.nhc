@@ -4,6 +4,10 @@
 # 15 December 2010
 #
 
+declare -agx NHC_MATCHES=( )
+declare -gn BREM;
+bash-5.1 && BREM='BASH_REMATCH' || BREM='NHC_MATCHES'
+
 PASSWD_DATA_SRC="${PASSWD_DATA_SRC:-/etc/passwd}"
 LOGIN_DEFS_SRC="${LOGIN_DEFS_SRC:-/etc/login.defs}"
 
@@ -214,150 +218,81 @@ function bash_stack_trace() {
 }
 ###########################################################
 
-# Define regexp match check conditionally based on bash version.
-# FIXME:  BASH 3.x and earlier are no longer supported for NHC, so this `if`
-#         statement can probably be removed.
-if (( BASHVER >= 30 )); then
-    # Check to see if parameter ($1) matches regexp ($2)
-    function mcheck_regexp() {
-        if [[ "$1" =~ $2 ]]; then
-            dbg "Regexp match check (internal):  $1 matches /$2/"
-            return 0
+# Check to see if parameter ($1) matches regexp ($2)
+function mcheck_regexp() {
+    if [[ "$1" =~ $2 ]]; then
+        dbg "Regexp match check (internal):  $1 matches /$2/"
+        [[ "${!BREM}" == 'BASH_REMATCH' ]] || BREM=( "${BASH_REMATCH[@]}" )
+        return 0
+    else
+        dbg "Regexp match check (internal):  $1 does not match /$2/"
+        BREM=( )
+        return 1
+    fi
+}
+
+# Check to see if a node range/list ($2) contains a node ($1)
+function mcheck_range() {
+    local IFS=','
+    local TARGET="$1"
+    local RANGELIST="$2"
+    local GROUP PREFIX SUFFIX RSTART REND WIDTH NODE i j
+
+    for GROUP in $RANGELIST; do
+        if [[ $GROUP =~ $RANGE_MATCH_REGEXP1 ]]; then
+            # Check a single node
+            if [[ $TARGET == $GROUP ]]; then
+                dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                return 0
+            fi
+        elif [[ $GROUP =~ $RANGE_MATCH_REGEXP2 ]]; then
+            # Check a node range
+            PREFIX=${BASH_REMATCH[1]}
+            RSTART=${BASH_REMATCH[2]}
+            REND=${BASH_REMATCH[3]}
+            SUFFIX=${BASH_REMATCH[4]}
+            WIDTH=${#RSTART}
+
+            if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
+                dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
+                continue
+            elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
+                dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
+                WIDTH=${#REND}
+            fi
+
+            if [[ 10#$RSTART -gt 10#$REND ]]; then
+                dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
+                j=$RSTART
+                RSTART=$REND
+                REND=$j
+            fi
+            NODE="${TARGET#${PREFIX}}"
+            NODE="${NODE%${SUFFIX}}"
+            dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
+            if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && 10#$WIDTH -eq 10#${#NODE} ]]; then
+                dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
+                return 0
+            fi
         else
-            dbg "Regexp match check (internal):  $1 does not match /$2/"
+            # Bad syntax
+            log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
             return 1
         fi
-    }
-
-    # Check to see if a node range/list ($2) contains a node ($1)
-    function mcheck_range() {
-        local IFS=','
-        local TARGET="$1"
-        local RANGELIST="$2"
-        local GROUP PREFIX SUFFIX RSTART REND WIDTH NODE i j
-
-        for GROUP in $RANGELIST; do
-            if [[ $GROUP =~ $RANGE_MATCH_REGEXP1 ]]; then
-                # Check a single node
-                if [[ $TARGET == $GROUP ]]; then
-                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                    return 0
-                fi
-            elif [[ $GROUP =~ $RANGE_MATCH_REGEXP2 ]]; then
-                # Check a node range
-                PREFIX=${BASH_REMATCH[1]}
-                RSTART=${BASH_REMATCH[2]}
-                REND=${BASH_REMATCH[3]}
-                SUFFIX=${BASH_REMATCH[4]}
-                WIDTH=${#RSTART}
-
-                if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
-                    dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
-                    continue
-                elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
-                    dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
-                    WIDTH=${#REND}
-                fi
-
-                if [[ 10#$RSTART -gt 10#$REND ]]; then
-                    dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
-                    j=$RSTART
-                    RSTART=$REND
-                    REND=$j
-                fi
-                NODE="${TARGET#${PREFIX}}"
-                NODE="${NODE%${SUFFIX}}"
-                dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
-                if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && 10#$WIDTH -eq 10#${#NODE} ]]; then
-                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                    return 0
-                fi
-            else
-                # Bad syntax
-                log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
-                return 1
-            fi
-        done
-        dbg "$FUNCNAME:  $TARGET NOT found in $RANGELIST."
-        return 1
-    }
-else
-    # Check to see if parameter ($1) matches regexp ($2) using egrep
-    function mcheck_regexp() {
-        if (echo "$1" | grep -E "$2" >/dev/null 2>&1); then
-            dbg "Regexp match check (external):  $1 matches /$2/"
-            return 0
-        else
-            dbg "Regexp match check (external):  $1 does not match /$2/"
-            return 1
-        fi
-    }
-
-    # Check to see if a node range/list ($2) contains a node ($1)
-    function mcheck_range() {
-        local IFS=','
-        local TARGET="$1"
-        local RANGELIST="$2"
-        local GROUP PREFIX RSTART REND WIDTH NODE i j
-
-        for GROUP in $RANGELIST; do
-            if mcheck_regexp "$GROUP" "$RANGE_MATCH_REGEXP1" ; then
-                # Check a single node
-                if [[ $TARGET == $GROUP ]]; then
-                    dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                    return 0
-                fi
-            else
-                PREFIX=""
-                RSTART=""
-                REND=""
-                SUFFIX=""
-                eval $(echo "$GROUP" | sed -re 's/'"$RANGE_MATCH_REGEXP2"'/PREFIX="\1" RSTART="\2" REND="\3" SUFFIX="\4"/')
-
-                if [[ -n "$PREFIX" || -n "$RSTART" ]]; then
-                    # Check a node range
-                    WIDTH=${#RSTART}
-
-                    if [[ -n "$PREFIX" && "${TARGET#${PREFIX}}" == "$TARGET" || -n "$SUFFIX" && "${TARGET%${SUFFIX}}" == "$TARGET" ]]; then
-                        dbg "$FUNCNAME:  Node \"$TARGET\" prefix/suffix do not match range [$PREFIX][${REND//?/#}][$SUFFIX]"
-                        continue
-                    elif [[ 10#${#RSTART} -lt 10#${#REND} ]]; then
-                        dbg "$FUNCNAME:  Node range has mismatched widths of start ($RSTART) and end ($REND).  Using ${#REND}."
-                        WIDTH=${#REND}
-                    fi
-
-                    if [[ 10#$RSTART -gt 10#$REND ]]; then
-                        dbg "$FUNCNAME:  Node range has range reversed:  start ($RSTART) > end ($REND)."
-                        j=$RSTART
-                        RSTART=$REND
-                        REND=$j
-                    fi
-                    NODE="${TARGET#${PREFIX}}"
-                    NODE="${NODE%${SUFFIX}}"
-                    dbg "$GROUP:  $TARGET -> [$PREFIX] [$NODE] [$SUFFIX]"
-                    if [[ 10#$RSTART -le 10#$NODE && 10#$NODE -le 10#$REND && 10#$WIDTH -eq 10#${#NODE} ]]; then
-                        dbg "$FUNCNAME:  Found $TARGET in $RANGELIST."
-                        return 0
-                    fi
-                else
-                    # Bad syntax
-                    log "$FUNCNAME:  Range not in pdsh syntax:  $GROUP"
-                    return 1
-                fi
-            fi
-        done
-        dbg "$FUNCNAME:  $TARGET NOT found in $RANGELIST."
-        return 1
-    }
-fi
+    done
+    dbg "$FUNCNAME:  $TARGET NOT found in $RANGELIST."
+    return 1
+}
 
 # Check to see if parameter ($1) matches glob ($2)
 function mcheck_glob() {
     if [[ "$1" == $2 ]]; then
         dbg "Glob match check:  $1 matches $2"
+        BREM=( "$1" $1 )
         return 0
     else
         dbg "Glob match check:  $1 does not match $2"
+        BREM=( )
         return 1
     fi
 }
@@ -841,9 +776,9 @@ function nhc_common_find_matches() {
     done
 
     if (( ${#COND[*]} > 0 )); then
-        COND_SUBST=( '#' '${#BASH_REMATCH[*]}' '@' '"${BASH_REMATCH[*]}"' )
+        COND_SUBST=( '#' '${#BREM[*]}' '@' '"${BREM[*]}"' )
         for ((i = 0; i < 10; i++)); do
-            COND_SUBST+=( $i '"${BASH_REMATCH['"$i"']}"' )
+            COND_SUBST+=( $i '"${BREM['"$i"']}"' )
         done
         for ((i = 0; i < ${#COND[*]}; i++)); do
             __cfm_subst "COND[$i]" "${COND_SUBST[@]}"
@@ -917,10 +852,6 @@ function nhc_common_find_matches() {
             LINE="${LINES[LINENUM]}"
             for ((i = 0; i < ${#MATCHES[*]}; i++)); do
                 if [[ -n "${COND[i]}" ]]; then
-                    # If there's a conditional, pre-populate the BASH_REMATCH array with the current line,
-                    # followed by each word in the line, so that glob matches can use the conditional too.
-                    # Regex match strings will replace this content anyway during `mcheck_regexp()`.
-                    BASH_REMATCH=( "${LINE}" ${LINE} )
                     eval "function __cfm_cond() { local - IFS=\$' \t\n'; ${COND[i]}; }"
                 else
                     function __cfm_cond() { :; }

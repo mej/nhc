@@ -66,6 +66,13 @@ readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
     NHC_BOOL_ARNOT=( [0]='are not' [1]='are' ) \
     NHC_BOOL_ARENT=( [0]="aren't" [1]='are' )
 
+# Disable pathname expansion by default so no unintended globbing happens.
+# We'll re-enable it here and there, but only where, and for as long as, it's needed.
+set -f
+# Check for aliases even though NHC is not an interactive Bash instance; also,
+# activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
+shopt -s expand_aliases extglob 2>/dev/null
+
 
 ### Output Functions
 # Convert standard `die()` message to JSON object
@@ -416,6 +423,90 @@ function pickdir() {
     return $(( (${#DIRS[*]} < 100) ? (${#DIRS[*]}) : (100) ))
 }
 
+# Multi-function Bash version check/comparison and numeric conversion
+function got-bash() {
+    local -i BLD EXACT=0 MAJ MAX=0 MIN NUM=0 PL RC=0 TRG=0 VAL=0 VER=0;
+    local PAT='' REL='' TARGET='';
+    local -n VAR='VAL';
+    local -;
+
+    # Start by getting the version info from the running Bash and save it for later.
+    MAJ="${BASH_VERSINFO[0]}";
+    MIN="${BASH_VERSINFO[1]}";
+    PL="${BASH_VERSINFO[2]}";
+    BLD="${BASH_VERSINFO[3]}";
+    REL="${BASH_VERSINFO[4]}";
+    printf -v VER '%d%03d%03d%03d' "$MAJ" "$MIN" "$PL" "$BLD";
+
+    OPTIND=1;
+    while getopts ":ehmnp:v:x" OPTION ; do
+        case "${OPTION}" in
+            'e') EXACT=1 ;;
+            'h') echo "Usage:  ${FUNCNAME[0]} [-ehmx] [ -v var ] { -n | -p <pattern> | <version> }  # e.g., ${FUNCNAME[0]} 4.3" ; return 0 ;;
+            'm') MAX=1 ;;
+            'n') NUM=1 ;;
+            'p') PAT="${OPTARG}" ;;
+            'v') local -n VAR="${OPTARG}" ;;
+            'x') set -x ;;
+            ':') err "${FUNCNAME[0]}():  Option -${OPTARG} requires an argument." ; ${FUNCNAME[0]} -h ; return 1 ;;
+            '?') err "${FUNCNAME[0]}():  Invalid option:  -${OPTARG}" ; ${FUNCNAME[0]} -h ; return 1 ;;
+        esac;
+    done;
+    shift $((OPTIND-1));
+    VAR="${VER}";
+
+    if (( $# == 1 )); then
+        TARGET="${1//[^.0-9]}";
+        if [[ -n "${TARGET}" && -z "${TARGET//[[:digit:]]}" ]]; then
+            TRG=${TARGET};
+            if (( TRG < 1000000000 )); then
+                (( TRG *= 1000000000 ));
+            fi;
+        elif [[ "${TARGET}" =~ ^([[:digit:]]+)(\.([[:digit:]]+))?(\.([[:digit:]]+))?(\.([[:digit:]]+))?$ ]]; then
+            MAJ="${BASH_REMATCH[1]}";
+            MIN="${BASH_REMATCH[3]:-0}";
+            PL="${BASH_REMATCH[5]:-0}";
+            BLD="${BASH_REMATCH[7]:-0}";
+            printf -v TRG '%d%03d%03d%03d' "$MAJ" "$MIN" "$PL" "$BLD";
+        else
+            err "${FUNCNAME[0]}():  Invalid version string:  $1";
+            ${FUNCNAME[0]} -h;
+            return 1;
+        fi;
+    elif [[ -z "${PAT}" && "${!VAR}" == 'VAL' && ${NUM} -eq 0 ]]; then
+        err "${FUNCNAME[0]}():  Expected exactly one non-option argument (version string).";
+        ${FUNCNAME[0]} -h;
+        return 1;
+    fi;
+
+    if (( NUM )); then
+        if (( TRG )); then
+            printf '%s\n' "${TRG}";
+        elif [[ "${!VAR}" == 'VAL' ]]; then
+            printf '%s\n' "${VAR}";
+        fi;
+        return 0;
+    elif [[ -n "${PAT}" ]]; then
+        if [[ "${BASH_VERSION}" == ${PAT%\*}* ]]; then
+            RC=0;
+        elif [[ "${MAJ}.${MIN}.${PL}.${BLD}" == ${PAT%\*}* ]]; then
+            RC=0;
+        else
+            RC=1;
+        fi;
+    elif (( MAX )); then (( RC = ((VAR <= TRG) ? 0 : 1) ));
+    elif (( EXACT )); then (( RC = ((VAR == TRG) ? 0 : 1) ));
+    elif [[ "${REL}" != *'release'* ]]; then (( RC = ((VAR > TRG) ? 0 : 1) ));
+    else (( RC = ((VAR >= TRG) ? 0 : 1) ));
+    fi;
+    return ${RC};
+}
+alias bash-4.3='got-bash 4.3'
+alias bash-4.4='got-bash 4.4.0'
+alias bash-5='got-bash 5.0'
+alias bash-5.1='got-bash 5.1'
+alias bver='got-bash -n'
+
 #########################
 
 function nhcmain_version_info() {
@@ -652,13 +743,6 @@ function nhcmain_init_env() {
         export NHC_DETACHED
         DETACHED_MODE=1
     fi
-
-    # Disable pathname expansion by default so no unintended globbing happens.
-    # We'll re-enable it here and there, but only where, and for as long as, it's needed.
-    set -f
-    # Check for aliases even though NHC is not an interactive Bash instance; also,
-    # activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
-    shopt -s expand_aliases extglob 2>/dev/null
 
     # Return TRUE (0) iff the global settings have already been read in.
     return $RC

@@ -943,6 +943,8 @@ function nhcmain_finalize_env() {
     if [[ -z "$NHC_RM" ]]; then
         nhcmain_find_rm || NHC_RM='none'
     fi
+    # The NHC_RM must be exported to the ONLINE_NODE/OFFLINE_NODE scripts
+    export NHC_RM
     if [[ "$NHC_RM" == 'none' || "$NHC_RM" == 'sge' ]]; then
         # None of these makes sense without a resource manager!
         # And with SGE, we return the status and note directly from NHC.

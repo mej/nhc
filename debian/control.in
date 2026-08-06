@@ -1,0 +1,14 @@
+Source: @PACKAGE@
+Section: utilities
+Priority: optional
+Maintainer: Michael Jennings <mej@eterm.org>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+Standards-Version: 4.7.2
+Homepage: https://github.com/mej/nhc
+
+Package: @PACKAGE@
+Architecture: any
+Description: LBNL Node Health Check
+ TORQUE, Slurm, and other schedulers/resource managers provide for a periodic "node health check" to be performed on each compute node to verify that the node is working properly. Nodes which are determined to be "unhealthy" can be marked as down or offline so as to prevent jobs from being scheduled or run on them. This helps increase the reliability and throughput of a cluster by reducing preventable job failures due to misconfiguration, hardware failure, etc.

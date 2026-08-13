@@ -1,0 +1,159 @@
+# LBNL NHC - Reasonfile Checks
+#
+# Graham Van Heule <grahamvh@lanl.gov>
+# 10 May 2019
+#
+
+# Indexed array of `"x<nodename>:#"` strings
+REASONFILE_NODESTATES=( )
+
+# Directory location where reasonfiles are stored
+REASONFILE_DIR="${REASONFILE_DIR:-/cluster_states/node_states}"
+
+# Maximum age in seconds allowed for a node's reasonfile (think "last seen time")
+typeset -i REASONFILE_MAX_AGE=${REASONFILE_MAX_AGE:-${REASONFILE_CHECKIN_TIME:-600}}
+
+# Read in list of nodes and their up/down states from `$REASONFILE_DIR`
+function nhc_reasonfile_nodestates_gather_data() {
+    local IFS='' NODE=''
+    local -a NODES=( )
+    local -i NOW=SECONDS WHEN=SECONDS-REASONFILE_MAX_AGE
+
+    if (( ${#REASONFILE_NODESTATES[*]} > 0 )); then
+        return 0
+    fi
+
+    # Get `xtprocadmin` data files by briefly re-enabling pathname expansion
+    set +f
+    ### FIXME:  Can we agree on a file extension to glob rather than pick up
+    #           every stray file we find there?  Might also address the issue
+    #           of not allowing empty node lists in `_min_nodes_ok()` check.
+    NODES=( "$REASONFILE_DIR"/* )
+    set -f
+
+    # Set `NODE` to the *basename only* of each reasonfile detected.
+    for NODE in "${NODES[@]##${REASONFILE_DIR}/}"; do
+        # If the reasonfile is empty, the node is "up;" otherwise, it's down.
+        if [[ -s "$REASONFILE_DIR/$NODE" ]]; then
+            REASONFILE_NODESTATES+=( "x$NODE:0" )
+            continue
+        fi
+
+        # check age of file
+        MTIME=$(stat -c %Y "$REASONFILE_DIR/$NODE")
+        if (( TIME_SINCE_CHECKIN <= REASONFILE_MAX_AGE )); then
+            REASONFILE_NODESTATES+=( "x$NODE:1" )
+            continue
+        fi
+
+        ###
+        # IMPORTANT:
+        # This function performs insertion only, never removal, nor does it handle/prevent duplication.  It works
+        # presently because NHC is single-pass-only, so the `*_gather_data()` functions are only ever run 1 time.
+        # If one of the planned enhancements (GQ.Work.NHC#2, et al.) that would result in a single NHC process
+        # looping through checks more than once (with a time delay in between), we'll need to rework this.  Perhaps
+        # a hashmap (key `$NODE`, value `0` or `1`)?  Could even be one large delimited string -- which would make
+        # frequent operations like counting, checking, adding, and even removing much simpler (and probably much
+        # faster too!) -- since the delimiter allows us to clearly differentiate between "words" and "spaces" when
+        # looking for matches, we don't have to worry (as much) about boundary/overlap issues across word boundaries.
+        #
+        REASONFILE_NODESTATES+=( "x$NODE:0" )
+    done
+}
+
+# Backward compatibility
+alias check_reasonfile_node_ok='check_reasonfile_nodes_ok'
+function check_reasonfile_nodes_ok() {
+    local CHECKNAME="${FUNCNAME[0]}" NODE='' NODE_COMMENT='Node'
+
+    OPTIND=1
+    while getopts ':t:m:' OPTION ; do
+        case "$OPTION" in
+            't') NODE_COMMENT="$OPTARG" ;;
+            ':') die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    NODE=$1
+
+    nhc_reasonfile_nodestates_gather_data || return 1
+
+    if [[ "${REASONFILE_NODESTATES[*]}" = *x$NODE:* ]]; then
+        if [[ "${REASONFILE_NODESTATES[*]}" = *x$NODE:1* ]]; then
+            return 0
+        else
+            die 1 "$CHECKNAME: $NODE($NODE_COMMENT) is not ok"
+            return 1
+        fi
+    fi
+    die 1 "$CHECKNAME: $NODE is not valid"
+    return 1
+}
+
+function check_reasonfile_min_nodes_ok() {
+    local CHECKNAME="${FUNCNAME[0]}" NODE='' NODE_COMMENT='Nodes'
+    local -a NODES=( )
+    local -i MIN=1 PERCENT_MIN=0 UP_COUNT=0
+
+    OPTIND=1
+    while getopts ':t:m:p:' OPTION ; do
+        case "$OPTION" in
+            't') NODE_COMMENT="$OPTARG" ;;
+            'm') MIN="$OPTARG" ;;
+            'p') PERCENT_MIN="$OPTARG" ;;
+            ':') die 1 "$CHECKNAME:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "$CHECKNAME:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    nhc_reasonfile_nodestates_gather_data || return 1
+
+    NODES=( "$@" )
+
+    # We don't permit the use of a generic reasonfile check (test all nodes),
+    # as it's too easy to get extra or missing data in the reasonfile area
+    if [[ -z "${NODES[*]}" ]]; then
+        die 1 "${FUNCNAME[0]}: node list must be defined"
+        return 1
+    fi
+
+    for NODE in "${NODES[@]}"; do
+        if [[ "${REASONFILE_NODESTATES[*]}" == *x$NODE:* ]]; then
+            if [[ "${REASONFILE_NODESTATES[*]}" == *x$NODE:1* ]]; then
+                ((UP_COUNT++))
+            fi
+        else
+            echo "${FUNCNAME[0]}: $NODE is not valid"
+        fi
+    done
+
+    if [[ -n "$PERCENT_MIN" ]]; then
+        PERCENT_UP=$(( $UP_COUNT * 100 / ${#NODES[@]} ))
+        if [[ $PERCENT_UP -ge $PERCENT_MIN ]]; then
+            return 0
+        fi
+        die 1 "${FUNCNAME[0]}: '$NODE_COMMENT' ok count below ${PERCENT_MIN}% (cur: ${PERCENT_UP}%; $UP_COUNT/${#NODES[*]})"
+        return 1
+    fi
+
+    if [[ $UP_COUNT -ge $MIN ]]; then
+        return 0
+    fi
+    die 1 "${FUNCNAME[0]}: '$NODE_COMMENT' ok count below $MIN (cur: $UP_COUNT; $UP_COUNT/${#NODES[*]})"
+    return 1
+}
+
+function reasonfile_node_up() {
+    local NODE="$1"
+
+    if (( ${#REASONFILE_NODESTATES[*]} == 0 )); then
+        nhc_reasonfile_nodestates_gather_data || return 1
+    fi
+
+    if [[ "${REASONFILE_NODESTATES[*]}" == *x$NODE:1* ]]; then
+       return 0
+    fi
+    return 1
+}

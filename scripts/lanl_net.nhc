@@ -1,0 +1,58 @@
+# LBNL NHC - LANL Network Checks
+#
+# Graham Van Heule <grahamvh@lanl.gov>
+# Michael Jennings <mej@lanl.gov>
+# 03 January 2022
+#
+
+declare -ax NET_LINK=( 'ip' 'link' 'show' ) NET_LINK_OUTPUT=( ) NET_LINK_RES=( )
+declare -Ax NET_LINK_DATA=( )
+
+function nhc_net_link_gather_data() {
+    local CHECKNAME="${1:-${FUNCNAME[1]}}"
+
+    if [[ -z "${CHECKNAME}" ]]; then
+        CHECKNAME="${FUNCNAME[0]}"
+    fi
+    if (( ${#NET_LINK_DATA[@]} > 0 )); then
+        return 0
+    fi
+    nhc_common_find_matches -C "${CHECKNAME}" -t 20 -0a -E NET_LINK -O NET_LINK_OUTPUT -R NET_LINK_RES
+    if (( ${NET_LINK_RES[0]} != 0 )); then
+        die 1 "${CHECKNAME}:  \"${NET_LINK[*]}\" failed:  \"${NET_LINK_RES[1]}\" (${NET_LINK_RES[0]})"
+        return 1
+    fi
+    ### TODO:  Parse the output into the NET_LINK_DATA[] hashmap keyed off the interface name.
+    return 0
+}
+
+function check_net_link() {
+    local IFACE="$1"
+
+    ### FIXME:  Use the old code for now.
+    if ip link show $IFACE | grep -Fq 'NO-CARRIER'; then
+        die 1 "${FUNCNAME[0]}:  Interface ${IFACE} has no carrier"
+        return 1
+    fi
+    return 0
+
+    ### FIXME:  The new code could look something like this.  Or perhaps it might be a better idea to
+    ###         replace the whole entire function with an invocation of `check_cmd_output` as shown below.
+
+    nhc_net_link_gather_data
+    if (( $? != 0 || ${#NET_LINK_OUTPUT[*]} == 0 )); then
+        die 1 "${FUNCNAME[0]}:  \"${NET_LINK[*]}\" failed:  \"${NET_LINK_RES[1]}\" (${NET_LINK_RES[0]})"
+        return 1
+    elif [[ "${NET_LINK_DATA[${IFACE}]}" == *"NO-CARRIER"* ]]; then
+        die 1 "${FUNCNAME[0]}:  Interface ${IFACE} has no carrier"
+        return 1
+    fi
+    return 0
+}
+
+### TODO:  Wipe out this entire file and replace with this instead?
+# function check_net_link() {
+#     check_cmd_output -C- -E "(ip link show '$1')" -M "Interface $1 has no link" -m '!/NO-CARRIER/' "$@"
+#     return $(( $? > 0 ? 1 : 0 ))
+# }
+

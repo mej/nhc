@@ -174,24 +174,23 @@ function check_fs_mount() {
         OPTIND=1
         while getopts ":0rE:F:O:e:f:o:s:t:" OPTION ; do
             case "$OPTION" in
-                0) NONFATAL=1 ;;
-                r) REMOUNT=1 ;;
-                f) FS_LIST[${#FS_LIST[*]}]="$OPTARG" ;;
-                F) AUTOFS_LIST[${#AUTOFS_LIST[*]}]="$OPTARG" ;;
-                o) OPTIONS_LIST[${#OPTIONS_LIST[*]}]="$OPTARG" ;;
-                O) MOUNT_OPTS="$OPTARG" ;;
-                s) SRC_LIST[${#SRC_LIST[*]}]="$OPTARG" ;;
-                t) TYPE_LIST[${#TYPE_LIST[*]}]="$OPTARG" ;;
-                e) ACTION="$OPTARG" ;;
-                E) FOUND_ACTION="$OPTARG" ;;
-                -) ((OPTIND++)) ; break ;;
-                :) die 1 "$CHECK:  Option -$OPTARG requires an argument." ; return 1 ;;
-                \?) die 1 "$CHECK:  Invalid option:  -$OPTARG" ; return 1 ;;
+                '0') NONFATAL=1 ;;
+                'r') REMOUNT=1 ;;
+                'f') FS_LIST+=( "$OPTARG" ) ;;
+                'F') AUTOFS_LIST+=( "$OPTARG" ) ;;
+                'o') OPTIONS_LIST+=( "$OPTARG" ) ;;
+                'O') MOUNT_OPTS="$OPTARG" ;;
+                's') SRC_LIST+=( "$OPTARG" ) ;;
+                't') TYPE_LIST+=( "$OPTARG" ) ;;
+                'e') ACTION="$OPTARG" ;;
+                'E') FOUND_ACTION="$OPTARG" ;;
+                ':') die 1 "${FUNCNAME[0]}:  Option -$OPTARG requires an argument." ; return 1 ;;
+                '?') die 1 "${FUNCNAME[0]}:  Invalid option:  -$OPTARG" ; return 1 ;;
             esac
         done
         shift $((OPTIND-1))
         while [[ -n "$1" ]]; do
-            FS_LIST[${#FS_LIST[*]}]="$1"
+            FS_LIST+=( "$1" )
             shift
         done
     fi
@@ -199,7 +198,7 @@ function check_fs_mount() {
     if [[ ${#FS_DEV[*]} -eq 0 || ${#AUTOFS_LIST[*]} -gt 0 ]]; then
         # Invalidate cache if automount filesystem(s) specified.
         nhc_fs_mounts_gather_data "${AUTOFS_LIST[@]}" || {
-            die 1 "$FUNCNAME:  /proc/mounts unreadable"
+            die 1 "${FUNCNAME[0]}:  /proc/mounts unreadable"
             return 1
         }
     fi
@@ -265,7 +264,7 @@ function check_fs_mount() {
 
         # If we get here, the filesystem is either missing (empty $MSG) or mounted incorrectly (with $MSG).
         if [[ -z "$MSG" && ! -d "$FS" ]]; then
-            MSG="$FUNCNAME:  $FS not mounted; directory $FS missing"
+            MSG="${FUNCNAME[0]}:  $FS not mounted; directory $FS missing"
             if [[ "$SHELL" != ":" ]]; then
                 mkdir -p -m 0755 "$FS"
                 RC=$?

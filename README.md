@@ -22,8 +22,10 @@ In a typical scenario, the NHC driver script is run periodically on each compute
 Begun in late 2010, LBNL NHC has 15 years of [development](https://github.com/mej/nhc/tree/dev), [testing](https://github.com/mej/nhc/tree/dev/test), and [real-world production deployments](https://techcommunity.microsoft.com/blog/azurehighperformancecomputingblog/automated-hpcai-compute-node-health-checks-integrated-with-the-slurm-scheduler/3113454) under its belt.  Now that it's again under active development on Github, lots of new features have gone in.  Additionally, efforts continue to rework and update portions of code that could benefit from modernization, especially with respect to newer features of Bash!  (Backward compatibility is still important, and we still maintain our commitment to support the 2-3 most recent RHEL releases still supported by the vendor!)
 
 
-## Table of Contents (by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc))
+## Table of Contents (by [gh-md-toc](https://github.com/mej/github-markdown-toc))
 <!--ts-->
+* [LBNL Node Health Check (NHC)](#lbnl-node-health-check-nhc)
+   * [Table of Contents (by <a href="https://github.com/ekalinin/github-markdown-toc">gh-md-toc</a>)](https://github.com/ekalinin/github-markdown-toc)
    * [Getting Started](#getting-started)
       * [Installation](#installation)
       * [Sample Configuration](#sample-configuration)
@@ -35,59 +37,70 @@ Begun in late 2010, LBNL NHC has 15 years of [development](https://github.com/me
          * [Grid Engine Integration](#grid-engine-integration)
          * [Periodic Execution](#periodic-execution)
    * [Configuration](#configuration)
+      * [Global/Default Environment Settings](#globaldefault-environment-settings)
+      * [NHC Contexts](#nhc-contexts)
       * [Command-Line Invocation](#command-line-invocation)
          * [Options](#options)
          * [Variable/Value Arguments](#variablevalue-arguments)
          * [Example Invocations](#example-invocations)
+      * [Configuration Variables](#configuration-variables)
       * [Configuration File Syntax](#configuration-file-syntax)
       * [Match Strings](#match-strings)
-      * [Supported Variables](#supported-variables)
       * [Detached Mode](#detached-mode)
       * [Built-in Checks](#built-in-checks)
-            * [check_cmd_output](#check_cmd_output)
-            * [check_cmd_status](#check_cmd_status)
-            * [check_dmi_data_match](#check_dmi_data_match)
-            * [check_dmi_raw_data_match](#check_dmi_raw_data_match)
-            * [check_file_contents](#check_file_contents)
-            * [check_file_stat](#check_file_stat)
-            * [check_file_test](#check_file_test)
-            * [check_fs_inodes](#check_fs_inodes)
-            * [check_fs_ifree](#check_fs_ifree)
-            * [check_fs_iused](#check_fs_iused)
-            * [check_fs_mount](#check_fs_mount)
-            * [check_fs_mount_ro](#check_fs_mount_ro)
-            * [check_fs_mount_rw](#check_fs_mount_rw)
-            * [check_fs_free](#check_fs_free)
-            * [check_fs_size](#check_fs_size)
-            * [check_fs_used](#check_fs_used)
-            * [check_hw_cpuinfo](#check_hw_cpuinfo)
-            * [check_hw_eth](#check_hw_eth)
-            * [check_hw_gm](#check_hw_gm)
-            * [check_hw_ib](#check_hw_ib)
-            * [check_hw_mcelog](#check_hw_mcelog)
-            * [check_hw_mem](#check_hw_mem)
-            * [check_hw_mem_free](#check_hw_mem_free)
-            * [check_hw_physmem](#check_hw_physmem)
-            * [check_hw_physmem_free](#check_hw_physmem_free)
-            * [check_hw_swap](#check_hw_swap)
-            * [check_hw_swap_free](#check_hw_swap_free)
-            * [check_moab_sched](#check_moab_sched)
-            * [check_moab_rm](#check_moab_rm)
-            * [check_moab_torque](#check_moab_torque)
-            * [check_net_ping](#check_net_ping)
-            * [check_net_socket](#check_net_socket)
-            * [check_nv_healthmon](#check_nv_healthmon)
-            * [check_ps_blacklist](#check_ps_blacklist)
-            * [check_ps_cpu](#check_ps_cpu)
-            * [check_ps_daemon](#check_ps_daemon)
-            * [check_ps_kswapd](#check_ps_kswapd)
-            * [check_ps_loadavg](#check_ps_loadavg)
-            * [check_ps_mem](#check_ps_mem)
-            * [check_ps_physmem](#check_ps_physmem)
-            * [check_ps_service](#check_ps_service)
-            * [check_ps_time](#check_ps_time)
-            * [check_ps_unauth_users](#check_ps_unauth_users)
-            * [check_ps_userproc_lineage](#check_ps_userproc_lineage)
+         * [check_cmd_dmesg](#check_cmd_dmesg)
+         * [check_cmd_output](#check_cmd_output)
+         * [check_cmd_status](#check_cmd_status)
+         * [check_dmi_data_match](#check_dmi_data_match)
+         * [check_dmi_raw_data_match](#check_dmi_raw_data_match)
+         * [check_file_contents](#check_file_contents)
+         * [check_file_stat](#check_file_stat)
+         * [check_file_test](#check_file_test)
+         * [check_fs_inodes](#check_fs_inodes)
+         * [check_fs_ifree](#check_fs_ifree)
+         * [check_fs_iused](#check_fs_iused)
+         * [check_fs_mount](#check_fs_mount)
+         * [check_fs_mount_ro](#check_fs_mount_ro)
+         * [check_fs_mount_rw](#check_fs_mount_rw)
+         * [check_fs_free](#check_fs_free)
+         * [check_fs_size](#check_fs_size)
+         * [check_fs_used](#check_fs_used)
+         * [check_hw_cpuinfo](#check_hw_cpuinfo)
+         * [check_hw_eth](#check_hw_eth)
+         * [check_hw_gm](#check_hw_gm)
+         * [check_hw_ib](#check_hw_ib)
+         * [check_hw_mcelog](#check_hw_mcelog)
+         * [check_hw_mem](#check_hw_mem)
+         * [check_hw_mem_free](#check_hw_mem_free)
+         * [check_hw_physmem](#check_hw_physmem)
+         * [check_hw_physmem_free](#check_hw_physmem_free)
+         * [check_hw_swap](#check_hw_swap)
+         * [check_hw_swap_free](#check_hw_swap_free)
+         * [check_kube](#check_kube)
+         * [check_kube_etcd_alerts](#check_kube_etcd_alerts)
+         * [check_kube_etcd_balance](#check_kube_etcd_balance)
+         * [check_moab_rm](#check_moab_rm)
+         * [check_moab_sched](#check_moab_sched)
+         * [check_moab_torque](#check_moab_torque)
+         * [check_net_link](#check_net_link)
+         * [check_net_ping](#check_net_ping)
+         * [check_net_socket](#check_net_socket)
+         * [check_nv_healthmon](#check_nv_healthmon)
+         * [check_nvgpu_smi](#check_nvgpu_smi)
+         * [check_nvsmi_healthmon](#check_nvsmi_healthmon)
+         * [check_ps_blacklist](#check_ps_blacklist)
+         * [check_ps_cpu](#check_ps_cpu)
+         * [check_ps_daemon](#check_ps_daemon)
+         * [check_ps_kswapd](#check_ps_kswapd)
+         * [check_ps_loadavg](#check_ps_loadavg)
+         * [check_ps_mem](#check_ps_mem)
+         * [check_ps_physmem](#check_ps_physmem)
+         * [check_ps_service](#check_ps_service)
+         * [check_ps_time](#check_ps_time)
+         * [check_ps_unauth_users](#check_ps_unauth_users)
+         * [check_ps_userproc_lineage](#check_ps_userproc_lineage)
+         * [check_reasonfile_min_nodes_ok](#check_reasonfile_min_nodes_ok)
+         * [check_reasonfile_nodes_ok](#check_reasonfile_nodes_ok)
    * [Customization](#customization)
       * [Writing Checks](#writing-checks)
       * [Tips and Best Practices for Checks](#tips-and-best-practices-for-checks)
@@ -96,9 +109,9 @@ Begun in late 2010, LBNL NHC has 15 years of [development](https://github.com/me
          * [Line Parsing and Loops](#line-parsing-and-loops)
          * [Text Transformations](#text-transformations)
          * [Matching](#matching)
-   * [Footnotes](#footnotes)
+               * [Footnotes](#footnotes)
 
-<!-- Added by: mej, at: 2019-01-01T03:03-0700 -->
+<!-- Created by https://github.com/ekalinin/github-markdown-toc -->
 
 <!--te-->
 
@@ -655,15 +668,35 @@ Example:
 
 
 ### Match Strings
-As noted in the last section, the first item on each line of the NHC configuration file specifies the **target** for the check which will follow.  When NHC runs on a particular host, it reads and parses each line of the configuration file, comparing the hostname of the host (taken from the `$HOSTNAME` variable) with the specified target expression; if the target matches, the check will be saved for later execution.  Lines whose targets don't match the current host are ignored completely.  The target is expressed in the form of a **match string** -- an NHC expression that allows for exact string matches or a variety of dynamic comparison methods.  Match strings are a very important concept and are used throughout NHC, not just for check targets, but as parameters to individual checks as well, so it's important that users fully understand how they work.
+As noted in the last section, the first item on each line of the NHC configuration file specifies the **target** for the check which will follow.  When NHC runs on a particular host, it reads and parses each line of the configuration file, comparing the hostname of the host (taken from the `$HOSTNAME` variable) with the specified target expression; if the target matches, the check will be saved for later execution.  Lines whose targets don't match the current host are ignored completely.  The target is expressed in the form of a **match string** -- an NHC-specific expression that allows for comparisons of string data (like `$HOSTNAME`) using a number of different text-matching expressions, including exact byte-for-byte comparison, Bash-native glob (wildcard) expressions, POSIX regular expressions, and more.  Match strings are a very important concept and are used throughout NHC -- not just for check targets in the config file(s), but also for validation of command output, file contents, etc. -- so it's important to fully understand how they work.
 
-There are multiple forms of **match string** supported by NHC.  The default style is a **glob**, also known as a **wildcard**.  bash will determine if the hostname of the node (specifically, the contents of `/proc/sys/kernel/hostname`) matches the supplied glob expression (e.g., `n*.viz`) and execute only those checks which have matching target expressions.  If the hostname does not match the glob, the corresponding check is ignored.
+There are multiple forms of **match string** supported by NHC.  The default style is a **glob**, also known as a **wildcard**.  Match string formats other than globs must be denoted by specific "delimiter" characters at the beginning and end of the expression, so any match string without delimiters is interpreted by NHC as a glob (or exact string match) and evaluated accordingly.
 
-The second method for specifying host matches is via **regular expression**.  Regex targets must be surrounded by slashes to identify them as regular expressions.  The internal regex matching engine of bash is used to compare the hostname to the given regular expression.  For example, given a target of `/^n00[0-5][0-9]\.cc2$/`, the corresponding check would execute on `n0017.cc2` but not on `n0017.cc1` or `n0083.cc2`.
+While loading and processing NHC's configuration file(s), if the default match string syntax is being used (i.e., no delimiters), NHC will use Bash's globbing-comparison functionality (specifically the `==` operator as implemented by the `[[` builtin command) to determine if the hostname of the node (`$HOSTNAME` as noted above) matches the supplied glob expression (e.g., `n*.viz`) at the front of each line, and only those checks which have a target expression that matches the node's hostname will be read, stored, and later executed.  If the hostname does not match, the corresponding check is ignored (i.e., skipped at configuration load time).
 
-The third form of match string (supported in NHC versions 1.2.2 and later) is **node range expressions** similar to those used by `pdsh`, Warewulf, and other open source HPC tools.  (_Please note that not all expressions supported by other tools will work in NHC due to limitations in `bash`._)  The match expression is placed in curly braces and specifies one or more comma-separated node name ranges, and the corresponding check will only execute on nodes which fall into at least one of the specified ranges.  Note that only one range expression is supported per range, and commas within ranges are not supported.  So, for example, the target `{n00[00-99].phys,n000[0-4].bio}` would cause its check to execute on `n0030.phys`, `n0099.phys`, and `n0001.bio`, but not on `n0100.phys` nor `n0005.bio`.  Expressions such as `{n[0-3]0[00-49].r[00-29]}` and `{n00[00-29,54,87].sci}` are not supported (though the latter may be written instead as `{n00[00-29].sci,n0054.sci,n0087.sci}`).
+The second match string format supported by NHC is **regular expression**.  Regex match strings must be surrounded ("delimited") by slashes to identify them as regular expressions.  The internal regex matching engine of Bash (specifically the `=~` operator implemented by the `[[` builtin command) is used to compare the data being matched against (again, for the **target** field in the config file, this would be `$HOSTNAME`) to the given match string's regular expression (after the leading and trailing slashes have been removed, of course).  For example, given a target of `/^n00[0-5][0-9]\.cc2$/`, the corresponding check would execute on `n0017.cc2` but not on `n0017.cc1` or `n0083.cc2`.  Similarly, when used in command output processing, a match string of `/^nhc:/` would match the line `nhc:  That worked` and `nhc:  This host is toast` but not `ERROR:  nhc:  This host is toast`.
 
-Match strings of any form (glob/wildcard, regular expression, node range, or external) can be negated.  This simply means that a match string which would otherwise have matched will instead fail to match, and vice versa (i.e., the boolean result of the match is inverted).  To negate any match string, simply prefix it (before the initial type character, if any) with an exclamation mark (`!`).  For example, to run a check on all but the I/O nodes, you could use the expression:  `!io*`
+The third form of match string NHC recognizes (since version 1.2.2) is a **node range expression** similar to those used by [Slurm](https://slurm.schedmd.com/), `clush`, `pdsh`, and other open source HPC tools.  (_Please note that not all expressions supported by other tools will work in NHC due to limitations in `bash`._)  The match string's range expression is enclosed in ("delimited by") curly braces (i.e., `{...}`) and specifies one or more comma-separated node name ranges, and the corresponding check will only execute on nodes which fall into at least one of the specified ranges.  Note that only one range expression is supported per range, and commas within ranges are not supported.  So, for example, the target `{n00[00-99].phys,n000[0-4].bio}` would cause its check to execute on `n0030.phys`, `n0099.phys`, and `n0001.bio`, but not on `n0100.phys` nor `n0005.bio`.  Expressions such as `{n[0-3]0[00-49].r[00-29]}` and `{n00[00-29,54,87].sci}` are not supported, but they can easily be rewritten to work correctly in NHC (e.g., the latter example could be written instead as `{n00[00-29].sci,n0054.sci,n0087.sci}`).
+
+The fourth and final class of match string available in NHC (since 1.4.2) is what has been dubbed the **external match string** (abbreviated **ex-mstr** or simply **xms**), so named because NHC itself does not determine whether the comparison is or is not a match.  Instead, NHC invokes a specific subcommand -- that is, a simple command, pipeline, list, or compound command that Bash can successfully parse, expand, and execute -- and uses the corresponding return/exit code in a shell-boolean context (i.e., `0` is TRUE and anything else is FALSE) to determine whether a specified string is or is not a valid match for the relevant **xms**.  To facilitate this, NHC needs to know 2 things:  the unique pair of **delimiter** characters that will identify each specific type of **xms** being used, and the subcommand to run to establish whether something is or isn't a match to an instance of that type of **xms**.
+
+To configure one or more types of **external match string** for use with NHC, values must be assigned to both of the Bash indexed array variables `NHC_MCHECK_DELIM` and `NHC_MCHECK_COMMAND`.  For each numerical index within the two arrays, starting at zero, a single- or double-character string in `NHC_MCHECK_DELIM` specifies the **delimiter** character(s) for recognizing that particular type of **xms**; the element with that exact same numerical index in the `NHC_MCHECK_COMMAND` array specifies the aforementioned "subcommand" to be executed to perform the actual comparison.  Within the subcommand, any occurrance(s) of `%m` will be replaced (unquoted, byte-for-byte) with the value of the **xms** itself; similarly, any/all occurrances of `%h` will be replaced by the actual string data being compared (e.g., the node's hostname).  For example, let's say you have a program/script called `node-is-group-member` that returns true _iff_ the given node is a member of the given group, and you'd like to use less-than/greater-than signs (a.k.a. "angle brackets") to instruct NHC to check a node's group memvbership, the following 2 assignments would configure this:
+
+```bash
+NHC_MCHECK_DELIM+=( '<>' );
+NHC_MCHECK_COMMAND+=( 'node-is-group-member "%h" "%m"' );
+```
+
+Notice how the `%h` and `%m` tokens have been surrounded with double-quotes in the command above; NHC itself will not add quotes or filter contents for the tokens' values, so make sure to include the appropriate quoting when defining the subcommand NHC should invoke!
+
+Given the above configuration, you could then use something like the following to only run the first check on nodes in the `storage` group and the second check on nodes _NOT_ in the `storage` group:
+
+```bash
+ <storage> || check_fs_mount_rw -s "/dev/md0" -t "xfs" -o '!/nodev/' -o '!/nosuid/' -o '!/noexec/' -o '/quota/' -rf '/raid'
+!<storage> || check_fs_mount_rw -s 'n0???.storage:/raid' -t 'nfs' -o '!/\bno(dev|exec|suid)\b/' -rf '/net/raid-storage'
+```
+
+Match strings of any form (glob/wildcard, regular expression, node range, or external) can be negated.  This simply means that a match string which would otherwise have matched will instead fail to match, and vice versa (i.e., the boolean result of the match is inverted).  As shown in the `!<storage>` example above, to negate any match string, simply prefix it (before the initial type character, if any) with an exclamation mark (`!`).  For example, to run a check on all but the I/O nodes, you could use the expression:  `!io*`
 
 Examples:
 ```
@@ -690,24 +723,89 @@ For this reason, when using detached mode, periodic checks are HIGHLY recommende
 
 
 ### Built-in Checks
-_In the documentation below, parameters surrounded by square brackets ([like this]) are **optional**.  All others are **required**._
+_In the documentation below, parameters surrounded by square brackets (`[like this]`) are **optional**.  All others are **required**.  Inside (curly) braces, alternatives are separated by pipes and are mutually exclusive ( `{ like this | or this }` )._
 
 The LBNL Node Health Check distribution supplies the following checks:
 
 
-##### check_cmd_output
-`check_cmd_output [-t timeout] [-r retval] [-m match [...]] { -e 'command [arg1 [...]]' | command [arg1 [...]] }`
+##### check_cmd_dmesg
+`check_cmd_dmesg [-0axz] [-t timeout] [-r retval] [-M msg1 [-M msg2 [...]]] [-c cond1 [-c cond2 [...]]] [-m mstr1 [-m mstr2 [...]] [-O outputvar] [-R resultvar] [-o outputfile] [-s source] [ { -I inputvar | -f inputfile } ]`
 
-`check_cmd_output` executes a _`command`_ and compares each line of its output against any _`mstr`_s ([match strings](#match-strings)) passed in.  If any positive match **is not** found in the command output, or if any negative match **is** found, the check fails.  The check also fails if the exit status of _`command`_ does not match _`retval`_ (if supplied) or if the _`command`_ fails to complete within _`timeout`_ seconds (default 5).  Options to this check are as follows:
+`check_cmd_dmesg` executes `dmesg` (specifically, the contents of the `NHC_DMESG_CMD[]` array) and compares each line of its output against any [match strings](#match-strings) passed in (via 1 or more occurrances of `-m`_`mstr`_).  If any positive match **is not** found in the command output, or if any negative match **is** found, the check fails.  The check also fails if the exit status of _`command`_ does not match _`retval`_ (`0` by default) or if the _`command`_ fails to complete within _`timeout`_ seconds (default `5`).
 
+**NOTE**:  `check_cmd_dmesg()` is identical to, and accepts all the same options and arguments as, `check_cmd_output()` (see [below](#check_cmd_output)) with a default _`command_array_name`_ of `NHC_DMESG_CMD` using the `-E` option.
+
+Options to this check are as follows:
+
+<!--  | `-` | . |  -->
+<!--  | `-?`_`?`_ | _`?`_. |  -->
 | **Check&nbsp;Option** | **Purpose** |
 | ---------------- | ----------- |
-| `-e`_`command`_ | Execute _`command`_ and gather its output.  The _`command`_ is split on word boundaries, much like `/bin/sh -c '...'` does. |
+| `-0` | Non-fatal failure mode.  Results, either success or failure, are returned to the caller.  Specifically, `die()` is not called if the check fails.  See also `-a` "check-all" mode; may be used together or separately depending on desired behavior.  (Without `-a`, the check will return immediately upon the first detected failure, if any.) |
+| `-I`_`inputvar`_ | Instead of running a command, take input from the indexed array variable specified as _`inputvar`_. |
+| `-M`_`msg`_ | For the corresponding _`mstr`_ given with `-m` (see below), use _`msg`_ when reporting match failure. |
+| `-O`_`outputvar`_ | Store resultant output into indexed array named _`outputvar`_. |
+| `-R`_`resultvar`_ | Store exit code and possible error message as a tuple into indexed array named _`resultvar`_. |
+| `-a` | Check-all mode.  Do not return immediately once check failure is detected; rather, parsing of output and detection of matches continues to completion, and results are generated based on total dataset.  See also `-0` "non-fatal" mode; may be used together or separately depending on desired behavior.  (Without `-0`, `die()` will ultimately be called for final, overall results.) |
+| `-c`_`conditional`_ | For the corresponding _`mstr`_ given with `-m`, evalute the expression _`conditional`_ if the _`mstr`_ matches.  If the result is "false" (i.e., non-zero), treat as a non-match.  If _`mstr`_ is a glob or regex, the _`conditional`_ may contain `%`-expandos; `%0` will be replaced by the entire line (glob) or matched text (regex), and `%n` (`%1` through `%9`) will be replaced by the _`n`th_ word on the line (glob) or the _`n`th_ parenthesized subexpression (regex). |
+| `-f`_`inputfile`_ | Instead of running `dmesg`, take input from the file specified as _`inputfile`_ (same as [`check_file_contents()` below](#check_file_contents)) |
 | `-m`_`mstr`_ | If the match string is negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
-| `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ or the check will fail. |
-| `-t`_`secs`_ | Command will timeout if not completed within _`secs`_ seconds (default is 5). |
+| `-o`_`outputfile`_ | Save all lines (without `-z`) or only matching lines (with `-z`) of output to _`outputfile`_. |
+| `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of `dmesg` must equal _`retval`_ (default `0`) or the check will fail. |
+| `-s`_`source`_ | Use _`source`_ as the plain-text description of the source of data being parsed (default is "`'dmesg' command output`"). |
+| `-t`_`secs`_ | The check will return failure, and any lingering subprocesses will be terminated, if `dmesg` has not completed within _`secs`_ seconds (default is `5`).<br />**WARNING**:  Fractional timeouts (e.g., `0.5`, `1.2`) are currently **unsupported**! |
+| `-x` | Bash trace mode.  Activates Bash's internal trace mode (i.e., `set -x`), similar to the `-x` option to `nhc` itself, but lasts only for the duration of the check's execution. |
+| `-z` | Output matches only.  When generating the output array (`-O`) and/or file (`-o`), limit the resulting content to only lines that successfully matched one or more match string expressions given. |
 
-> **NOTE**:  If the _`command`_ is passed using `-e`, the _`command`_ string is split on word boundaries to create the `argv[]` array for the command.  If passed on the end of the check line, DO NOT quote the command.  Each parameter must be distinct.  Only use quotes to group multiple words into a single argument.  For example, passing _`command`_ as `"service bind restart"` will work if used with `-e` but will fail if passed at the end of the check line (use without quotes instead)!
+> **WARNING**:  **DO NOT** attempt to use args or the `-E`/`-e` options to modify the specific `dmesg` command being run; instead, change the value of the global array variable `NHC_DMESG_CMD` prior to invoking `check_cmd_dmesg` or simply use `check_cmd_output()` directly!
+
+> **NOTE**:  Option `-m` may be given any number of times; `-M` and/or `-c` options must appear the same number of times, and in the same order, or not at all.  Defaults will always be used if `-M`/`-c` are not given at all.  To specify the default message string or conditional should be used for specific matches, pass an empty argument to `-M` or `-c` (e.g., `-M ''` or `-c ''`) at the corresponding position in order in the argument list.<br />
+> Example:  Given match strings _`mstr1`_, _`mstr2`_, and _`mstr3`_, with corresponding custom messages _`msg1`_ and _`msg3`_ and conditional _`cond2`_, and using defaults for everything else (i.e., _`msg2`_, _`cond1`_, and _`cond3`_), the options and arguments could be passed in any of the following orders:
+> * `-m mstr1 -m mstr2 -m mstr3 -M msg1 -M '' -M msg3 -c '' -c cond2 -c ''`<br />
+> * `-m mstr1 -M msg1 -c '' -m mstr2 -M '' -c cond2 -m mstr3 -M msg3 -c ''`<br />
+> * `-M msg1 -c '' -m mstr1 -M '' -c cond2 -m mstr2 -M msg3 -c '' -m mstr3`<br />
+
+_**Example** (Verify that the `rpcbind` service is alive)_:  `check_cmd_dmesg -t 1 -r 0 -m '/is running/' /sbin/service rpcbind status`
+
+
+<br />
+
+
+##### check_cmd_output
+`check_cmd_output [-0axz] [-C checkname] [-t timeout] [-r retval] [-M msg1 [-M msg2 [...]]] [-c cond1 [-c cond2 [...]]] [-m mstr1 [-m mstr2 [...]] [-O outputvar] [-R resultvar] [-o outputfile] [-s source] { -E command_array_name | -E compound_assignment | -I inputvar | -f inputfile | -e commandline | command [arg(s)] }`
+
+`check_cmd_output` executes a _`command`_ and compares each line of its output against any [match strings](#match-strings) passed in (via 1 or more occurrances of `-m`_`mstr`_).  If any positive match **is not** found in the command output, or if any negative match **is** found, the check fails.  The check also fails if the exit status of _`command`_ does not match _`retval`_ (`0` by default) or if the _`command`_ fails to complete within _`timeout`_ seconds (default `5`).  Options to this check are as follows:
+
+<!--  | `-` | . |  -->
+<!--  | `-?`_`?`_ | _`?`_. |  -->
+| **Check&nbsp;Option** | **Purpose** |
+| ---------------- | ----------- |
+| `-0` | Non-fatal failure mode.  Results, either success or failure, are returned to the caller.  Specifically, `die()` is not called if the check fails.  See also `-a` "check-all" mode; may be used together or separately depending on desired behavior.  (Without `-a`, the check will return immediately upon the first detected failure, if any.) |
+| `-C`_`checkname`_ | Use _`checkname`_ rather than `check_cmd_output()` as the name of the check being run.  Conceptually, many health checks involve parsing the output of one or more subcommand(s); by supplying an alternate check name, such health checks can be implemented quickly and easily without having to reinvent existing `check_cmd_output()` features. |
+| `-E`_`commandlist`_ | Execute _`commandlist`_ and gather its output.  Unlike with `-e`, the _`commandlist`_ is NOT split or expanded further in any way.  The format of _`commandlist`_ must be either the right-hand side of a Bash compound assignment statement for an indexed array OR the name of an existing indexed array variable.  See also the mutually exclusive `-e` option. |
+| `-I`_`inputvar`_ | Instead of running a command, take input from the indexed array variable specified as _`inputvar`_. |
+| `-M`_`msg`_ | For the corresponding _`mstr`_ given with `-m` (see below), use _`msg`_ when reporting match failure. |
+| `-O`_`outputvar`_ | Store resultant output into indexed array named _`outputvar`_. |
+| `-R`_`resultvar`_ | Store exit code and possible error message as a tuple into indexed array named _`resultvar`_. |
+| `-a` | Check-all mode.  Do not return immediately once check failure is detected; rather, parsing of output and detection of matches continues to completion, and results are generated based on total dataset.  See also `-0` "non-fatal" mode; may be used together or separately depending on desired behavior.  (Without `-0`, `die()` will ultimately be called for final, overall results.) |
+| `-c`_`conditional`_ | For the corresponding _`mstr`_ given with `-m`, evalute the expression _`conditional`_ if the _`mstr`_ matches.  If the result is "false" (i.e., non-zero), treat as a non-match.  If _`mstr`_ is a glob or regex, the _`conditional`_ may contain `%`-expandos; `%0` will be replaced by the entire line (glob) or matched text (regex), and `%n` (`%1` through `%9`) will be replaced by the _`n`th_ word on the line (glob) or the _`n`th_ parenthesized subexpression (regex). |
+| `-e`_`commandline`_ | Execute _`commandline`_ and gather its output.  The _`commandline`_ is split on word boundaries, much like `/bin/sh -c '...'` does.  See also the mutually exclusive `-E` option; the difference between `-E` and `-e` is analogous to the traditional C functions [`execv(3)` ](https://linux.die.net/man/3/execv) vs. [`system(3)`](https://linux.die.net/man/3/system). |
+| `-f`_`inputfile`_ | Instead of running a command, take input from the file specified as _`inputfile`_ (same as [`check_file_contents()` below](#check_file_contents)) |
+| `-m`_`mstr`_ | If the match string is negated, no line of the output may match the specified _`mstr`_ expression.  Otherwise, at least one line must match.  This option may be used multiple times as needed. |
+| `-o`_`outputfile`_ | Save all lines (without `-z`) or only matching lines (with `-z`) of output to _`outputfile`_. |
+| `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ (default `0`) or the check will fail. |
+| `-s`_`source`_ | Use _`source`_ as the plain-text description of the source of data being parsed; otherwise, NHC generates the description internally (e.g., "`'foo' command output`" or "`'VAR_NAME[]' array data`") which may or may not be ideal. |
+| `-t`_`secs`_ | The check will return failure, and any lingering subprocesses will be terminated, if the subcommands (if any) have not completed within _`secs`_ seconds (default is `5`).<br />**WARNING**:  Fractional timeouts (e.g., `0.5`, `1.2`) are currently **unsupported**! |
+| `-x` | Bash trace mode.  Activates Bash's internal trace mode (i.e., `set -x`), similar to the `-x` option to `nhc` itself, but lasts only for the duration of the check's execution. |
+| `-z` | Output matches only.  When generating the output array (`-O`) and/or file (`-o`), limit the resulting content to only lines that successfully matched one or more match string expressions given. |
+
+> **WARNING**:  If the _`command`_ is passed using `-e`, the _`command`_ string is split on word boundaries to create the `argv[]` array for the command.  If passed on the end of the check line, **DO NOT** quote the command.  Each parameter must be distinct.  Only use quotes to group multiple words into a single argument.  For example, passing _`command`_ as `"service bind restart"` will work if used with `-e` but will fail if passed at the end of the check line (use without quotes instead)!
+
+> **NOTE**:  Option `-m` may be given any number of times; `-M` and/or `-c` options must appear the same number of times, and in the same order, or not at all.  Defaults will always be used if `-M`/`-c` are not given at all.  To specify the default message string or conditional should be used for specific matches, pass an empty argument to `-M` or `-c` (e.g., `-M ''` or `-c ''`) at the corresponding position in order in the argument list.<br />
+> Example:  Given match strings _`mstr1`_, _`mstr2`_, and _`mstr3`_, with corresponding custom messages _`msg1`_ and _`msg3`_ and conditional _`cond2`_, and using defaults for everything else (i.e., _`msg2`_, _`cond1`_, and _`cond3`_), the options and arguments could be passed in any of the following orders:
+> * `-m mstr1 -m mstr2 -m mstr3 -M msg1 -M '' -M msg3 -c '' -c cond2 -c ''`<br />
+> * `-m mstr1 -M msg1 -c '' -m mstr2 -M '' -c cond2 -m mstr3 -M msg3 -c ''`<br />
+> * `-M msg1 -c '' -m mstr1 -M '' -c cond2 -m mstr2 -M msg3 -c '' -m mstr3`<br />
 
 _**Example** (Verify that the `rpcbind` service is alive)_:  `check_cmd_output -t 1 -r 0 -m '/is running/' /sbin/service rpcbind status`
 
@@ -716,14 +814,16 @@ _**Example** (Verify that the `rpcbind` service is alive)_:  `check_cmd_output -
 
 
 ##### check_cmd_status
-`check_cmd_status [-t timeout] -r retval command [arg1 [...]]`
+`check_cmd_status [-x] [-C checkname] [-t timeout] [-r retval] command [arg1 [...]]`
 
-`check_cmd_status` executes a _`command`_ and redirects its output to `/dev/null`.  The check fails if the exit status of _`command`_ exit status does not match _`retval`_ or if the _`command`_ fails to complete within _`timeout`_ seconds (default 5).  Options to this check are as follows:
+`check_cmd_status` executes a _`command`_ and redirects its output to `/dev/null`.  The check fails if the numeric exit status (0-255) of _`command`_ is not equal to _`retval`_ or if the _`command`_ fails to complete within _`timeout`_ seconds (default 5).  Options to this check are as follows:
 
 | **Check&nbsp;Option** | **Purpose** |
 | ---------------- | ----------- |
-| `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ or the check will fail. |
-| `-t`_`secs`_ | Command will timeout if not completed within _`secs`_ seconds (default is 5). |
+| `-C`_`checkname`_ | Use _`checkname`_ rather than `check_cmd_status()` as the name of the check being run.  Conceptually, many health checks involve invoking subcommand(s) and examining their exit status; typically 0 represents successful completion, 1-127 mean an error occurred, and 128-255 indicate that the process was terminated by a signal.  By using the `check_cmd_status()` function but supplying an alternate check name, health checks needing to exhibit the same behavior can be implemented quickly and easily; additionally, they inherit the features and advantages of `check_cmd_status()` for free (like process watchdogs and asynchronous execution). |
+| `-r`_`retval`_ | Exit status (a.k.a. return code or return value) of _`command`_ must equal _`retval`_ (default `0`) or the check will fail. |
+| `-t`_`secs`_ | The check will return failure, and any lingering subprocesses will be terminated, if _`command`_ has not completed within _`secs`_ seconds (default is `5`).<br />**WARNING**:  Fractional timeouts (e.g., `0.5`, `1.2`) are currently **unsupported**! |
+| `-x` | Bash trace mode.  Activates Bash's internal trace mode (i.e., `set -x`), similar to the `-x` option to `nhc` itself, but lasts only for the duration of the check's execution. |
 
 _**Example** (Make sure SELinux is disabled)_:  `check_cmd_status -t 1 -r 1 selinuxenabled`
 
@@ -1082,13 +1182,34 @@ _**Example** (require at least 1 GB free)_:  `check_hw_swap_free 1048576`
 
 <br />
 
+##### check_kube
+`check_kube `
 
-##### check_moab_sched
-`check_moab_sched [-t timeout] [-a alert_match] [-m [!]mstr] [-v version_match]`
+`check_kube`
 
-`check_moab_sched` executes `mdiag -S -v` and examines its output, similarly to `check_cmd_output`.  In addition to the arbitrary positive/negative _`mstr`_ [match strings](#match-strings), it also accepts an _`alert_match`_ for flagging specific Moab alerts and a _`version_match`_ for making sure the expected version is running.  The check will fail based on any of these matches, or if `mdiag` does not return within the specified timeout.
+_**Example** ()_:  `check_kube`
 
-_**Example** (ensure we're running Moab 7.2.3 and it's not paused)_:  `check_moab_sched -t 45 -m '!/PAUSED/' -v 7.2.3`
+
+<br />
+
+
+##### check_kube_etcd_alerts
+`check_kube_etcd_alerts `
+
+`check_kube_etcd_alerts`
+
+_**Example** ()_:  `check_kube_etcd_alerts`
+
+
+<br />
+
+
+##### check_kube_etcd_balance
+`check_kube_etcd_balance `
+
+`check_kube_etcd_balance`
+
+_**Example** ()_:  `check_kube_etcd_balance`
 
 
 <br />
@@ -1105,12 +1226,34 @@ _**Example** (basic Moab RM sanity check)_:  `check_moab_rm -t 45`
 <br />
 
 
+##### check_moab_sched
+`check_moab_sched [-t timeout] [-a alert_match] [-m [!]mstr] [-v version_match]`
+
+`check_moab_sched` executes `mdiag -S -v` and examines its output, similarly to `check_cmd_output`.  In addition to the arbitrary positive/negative _`mstr`_ [match strings](#match-strings), it also accepts an _`alert_match`_ for flagging specific Moab alerts and a _`version_match`_ for making sure the expected version is running.  The check will fail based on any of these matches, or if `mdiag` does not return within the specified timeout.
+
+_**Example** (ensure we're running Moab 7.2.3 and it's not paused)_:  `check_moab_sched -t 45 -m '!/PAUSED/' -v 7.2.3`
+
+
+<br />
+
+
 ##### check_moab_torque
 `check_moab_torque [-t timeout] [-m [!]mstr]`
 
 `check_moab_torque` executes `qmgr -c 'print server'` and examines its output, similarly to `check_cmd_output`.  In addition to the arbitrary positive/negative _`mstr`_ [match strings](#match-strings), it also checks to make sure that the `scheduling` parameter is set to `True` (and fails if it isn't).  The check will also fail if `qmgr` does not return within the specified timeout.
 
 _**Example** (basic TORQUE configuration/responsiveness sanity check)_:  `check_moab_torque -t 45`
+
+
+<br />
+
+
+##### check_net_link
+`check_net_link interface`
+
+(Version 1.5+) `check_net_link` uses the `ip link` command to assert that the specified `interface` has link.  The check returns true (`0`) if link is detected on the specified network interface or false (`1`) otherwise.  At present, this check does not support any options and takes exactly one argument (the name of the network interface), but this is likely to change in future releases.
+
+_**Example** (check network link status of onboard 10GbE NIC `eno1`)_:  `check_net_link eno1`
 
 
 <br />
@@ -1151,11 +1294,37 @@ _**Example** (search for HTTP daemon IPv4 listening socket and restart if missin
 
 
 ##### check_nv_healthmon
-`check_nv_healthmon`
+(_deprecated_) `check_nv_healthmon`
 
-(Version 1.2+) `check_nv_healthmon` runs the command `$NVIDIA_HEALTHMON` (default:  `nvidia-healthmon`) with the arguments specified in `$NVIDIA_HEALTHMON_ARGS` (default:  `-e -v`) to check for problems with any nVidia Tesla GPU devices on the system.  If any errors are found, the entire (human-readable) output of the command is logged, and the check fails.  **NOTE:**  Version 3.304 or higher of the nVidia Tesla Deployment Kit (TDK) is required!  See <http://developer.nvidia.com/cuda/tesla-deployment-kit> for details and downloads.
+(Versions 1.2 - 1.5.x) `check_nv_healthmon` runs the command `$NVIDIA_HEALTHMON` (default:  `nvidia-healthmon`) with the arguments specified in `$NVIDIA_HEALTHMON_ARGS` (default:  `-e -v`) to check for problems with any nVidia Tesla GPU devices on the system.  If any errors are found, the entire (human-readable) output of the command is logged, and the check fails.  **NOTE:**  Version 3.304 or higher of the nVidia Tesla Deployment Kit (TDK) is required!  See <http://developer.nvidia.com/cuda/tesla-deployment-kit> for details and downloads.
+
+**WARNING**:  This check is deprecated in favor of those using the newer, more capable `nvidia-smi` and/or `nvidia-dcgm` tools and relevant features.  All the code and supporting infrastructure for this check will be removed from a future NHC version.
 
 _**Example**_:  `check_nv_healthmon`
+
+
+<br />
+
+
+##### check_nvgpu_smi
+`check_nvgpu_smi`
+
+(Version 1.5+) `check_nvgpu_smi` runs the commandlist `${NVGPU_SMI[@]}` (default:  `nvidia-smi -e -v`) and examines its output, looking for some specific indicators of success or failure.  If "`OK`" does _NOT_ appear, or if phrases like "unreachable" or "no data" show up, this check will fail.  Similarly, it will fail if the commandlist returns a non-zero exit status.  At present, this check takes no options or arguments, but this is expected to change _significantly_ in later versions!
+
+_**Example**_:  `check_nvgpu_smi`
+
+
+<br />
+
+
+##### check_nvsmi_healthmon
+`check_nvsmi_healthmon`
+
+(Version 1.3+) `check_nvsmi_healthmon` runs the command `$NVIDIA_SMI_HEALTHMON` (default:  `nvidia-smi`) with the arguments specified in `$NVIDIA_SMI_HEALTHMON_ARGS` (empty by default) and compares the exit status of the command to a list of known return values, providing a human-readable error message and failing the check if the exit status is non-zero.  If an unexpected value is returned, the check will send the entire output stream to `$LOGFILE` before failing the check and noting the unhandled return code value.
+
+**NOTE**:  While the exact command it executes can be modified using the configuration variables noted here, this check does not accept any options or arguments.
+
+_**Example**_:  `check_nvsmi_healthmon`
 
 
 <br />
@@ -1352,6 +1521,50 @@ _**Example** (log, syslog, and kill rogue user processes)_:  `check_ps_unauth_us
 `check_ps_userproc_lineage` examines all processes running on the system to check for any processes not owned by an "authorized user" (see previous check) which are not children (directly or indirectly) of the Resource Manager daemon.  Refer to the `$RM_DAEMON_MATCH` [configuration variable](#supported-variables) for how NHC determines the RM daemon process.  If such a rogue process is found, the specified action(s) are taken.  The following actions are valid:  `kill` (terminate the process), `ignore` (do nothing), `log` (write error to log file and continue), `syslog` (write error to syslog and continue), or `die` (fail the check as normal).  The default is "`die`" if no _action_ is specified.
 
 _**Example** (mark the node bad on rogue user processes)_:  `check_ps_userproc_lineage die`
+
+
+<br />
+
+
+##### check_reasonfile_min_nodes_ok
+`check_reasonfile_min_nodes_ok [-t comment] { -m count | -p percentage }`
+
+(Version 1.5+) The `lanl_reasonfile.nhc` check module enables the use of a central/global directory (`$REASONFILE_DIR`) containing exactly one file per node to allow NHC to track node status information from other sources.  Each file shares its exact name with its respective host/node; an empty file indicates "OK" or "UP" status, whereas a non-empty file will contain an error/failure message for why that particular system should be considered to be "DOWN" or otherwise not "OK."  Conceptually similar to the `REASON` node attribute in Slurm or the node's "Note" in TORQUE/PBS, each "reasonfile" can store arbitrary error message(s) or status information without needing a Resource Manager to keep track of it.
+
+`check_reasonfile_min_nodes_ok` uses either a relative (_`percentage`_) or an absolute (_`count`_) quantity of nodes to act as a minimum; if the quantity of empty "reasonfiles" in `$REASONFILE_DIR` drops below the given threshold, the check will fail.
+
+> **WARNING**:  This particular check looks holistically at the entirety of the state information presented in `$REASONFILE_DIR` rather than focusing solely on data for the current node; therefore, this is more of a "cluster health check" rather than a specific "node health check" and should be leveraged accordingly.  (Hint:  Maybe _don't_ run this check on all your cluster nodes....)
+
+The table below lists the available options.  In the absence of either _`count`_ or _`percentage`_ being provided, the default behavior looks for a single-node minimum (i.e., `-m 1`).
+
+| **Check&nbsp;Option** | **Purpose** |
+| ---------------- | ----------- |
+| `-m`_`count`_ | Causes the check to fail if `$REASONFILE_DIR` contains fewer than _`count`_ empty "reasonfiles." |
+| `-p`_`percentage`_ | Causes the check to fail if the ratio of empty-to-total "reasonfiles" in `$REASONFILE_DIR` drops below the minimum of _`percentage`_%. |
+| `-t`_`comment`_ | Uses _`comment`_ in the check failure message if applicable (default:  `Nodes`). |
+
+_**Example** (require at least 20% of node states be "OK")_:  `check_reasonfile_min_nodes_ok -p 20`
+
+
+<br />
+
+
+##### check_reasonfile_nodes_ok
+`check_reasonfile_nodes_ok [-t comment] nodename` (plural, _**preferred**_)<br />
+ &nbsp; -OR-<br />
+`check_reasonfile_node_ok [-t comment] nodename`  (singular)
+
+(Version 1.5+)  `check_reasonfile_nodes_ok` (or its singular alias `check_reasonfile_node_ok`) examines the metadata associated with the provided _`nodename`_ (specifically, the file `$REASONFILE_DIR/`_`nodename`_).  If that file doesn't exist at all, the check fails with an "invalid node" error.  If the file is non-empty, the check fails because _`nodename`_ isn't in an "OK" state.  Additionally, if the file is empty but has not been updated in the last `$REASONFILE_MAX_AGE` seconds, the check will still fail because the node state data is too "stale."  Otherwise, the check passes.
+
+Refer to [`check_reasonfile_min_nodes_ok()` above](#check_reasonfile_min_nodes_ok) for information about the `lanl_reasonfile.nhc` check module.
+
+At present, this check requires exactly one argument (_`nodename`_) and offers a single option:
+
+| **Check&nbsp;Option** | **Purpose** |
+| ---------------- | ----------- |
+| `-t`_`comment`_ | Uses _`comment`_ in the check failure message if applicable (default:  `Node`). |
+
+_**Example** (fail if the current node isn't "OK")_:  `check_reasonfile_nodes_ok $HOSTNAME`
 
 
 <br />

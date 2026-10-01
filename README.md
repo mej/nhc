@@ -413,64 +413,30 @@ Configuration of NHC is generally done in one of 3 ways:  passing option flags a
 
 
 ### Global/Default Environment Settings
-    After some discussions with a colleague, I realized that the existing
-    handling of configuration info from the environment (e.g., `CONFDIR`)
-    made it difficult for a non-`root` user to point an installation of NHC
-    at their own home directory (or anywhere else, really), due at least in
-    part to the lack of a clean way of altering default locations without
-    invoking `nhc` with a bunch of command line settings every time or
-    modifying the `nhc` script itself directly.
+After some discussions with a colleague, I realized that the existing handling of configuration info from the environment (e.g., `CONFDIR`) made it difficult for a non-`root` user to point an installation of NHC at their own home directory (or anywhere else, really), due at least in part to the lack of a clean way of altering default locations without invoking `nhc` with a bunch of command line settings every time or modifying the `nhc` script itself directly.
 
-    The aforementioned coworker had actually gone to the trouble of writing
-    up an entire Confluence page detailing all the pain they'd had to go
-    through to get a simple homedir-local NHC installation fully functional,
-    and I just couldn't prepare a release without addressing that mess.  So
-    using their (awesome!) document as a roadmap, I went to work fixing
-    things.
+The aforementioned coworker had actually gone to the trouble of writing up an entire Confluence page detailing all the pain they'd had to go through to get a simple homedir-local NHC installation fully functional, and I just couldn't prepare a release without addressing that mess.  So using their (awesome!) document as a roadmap, I went to work fixing things.
 
-    (It's worth noting that this is a largely self-inflicted wound; I made
-    the decision years ago that I wanted to avoid the typical `autotools`
-    scenario where everything had to be a `*.in` file if the `autoconf`-
-    and/or `automake`-based variables needed to be expanded in it.  If
-    `nhc` had to be generated from `nhc.in`, it would be impossible to run
-    the `nhc` script directly from a Git clone or extracted tarball, nor
-    could the `nhc` file itself be committed to the SCM repository.  The
-    downside of avoiding `nhc.in` is the inability to use `./configure`
-    settings in the installed script....)
+(It's worth noting that this is a largely self-inflicted wound; I made the decision years ago that I wanted to avoid the typical `autotools` scenario where everything had to be a `*.in` file if the `autoconf`- and/or `automake`-based variables needed to be expanded in it.  If `nhc` had to be generated from `nhc.in`, it would be impossible to run the `nhc` script directly from a Git clone or extracted tarball, nor could the `nhc` file itself be committed to the SCM repository.  The downside of avoiding `nhc.in` is the inability to use `./configure` settings in the installed script....)
 
-    NHC already tends to accept pre-existing values in the environment;
-    however, since a lot of the primary location variables (like `INCDIR`,
-    `CONFDIR`, etc.) are not namespaced and could be prone to conflicts,
-    they cannot safely be set in the general environment.  (In other words,
-    setting `INCDIR` in your `~/.bashrc` file might conflict with other
-    software, whereas it's highly unlikely any other package would care
-    about `NHC_INCDIR`, for example.)  Nor can NHC safely use a pre-existing
-    environment setting for these variables, as they might be intended for
-    use by a different program.  NHC has historically `unset` them at
-    startup for this reason.
+NHC already tends to accept pre-existing values in the environment; however, since a lot of the primary location variables (like `INCDIR`, `CONFDIR`, etc.) are not namespaced and could be prone to conflicts, they cannot safely be set in the general environment.  (In other words, setting `INCDIR` in your `~/.bashrc` file might conflict with other software, whereas it's highly unlikely any other package would care about `NHC_INCDIR`, for example.)  Nor can NHC safely use a pre-existing environment setting for these variables, as they might be intended for use by a different program.  NHC has historically `unset` them at startup for this reason.
 
-    So here's my attempt to fully address all of the above:  `nhc` will now
-    look for a handful of configuration variables from the environment, all
-    of which start with `NHC_CFG_` for proper namespacing, that act as
-    overrides; they take precedence over settings from all other
-    configuration sources, apart from the command line. These can be safely
-    set in places like `/etc/bashrc` and/or
-    `~/.bashrc` without the risk of impacting other programs.
+To fully address all of the above, `nhc` will now look for a handful of configuration variables from the environment, all of which start with `NHC_CFG_` for proper namespacing, that act as overrides; they take precedence over settings from all other configuration sources (apart from the command line). These can be safely set in places like `/etc/bashrc` and/or `~/.bashrc` without the risk of impacting other programs.
 
-    The recognized variables are:
-    - `NHC_CFG_GLOBAL` - The complete path- and filename to a global
-      settings file, used instead of `/etc/sysconfig/nhc`
-    - `NHC_CFG_PREFIX` - Assume `autoconf`-style layout with
-    `--prefix=<value>`
-    - `NHC_CFG_SYSCONFIGDIR` - Override default `SYSCONFIGDIR` value
-    (OS-dependent)
-    - `NHC_CFG_LIBEXECDIR` - Override default `LIBEXECDIR` value
-    (OS-dependent)
-    - `NHC_CFG_CONFDIR` - Override default `CONFDIR` value (`/etc/nhc`)
-    - `NHC_CFG_INCDIR` - Override default `INCDIR` value
-    (`$CONFDIR/scripts`)
-    - `NHC_CFG_HELPERDIR` - Override default `HELPERDIR` value
-    (`$LIBEXECDIR/nhc`)
+The recognized variables are:
+- `NHC_CFG_GLOBAL` - The complete path- and filename to a global
+  settings file, used instead of `/etc/sysconfig/nhc`
+- `NHC_CFG_PREFIX` - Assume `autoconf`-style layout with
+`--prefix=<value>`
+- `NHC_CFG_SYSCONFIGDIR` - Override default `SYSCONFIGDIR` value
+(OS-dependent)
+- `NHC_CFG_LIBEXECDIR` - Override default `LIBEXECDIR` value
+(OS-dependent)
+- `NHC_CFG_CONFDIR` - Override default `CONFDIR` value (`/etc/nhc`)
+- `NHC_CFG_INCDIR` - Override default `INCDIR` value
+(`$CONFDIR/scripts`)
+- `NHC_CFG_HELPERDIR` - Override default `HELPERDIR` value
+(`$LIBEXECDIR/nhc`)
 
 
 

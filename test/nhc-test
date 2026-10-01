@@ -6,6 +6,8 @@
 # 29 June 2012
 #
 
+export SHELL="${BASH:-$(command -v bash)}"
+
 # This script is used to perform unit testing on the NHC driver script
 # and its built-in checks.  It should only be used by developers
 # working from the source tree.  To perform the tests, run "make test"

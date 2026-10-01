@@ -1,6 +1,9 @@
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = bench test
-#SHELL = /bin/bash -x
+
+BASHPATH :::= $(if $(BASH),$(BASH),$(shell command -v bash))
+BASH ?= $(BASHPATH)
+export BASH
 
 helperdir = $(libexecdir)/nhc
 confdir = $(sysconfdir)/nhc

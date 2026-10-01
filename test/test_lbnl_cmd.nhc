@@ -41,30 +41,33 @@ plan $((3+14+14+2)) "lbnl_cmd.nhc" && {
 
     ### check_cmd_dmesg() wraps check_cmd_output(), so we don't need to retest the above.
     export TESTDATA=$'\n\ncheck_cmd_dmesg() Test Data\n\n  dmesg-good1\ndmesg-b@d2 blah blah blah yadda yadda yadda\n\n\t\tmoomoodmesg-bad1moomoo\n'
-    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2' echo "$TESTDATA"
-    is $? 1 "dmesg data containing 1 good and 1 bad string"
-    like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should match default since none was provided"
 
-    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2' /bin/sh -c 'cat <<< "$TESTDATA"'
+    export NHC_DMESG_CMD=(  /bin/sh -c 'cat <<< "$TESTDATA"' )
+    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2'
     is $? 1 "dmesg data containing 1 good and 1 bad string"
-    like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should match default since none was provided"
+    like "$DIE_MSG" "check_cmd_dmesg:  * matched at line * of * output*" "die() message should match default since none was provided"
+
+    export NHC_DMESG_CMD=( echo "$TESTDATA" )
+    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -M 'dmesg is not GOOD1' -m '!*dmesg-bad1*' -M '' -m '!/dmesg-bad2/' -M 'dmesg is BAD2'
+    is $? 1 "dmesg data containing 1 good and 1 bad string"
+    like "$DIE_MSG" "check_cmd_dmesg:  * matched at line * of * output*" "die() message should match default since none was provided"
 
     # Make sure that "no messages overridden" cases are handled correctly
-    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/' echo "$TESTDATA"
+    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/'
     is $? 1 "dmesg data -- positive presence check fails"
-    like "$DIE_MSG" "check_cmd_dmesg:  dmesg output failed to match *" "die() message should always match default when none are overridden (#3)"
-    check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '*dmesg-bad1*' -m '!/dmesg-bad2/' echo "$TESTDATA"
+    like "$DIE_MSG" "check_cmd_dmesg:  * failed to match *" "die() message should always match default when none are overridden (#3)"
+    check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '*dmesg-bad1*' -m '!/dmesg-bad2/'
     is $? 1 "dmesg data -- negative presence check fails"
-    like "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should always match default when none are overridden (#1)"
+    like "$DIE_MSG" "check_cmd_dmesg:  * matched at line * of * output*" "die() message should always match default when none are overridden (#1)"
 
     # Make sure that "all messages overridden" cases work, even when passed differently
-    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2' echo "$TESTDATA"
+    check_cmd_dmesg -t 1 -m '*dmesg-good1*' -m '*dmesg-bad1*' -m '/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2'
     is $? 1 "dmesg data -- positive presence check fails"
-    unlike "$DIE_MSG" "check_cmd_dmesg:  dmesg output failed to match *" "die() message should never match default when all are overridden (#3)"
+    unlike "$DIE_MSG" "check_cmd_dmesg:  * failed to match *" "die() message should never match default when all are overridden (#3)"
     like "$DIE_MSG" "check_cmd_dmesg:  dmesg is BAD2." "die() message should match supplied override value"
-    check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '!*dmesg-bad1*' -m '!/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2' echo "$TESTDATA"
+    check_cmd_dmesg -t 1 -m '!*dmesg-good1*' -m '!*dmesg-bad1*' -m '!/dmesg-bad2/' -M 'dmesg is not GOOD1' -M 'dmesg is BAD1' -M 'dmesg is BAD2'
     is $? 1 "dmesg data -- negative presence check fails"
-    unlike "$DIE_MSG" "check_cmd_dmesg:  dmesg output matched *" "die() message should never match default when all are overridden (#1)"
+    unlike "$DIE_MSG" "check_cmd_dmesg:  * matched at line * of * output*" "die() message should never match default when all are overridden (#1)"
     like "$DIE_MSG" "check_cmd_dmesg:  dmesg is not GOOD1." "die() message should match supplied override value"
 
     check_cmd_status -t 1 true

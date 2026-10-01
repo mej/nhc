@@ -424,7 +424,7 @@ function pickdir() {
 }
 
 # Multi-function Bash version check/comparison and numeric conversion
-function got-bash() {
+function check_bash_version() {
     local -i BLD EXACT=0 MAJ MAX=0 MIN NUM=0 PL RC=0 TRG=0 VAL=0 VER=0;
     local PAT='' REL='' TARGET='';
     local -n VAR='VAL';
@@ -501,11 +501,15 @@ function got-bash() {
     fi;
     return ${RC};
 }
+
+alias got-bash='check_bash_version'
 alias bash-4.3='got-bash 4.3'
 alias bash-4.4='got-bash 4.4.0'
 alias bash-5='got-bash 5.0'
 alias bash-5.1='got-bash 5.1'
-alias bver='got-bash -n'
+
+alias get-bash='check_bash_version'
+alias bver='get-bash -n'
 
 #########################
 

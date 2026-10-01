@@ -1,8 +1,9 @@
 AUTOMAKE_OPTIONS = foreign
 SUBDIRS = bench test
 
-BASHPATH :::= $(if $(BASH),$(BASH),$(shell command -v bash))
-BASH ?= $(BASHPATH)
+which = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(PATH)))))
+
+BASH ?= $(call which,bash)
 export BASH
 
 helperdir = $(libexecdir)/nhc

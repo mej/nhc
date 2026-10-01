@@ -1,0 +1,5 @@
+@PACKAGE@ (@VERSION@) UNRELEASED; urgency=medium
+
+  * Debian release.
+
+ -- LBNL <@PACKAGE_BUGREPORT@>  @DATE@

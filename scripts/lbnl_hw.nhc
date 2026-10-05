@@ -85,7 +85,7 @@ function nhc_hw_cpu_gather_data() {
             MHZ="${FIELD[3]}"
             MHZ="${MHZ/%.*}"
         fi
-    done <<< "${CPUDATA}"
+    done < <(echo "${CPUDATA}" )
 
     if [[ $PROCESSOR -ge 0 && $HW_SOCKETS -eq 0 ]]; then
         HW_SOCKETS=$((PROCESSOR+1))
@@ -158,7 +158,7 @@ function nhc_hw_mem_gather_data() {
         elif [[ "${FIELD[0]}" = "SwapFree:" ]]; then
             HW_SWAP_FREE=${FIELD[1]}
         fi
-    done <<< "$MEMDATA"
+    done < <(echo "$MEMDATA" )
 
     dbg "Found $HW_RAM_TOTAL kB RAM ($HW_RAM_FREE kB free)"
     dbg "Found $HW_SWAP_TOTAL kB swap ($HW_SWAP_FREE kB free)"
@@ -236,7 +236,7 @@ function nhc_hw_kmod_gather_data() {
 
     while read -a FIELD ; do
         HW_MODULES+=( "${FIELD[0]}" )
-    done <<< "$MODDATA"
+    done < <(echo "$MODDATA" )
 
     export HW_MODULES
     dbg "Found kernel modules:  ${HW_MODULES[*]}"
@@ -280,7 +280,7 @@ function nhc_hw_eth_gather_data() {
             DEV=${FIELD[0]%%:*}
             HW_ETH_DEV+=( "${DEV}" )
         fi
-    done <<< "${DEVDATA}"
+    done < <(echo "${DEVDATA}" )
     export HW_ETH_DEV
     dbg "Found network devices:  ${HW_ETH_DEV[*]}"
 }

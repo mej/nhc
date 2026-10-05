@@ -481,7 +481,9 @@ function check_hw_ib() {
     local PHYS_STATE="LinkUp"
     local RATE="$1"
     local DEV="$2"
-    local i
+    local LINK_WIDTH="$3"
+    local LINK_SPEED="$4"
+    local i DEV_IDX
 
     if [[ ${#HW_IB_STATE[*]} -eq 0 ]]; then
         nhc_hw_hsn_gather_data
@@ -492,22 +494,44 @@ function check_hw_ib() {
         return 1
     fi
 
-    for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
-        if [[ "${HW_IB_STATE[$i]}" == "$STATE" && "${HW_IB_PHYS_STATE[$i]}" == "$PHYS_STATE" ]]; then
-            if [[ (-z "$DEV" || "${HW_IB_DEV[$i]}" == "$DEV") && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") ]]; then
+    if [[ -n "$DEV" ]]; then
+        # Determine corresponding index
+        for ((i=0; i < ${#HW_IB_DEV[*]}; i++)); do
+            if [[ "${HW_IB_DEV[$i]}" == "$DEV" ]]; then
+                DEV_IDX="$i"
+                break
+            fi
+        done
+        if [[ -z "$DEV_IDX" ]]; then
+            die 1 "$FUNCNAME:  IB port $DEV not found"
+            return 1
+        fi
+        # Check other provided parameters
+        if   [[ -n "$RATE" && "${HW_IB_RATE[$i]}" != "$RATE" ]]; then
+            die 1 "$FUNCNAME:  IB port $DEV rate is ${HW_IB_RATE[$i]} Gb/s (expected $RATE Gb/s)"
+            return 1
+        elif [[ -n "$LINK_WIDTH" && "${HW_IB_LINK_WIDTH[$i]}" != "$LINK_WIDTH" ]]; then
+            die 1 "$FUNCNAME:  IB port $DEV link width is ${HW_IB_LINK_WIDTH[$i]}x (expected ${LINK_WIDTH}x)"
+            return 1
+        elif [[ -n "$LINK_SPEED" && "${HW_IB_LINK_SPEED[$i]}" != "$LINK_SPEED" ]]; then
+            die 1 "$FUNCNAME:  IB port $DEV link speed is ${HW_IB_LINK_SPEED[$i]} GT/s (expected $LINK_SPEED GT/s)"
+            return 1
+        fi
+        return 0
+    else
+        # No dev name, only checking state (and optionally rate)
+        for ((i=0; i < ${#HW_IB_STATE[*]}; i++)); do
+            if [[ "${HW_IB_STATE[$i]}" == "$STATE" && "${HW_IB_PHYS_STATE[$i]}" == "$PHYS_STATE" && (-z "$RATE" || "${HW_IB_RATE[$i]}" == "$RATE") ]]; then
                 return 0
             fi
-        fi
-    done
-
-    if [[ -n "$DEV" ]]; then
-        DEV=" $DEV"
+        done
     fi
+
     if [[ -n "$RATE" ]]; then
         RATE=" $RATE Gb/sec"
     fi
 
-    die 1 "$FUNCNAME:  No IB port$DEV is $STATE ($PHYS_STATE$RATE)."
+    die 1 "$FUNCNAME:  No IB port is $STATE ($PHYS_STATE$RATE)."
     return 1
 }
 

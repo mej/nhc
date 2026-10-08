@@ -1,0 +1,132 @@
+# LBNL NHC - LANL Kubernetes Checks
+#
+# Graham Van Heule <grahamvh@lanl.gov>
+# Michael Jennings <mej@lanl.gov>
+# 20 December 2021
+#
+
+CACHE_DEPLOYMENT=''
+CACHE_STATEFULSET=''
+CACHE_ETCD=''
+
+declare -a KUBECTL=( 'kubectl' )
+
+function nhc_kube_gather_data() {
+    if [[ -n "$CACHE_DEPLOYMENT" ]]; then
+        return 0;
+    fi
+    CACHE_DEPLOYMENT=$("${KUBECTL[@]}" get deployment -A | tail -n +2 | sed 's|/| |g' | awk '{print $1 ":" $2 ":" $3}' | xargs)
+    CACHE_STATEFULSET=$("${KUBECTL[@]}" get statefulset -A | tail -n +2 | sed 's|/| |g' | awk '{print $1 ":" $2 ":" $3}' | xargs)
+    CACHE_ETCD=$("${KUBECTL[@]}" get etcd -A -o json | jq '."items"[] | select(. != "") | "\(.metadata.namespace):\(.metadata.name):\(.status.phase)"' | sed 's/"//g' | xargs)
+}
+
+function check_kube_etcd_balance() {
+    local K8S_NS='default' K8S_NAME='' NON_UNIQUE=''
+
+    OPTIND=1
+    while getopts ":n:t:" OPTION ; do
+        case "$OPTION" in
+            'n') K8S_NS="$OPTARG" ;;
+            't') K8S_NAME="$OPTARG" ;;
+            ':') die 1 "${FUNCNAME[0]}:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "${FUNCNAME[0]}:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    K8S_NAME="$*"
+
+    NON_UNIQUE=( $("${KUBECTL[@]}" get pods -n services --selector=etcd_cluster=\${K8S_NAME} -o wide -o json | jq '."items"[] | .spec.nodeName' | uniq -d) )
+    if [[ -n "$NON_UNIQUE" ]]; then
+        die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' has multiple pods on the same node"
+    fi
+}
+
+function check_kube_etcd_alerts() {
+    local K8S_NS='default' K8S_NAME=''
+    local -a K8S_NAMES=( ) PODS=( )
+
+    OPTIND=1
+    while getopts ":n:t:" OPTION ; do
+        case "$OPTION" in
+            'n') K8S_NS="$OPTARG" ;;
+            't') K8S_NAMES=( "$OPTARG" ) ;;
+            ':') die 1 "${FUNCNAME[0]}:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "${FUNCNAME[0]}:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    K8S_NAMES=( "$@" )
+    for K8S_NAME in ${K8S_NAMES[@]}; do
+        PODS+=( $("${KUBECTL[@]}" get pods -l app=${K8S_NAME} -n ${K8S_NS} -o jsonpath='{.items[*].metadata.name}') )
+    done
+
+    for POD in "${PODS[@]}"; do
+        check_cmd_status -C "${FUNCNAME[0]}" "${KUBECTL[@]}" -n "${K8S_NS}" exec "${POD}" -- /bin/sh -c "ETCDCTL_API=3 etcdctl alarm list"
+    done
+}
+
+function check_kube() {
+    local K8S_NS='default' K8S_NAME='' TYPE=''
+    local -i RESTART=0
+
+    OPTIND=1
+    while getopts ":n:rt:" OPTION ; do
+        case "$OPTION" in
+            'n') K8S_NS="$OPTARG" ;;
+            'r') RESTART=1 ;;
+            't') TYPE="$OPTARG" ;;
+            ':') die 1 "${FUNCNAME[0]}:  Option -$OPTARG requires an argument." ; return 1 ;;
+            '?') die 1 "${FUNCNAME[0]}:  Invalid option:  -$OPTARG" ; return 1 ;;
+        esac
+    done
+    shift $((OPTIND-1))
+
+    K8S_NAME="$*"
+
+    nhc_kube_gather_data
+
+
+    if [[ "$TYPE" == "deployment" ]]; then
+        if [[ "$CACHE_DEPLOYMENT" == *${K8S_NS}:${K8S_NAME}:* ]]; then
+            if [[ "$CACHE_DEPLOYMENT" != *${K8S_NS}:${K8S_NAME}:0* ]]; then
+                return 0
+            fi
+        else
+            die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' type: '$TYPE' does not exist"
+            return 1
+        fi
+    elif [[ "$TYPE" == "statefulset" ]]; then
+        if [[ "$CACHE_STATEFULSET" == *${K8S_NS}:${K8S_NAME}:* ]]; then
+            if [[ "$CACHE_STATEFULSET" != *${K8S_NS}:${K8S_NAME}:0* ]]; then
+                return 0
+            fi
+        else
+            die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' type: '$TYPE' does not exist"
+            return 1
+        fi
+    elif [[ "$TYPE" == "etcd" ]]; then
+        if [[ "$CACHE_ETCD" == *${K8S_NS}:${K8S_NAME}:* ]]; then
+            if [[ "$CACHE_ETCD" == *${K8S_NS}:${K8S_NAME}:Running* ]]; then
+                return 0
+            fi
+        else
+            die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' type: '$TYPE' does not exist"
+            return 1
+        fi
+    else
+        die 1 "${FUNCNAME[0]}: '$TYPE' is not valid. Types: [deployment, statefulset, etcd]"
+        return 1
+    fi
+
+    # if we get this far it's not running and we report it as such
+    if (( RESTART )); then
+        "${KUBECTL[@]}" rollout restart -n "${K8S_NS}" "$TYPE" "${K8S_NAME}"
+        die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' type: '$TYPE' has no pods ready (restarted)"
+        return 1
+    else
+        die 1 "${FUNCNAME[0]}: name: '${K8S_NAME}' namespace: '${K8S_NS}' type: '$TYPE' has no pods ready"
+        return 1
+    fi
+}

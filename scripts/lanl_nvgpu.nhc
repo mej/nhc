@@ -1,0 +1,34 @@
+# NHC - nVidia GPU Checks
+#
+# Michael Jennings <mej@lanl.gov>
+# 05 November 2025
+#
+
+declare -ax NVGPU_SMI=( 'nvidia-smi' '-e' '-v' ) NVGPU_SMI_OUTPUT=( ) NVGPU_SMI_RES=( )
+declare -ax NVGPU_DCGM=( 'nvidia-dcgm' 'config' '--get' '-v' ) NVGPU_DCGM_OUTPUT=( ) NVGPU_DCGM_RES=( )
+declare -Ax NVGPU_DCGM_DATA=( )
+
+### FIXME:  Currently unused.
+function nhc_nvgpu_smi_gather_data() {
+    nhc_common_find_matches -C "${FUNCNAME[0]}" -t 20 -0a -E NVGPU_SMI -O NVGPU_SMI_OUTPUT -R NVGPU_SMI_RES
+    return ${NVGPU_SMI_RES[0]}
+}
+
+function nhc_nvgpu_dcgm_gather_data() {
+    nhc_common_find_matches -C "${FUNCNAME[0]}" -t 20 -0a -E NVGPU_DCGM -O NVGPU_DCGM_OUTPUT -R NVGPU_DCGM_RES
+    return ${NVGPU_DCGM_RES[0]}
+}
+
+# Run the Nvidia SMI utility and verify that all GPUs
+# are functioning properly.
+function check_nvgpu_smi() {
+    nhc_nvgpu_smi_gather_data
+    if (( $? != 0 )); then
+        die 1 "${FUNCNAME[0]}:  \"${NVGPU_SMI[*]}\" failed:  \"${NVGPU_SMI_RES[1]}\" (${NVGPU_SMI_RES[0]})"
+    fi
+    check_cmd_output -C 'check_nvgpu_smi' -t 20 -I NVGPU_SMI_OUTPUT -R NVGPU_SMI_RES \
+        -m '/GPU.*:.*\s+OK\s*$/'           -M 'GPU status is not "OK"' \
+        -m '!/GPU.*:.*\s+Unreachable\s*$/' -M 'GPU status is "Unreachable"' \
+        -m '!/GPU.*:.*\s+No\s+Data\s*$/'   -M 'GPU status is "No Data"' \
+        -m '!/GPU.*:.*\s+Unknown\s*$/'     -M 'GPU status is "Unknown"'
+}

@@ -424,21 +424,18 @@ NHC already tends to accept pre-existing values in the environment; however, sin
 To fully address all of the above, `nhc` will now look for a handful of configuration variables from the environment, all of which start with `NHC_CFG_` for proper namespacing, that act as overrides; they take precedence over settings from all other configuration sources (apart from the command line). These can be safely set in places like `/etc/bashrc` and/or `~/.bashrc` without the risk of impacting other programs.
 
 The recognized variables are:
-- `NHC_CFG_GLOBAL` - The complete path- and filename to a global
-  settings file, used instead of `/etc/sysconfig/nhc`
-- `NHC_CFG_PREFIX` - Assume `autoconf`-style layout with
-`--prefix=<value>`
-- `NHC_CFG_SYSCONFIGDIR` - Override default `SYSCONFIGDIR` value
-(OS-dependent)
-- `NHC_CFG_LIBEXECDIR` - Override default `LIBEXECDIR` value
-(OS-dependent)
-- `NHC_CFG_CONFDIR` - Override default `CONFDIR` value (`/etc/nhc`)
-- `NHC_CFG_INCDIR` - Override default `INCDIR` value
-(`$CONFDIR/scripts`)
-- `NHC_CFG_HELPERDIR` - Override default `HELPERDIR` value
-(`$LIBEXECDIR/nhc`)
-
-
+  - High-Level Settings
+    - `NHC_CFG_GLOBAL` - The complete path- and filename to a global settings file, used instead of `/etc/sysconfig/nhc`
+    - `NHC_CFG_PREFIX` - Assume `autoconf`-style layout with `--prefix=<value>`
+  - Individual Directories
+    - `NHC_CFG_CONFDIR` - Override default `CONFDIR` value (`/etc/nhc`)
+    - `NHC_CFG_INCDIR` - Override default `INCDIR` value (`$CONFDIR/scripts`)
+    - `NHC_CFG_HELPERDIR` - Override default `HELPERDIR` value (`$LIBEXECDIR/nhc`)
+    - `NHC_CFG_LIBEXECDIR` - Override default `LIBEXECDIR` value (OS-dependent)
+    - `NHC_CFG_LOGDIR` - Override default `LOGDIR` value (`$STATEDIR/log`)
+    - `NHC_CFG_RUNDIR` - Override default `RUNDIR` value (`$STATEDIR/run/nhc`)
+    - `NHC_CFG_STATEDIR` - Override default `STATEDIR` value (OS-dependent)
+    - `NHC_CFG_SYSCONFIGDIR` - Override default `SYSCONFIGDIR` value (OS-dependent)
 
 
 ### NHC Contexts

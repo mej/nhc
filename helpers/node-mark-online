@@ -171,6 +171,28 @@ elif [[ "$NHC_RM" == "lsf" ]]; then
     echo "$0:  Skipping \"$STATUS\" node $HOSTNAME ($OLD_NOTE_LEADER $OLD_NOTE)"
 
 
+### LANL Reasonfile
+elif [[ "$NHC_RM" == "reasonfile" ]]; then
+    REASONFILE=${REASONFILE:-/.nodestatus}
+
+    touch "$REASONFILE"
+    if [[ ! -s "$REASONFILE" ]]; then
+        echo "$0:  Not onlining $HOSTNAME:  No note set."
+        exit 0
+    fi
+
+    LINE=( $(< $REASONFILE) )
+    OLD_NOTE_LEADER="${LINE[0]}"
+    # If there IS an old note, but it wasn't set by NHC, do not online the node.
+    if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+        echo "$0:  Not onlining $HOSTNAME:  Offline for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+        exit 0
+    fi
+
+    echo "$0:  Marking $HOSTNAME online and clearing note"
+    : > "$REASONFILE"
+
+
 ### Sun Grid Engine (and variants)
 elif [[ "$NHC_RM" == "sge" ]]; then
     echo "$0:  No additional node marking necessary for SGE and variants."

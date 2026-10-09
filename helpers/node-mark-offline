@@ -189,9 +189,36 @@ elif [[ "$NHC_RM" == "lsf" ]]; then
             ;;
     esac
 
+
+### LANL Reasonfile
+elif [[ "$NHC_RM" == "reasonfile" ]]; then
+    REASONFILE=${REASONFILE:-/.nodestatus}
+
+    touch "$REASONFILE"
+    if [[ -s $REASONFILE ]]; then
+        LINE=( $(< $REASONFILE) )
+        OLD_NOTE_LEADER="${LINE[0]}"
+        OLD_NOTE="${LINE[*]}"
+        # If there IS an old note, but it wasn't set by NHC, do not online the node.
+        if [[ -n "$OLD_NOTE_LEADER" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
+            echo "$0:  Not offlining $HOSTNAME:  Offline for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"
+            exit 0
+        fi
+
+        if [[ "$OLD_NOTE" == "$LEADER $NOTE" ]]; then
+            echo "$0:  Not offlining $HOSTNAME:  Offline for same NHC reason ($OLD_NOTE)"
+            exit 0
+        fi
+    fi
+
+    echo "$0:  Marking $HOSTNAME offline:  $LEADER $NOTE"
+    echo "$LEADER $NOTE" > $REASONFILE
+
+
 ### Sun Grid Engine (and variants)
 elif [[ "$NHC_RM" == "sge" ]]; then
     echo "$0:  No additional node marking necessary for SGE and variants."
+
 
 ### Everything else is unsupported.
 else

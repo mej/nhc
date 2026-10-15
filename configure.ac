@@ -1,9 +1,9 @@
 m4_define([nhc_pkgname], [lbnl-nhc])
-m4_define([nhc_version], [1.5])
+m4_define([nhc_version], [1.5.1])
 m4_define([nhc_address], [nhc-devel@lbl.gov])
 
-AC_PREREQ(2.59)
-AC_INIT(defn([nhc_pkgname]), defn([nhc_version]), defn([nhc_address]))
+AC_PREREQ([2.69])
+AC_INIT([defn(nhc_pkgname)],[defn(nhc_version)],[defn(nhc_address)])
 AC_CONFIG_SRCDIR([.])
 AM_INIT_AUTOMAKE([foreign tar-pax])
 
@@ -49,9 +49,10 @@ fi
 AC_SUBST([GITRELEASE])
 AC_SUBST([NHC_VERSION])
 
-AC_OUTPUT([
+AC_CONFIG_FILES([
    Makefile
    bench/Makefile
    test/Makefile
    lbnl-nhc.spec
 ])
+AC_OUTPUT

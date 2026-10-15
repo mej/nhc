@@ -534,17 +534,28 @@ function nhc_common_get_userid() {
 
 ###############################################################################
 #
-# Fixed-/Floating-Point Math Functions
+# Math Utility Functions
 #
-### Basic min/max functions for integers
+### Random Number Generation
+# Signed/unsigned 8-bit integer
+function rand-i8()  { local -i NUM; (( NUM = (RANDOM & 0xff) - (1 << 7) )); echo ${NUM}; }
+function rand-u8()  { local -i NUM; (( NUM = (RANDOM & 0xff) )); echo ${NUM}; }
+# Signed/unsigned 16-bit integer
+function rand-i16() { local -i NUM; (( NUM = ((RANDOM & 0x01) ? (0 - RANDOM - 1) : (RANDOM)) )); echo ${NUM}; }
+function rand-u16() { local -i NUM; (( NUM = (RANDOM << 1) | (RANDOM & 0x01) )); echo ${NUM}; }
+
+### Minimum and Maximum Integer Functions
+# Find the min/max of 2 integers; store result in specified variable; if none specified, print.
 function min2() { local -i a=$1 b=$2; local V="$3"; printf ${V:+-v$V} '%d' $(( a < b ? a : b )); }
 function max2() { local -i a=$1 b=$2; local V="$3"; printf ${V:+-v$V} '%d' $(( a > b ? a : b )); }
+# Find the min/max of a list of integers and print result.
 function min()  { local -i MIN b; MIN=$1; shift; for b in "$@"; do min2 ${MIN} $b MIN; done; printf '%d' "${MIN}"; }
 function max()  { local -i MAX b; MAX=$1; shift; for b in "$@"; do max2 ${MAX} $b MAX; done; printf '%d' "${MAX}"; }
+# Find the min/max of a list of integers and store result in specified variable.
 function vmin() { printf ${1:+-v$1} '%d' $(min "${@:2}"); }
 function vmax() { printf ${1:+-v$1} '%d' $(max "${@:2}"); }
 
-### "Library" functions
+### Floating Point Arithmetic Functions
 # "Private" function that does the real work for addition, subtraction, and multiplication.
 function _fp_op() {
     local -;
@@ -558,7 +569,7 @@ function _fp_op() {
     # decimal point; i.e., the power of 10 used above
     local -i FRACLEN1=${#ASINT1}-${#INTPART1} FRACLEN2=${#ASINT2}-${#INTPART2};
     # Mathematical operation to perform
-    local OPERATOR="${2:-+}" PRECISION="$4";
+    local OPERATOR="${2:-+}" PRECISION="${4:+${4#@}}";
     # Decimal places to use and difference between them
     local -i FRACLEN=0 LENDIFF=0 SHL=0 SHR=0;
     # The result of the operation
@@ -603,7 +614,42 @@ function _fp_op() {
     dbgf 'After normalization:  (%s) %s (%s)\n' "${ASINT1}" "${OPERATOR}" "${ASINT2}";
 
     # Evaluate the operation
-    ANSWER=$(( ${ASINT1} "${OPERATOR}" ${ASINT2} ));
+    ANSWER=$(( ${ASINT1} ${OPERATOR} ${ASINT2} ));
+
+    # Try our best to detect overflow
+    if [[ "${OPERATOR}" == '*' ]]; then
+        if (( ASINT1 > 0 && ASINT2 > 0 || ASINT1 < 0 && ASINT2 < 0 )); then
+            # If both numbers are positive or both are negative, the result should be positive.
+            if (( ANSWER < 0 )); then
+                errf "Overflow/underflow detected:  (%s) * (%s) = %s" "${ASINT1}" "${ASINT2}" "${ANSWER}";
+                printf '0\n';
+                return 1;
+            fi;
+        elif (( ASINT1 > 0 && ASINT2 < 0 || ASINT1 < 0 && ASINT2 > 0 )); then
+            # If one number is positive and the other is negative, the result should be negative.
+            if (( ANSWER > 0 )); then
+                errf "Overflow/underflow detected:  (%s) * (%s) = %s" "${ASINT1}" "${ASINT2}" "${ANSWER}";
+                printf '0\n';
+                return 1;
+            fi;
+        fi;
+    elif [[ "${OPERATOR}" == '+' ]]; then
+        # For addition, if both numbers are positive but the result is negative, or if both numbers are
+        # negative but the result is positive, then we have an overflow/underflow.
+        if (( (ASINT1 > 0 && ASINT2 > 0 && ANSWER < 0) || (ASINT1 < 0 && ASINT2 < 0 && ANSWER > 0) )); then
+            errf "Overflow/underflow detected:  (%s) %s (%s) = %s" "${ASINT1}" "${OPERATOR}" "${ASINT2}" "${ANSWER}";
+            printf '0\n';
+            return 1;
+        fi;
+    elif [[ "${OPERATOR}" == '-' ]]; then
+        # For subtraction, the same logic applies as for addition, but the second number is negated,
+        # so we just check for the opposite sign on the 2nd operand.
+        if (( (ASINT1 > 0 && ASINT2 < 0 && ANSWER < 0) || (ASINT1 < 0 && ASINT2 > 0 && ANSWER > 0) )); then
+            errf "Overflow/underflow detected:  (%s) %s (%s) = %s" "${ASINT1}" "${OPERATOR}" "${ASINT2}" "${ANSWER}";
+            printf '0\n';
+            return 1;
+        fi;
+    fi;
     LENDIFF=$(( ${#ANSWER} - FRACLEN ));
     if (( LENDIFF < 0 )); then
         # If the answer is shorter than the number of decimal places we need, pad it with zeros
@@ -624,12 +670,13 @@ function _fp_op() {
             ANSWER="${ANSWER%.}";
         fi;
     fi;
-    if [[ -n "${PRECISION}" ]]; then
+    if [[ "${PRECISION}" == [0-9] ]]; then
         ### FIXME:  This may be too late to be useful....
-        printf "%${PRECISION:+.${PRECISION}}f\n" "${ANSWER}";
+        printf "%.${PRECISION}f\n" "${ANSWER}";
     else
         printf '%s\n' "${ANSWER}";
     fi;
+    return 0;
 }
 
 # Long division is implemented separately for clarity/readability since it is more complex than the other operations
@@ -637,7 +684,7 @@ function _fp_op() {
 function _fp_div() {
     local -;
     #set -x;
-    local DIVIDEND="$1" DIVISOR="$2" PRECISION="$3";
+    local DIVIDEND="$1" DIVISOR="$2" PRECISION="${3#@}";
     # `INTPART` is the integer portion only; everything after the decimal is removed
     local DIVIDEND_INTPART="${DIVIDEND%.*}" DIVISOR_INTPART="${DIVISOR%.*}";
     # `ASINT` has the decimal point removed; i.e., multiply the number by some power of 10
@@ -750,10 +797,10 @@ function _fp_div() {
     fi;
 }
 
-function fp-add() { _fp_op "$1" '+' "$2" ${3:+"$3"}; }
-function fp-sub() { _fp_op "$1" '-' "$2" ${3:+"$3"}; }
-function fp-mul() { _fp_op "$1" '*' "$2" ${3:+"$3"}; }
-function fp-div() { _fp_div "$1"    "$2" ${3:+"$3"}; }
+function fp_add() { _fp_op  "$1" '+' "$2" ${3:+"${3#@}"}; }
+function fp_sub() { _fp_op  "$1" '-' "$2" ${3:+"${3#@}"}; }
+function fp_mul() { _fp_op  "$1" '*' "$2" ${3:+"${3#@}"}; }
+function fp_div() { _fp_div "$1"     "$2" ${3:+"${3#@}"}; }
 
 function fp() {
     local A="$1" OP='' B='' PRECISION='' STMT='';
@@ -762,20 +809,21 @@ function fp() {
     STMT+="$A";
     shift;
     while (( $# > 0 )); do
-        OP="$1" B="$2" PRECISION="$3";
+        OP="$1" B="$2" PRECISION="${3#@}";
 
-        if (( PRECISION >= 1 && PRECISION <= 9 )); then
+        if [[ "$3" == '@'[0-9] ]]; then
             shift 3;
         else
             PRECISION='';
             shift 2;
         fi;
         case "$OP" in
-            '+') A=$(fp-add "$A" "$B" ${PRECISION}) ;;
-            '-') A=$(fp-sub "$A" "$B" ${PRECISION}) ;;
-            '*') A=$(fp-mul "$A" "$B" ${PRECISION}) ;;
-            '/') A=$(fp-div "$A" "$B" ${PRECISION}) ;;
-            *)   errf "${FUNCNAME[0]}:  Invalid/missing operator:  %s %s\n" "$A" "$*" ; (( RC++ )) ;;
+            '+') A=$(fp_add "$A" "$B" ${PRECISION:+"${PRECISION}"}) ;;
+            '-') A=$(fp_sub "$A" "$B" ${PRECISION:+"${PRECISION}"}) ;;
+            '*') A=$(fp_mul "$A" "$B" ${PRECISION:+"${PRECISION}"}) ;;
+            '/') A=$(fp_div "$A" "$B" ${PRECISION:+"${PRECISION}"}) ;;
+            *)   errf "${FUNCNAME[0]}:  Invalid/missing operator:  [%s] >>%s<< %s%s\n" "$A" "${OP}" "$B" "${3:+ $3 $*}";
+                 return 1 ;;
         esac;
         STMT+=" $OP $B";
     done;

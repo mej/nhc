@@ -71,7 +71,7 @@ readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
 set -f
 # Check for aliases even though NHC is not an interactive Bash instance; also,
 # activate extended globbing syntax; we *do* want to support that, especially in `mcheck()`!
-shopt -s expand_aliases extglob 2>/dev/null
+shopt -s expand_aliases extglob nullglob 2>/dev/null
 
 
 ### Output Functions

@@ -4,7 +4,37 @@
 # 15 December 2010
 #
 
-declare -agx NHC_MATCHES=( )
+declare -agx NHC_MATCHES=( ) \
+    SI_POWERS=(     [0]='' [1]='k' [2]='M' [3]='G' [4]='T' [5]='P' [6]='E' [7]='Z' [8]='Y' [9]='R' [10]='Q' ) \
+    SI_NEG_POWERS=( [0]='' [1]='m' [2]='u' [3]='n' [4]='p' [5]='f' [6]='a' [7]='z' [8]='y' [9]='r' [10]='q' )
+declare -Agx SI_ABBREV=(
+    ['k']='1'  ['M']='2'  ['G']='3'  ['T']='4'  ['P']='5'  ['E']='6'  ['Z']='7'  ['Y']='8'  ['R']='9'  ['Q']='10'
+    ['m']='-1' ['u']='-2' ['n']='-3' ['p']='-4' ['f']='-5' ['a']='-6' ['z']='-7' ['y']='-8' ['r']='-9' ['q']='-10'
+    ['1']='k'  ['2']='M'  ['3']='G'  ['4']='T'  ['5']='P'  ['6']='E'  ['7']='Z'  ['8']='Y'  ['9']='R'  ['10']='Q'
+    ['-1']='m' ['-2']='u' ['-3']='n' ['-4']='p' ['-5']='f' ['-6']='a' ['-7']='z' ['-8']='y' ['-9']='r' ['-10']='q'
+) SI_PREFIXES=(
+    ['kilo']='k'   ['k']='kilo'
+    ['mega']='M'   ['M']='mega'
+    ['giga']='G'   ['G']='giga'
+    ['tera']='T'   ['T']='tera'
+    ['peta']='P'   ['P']='peta'
+    ['exa']='E'    ['E']='exa'
+    ['zetta']='Z'  ['Z']='zetta'
+    ['yotta']='Y'  ['Y']='yotta'
+    ['ronna']='R'  ['R']='ronna'
+    ['quetta']='Q' ['Q']='quetta'
+
+    ['milli']='m'  ['m']='milli'
+    ['micro']='u'  ['u']='micro'
+    ['nano']='n'   ['n']='nano'
+    ['pico']='p'   ['p']='pico'
+    ['femto']='f'  ['f']='femto'
+    ['atto']='a'   ['a']='atto'
+    ['zepto']='z'  ['z']='zepto'
+    ['yocto']='y'  ['y']='yocto'
+    ['ronto']='r'  ['r']='ronto'
+    ['quecto']='q' ['q']='quecto'
+)
 declare -gn BREM;
 bash-5.1 && BREM='BASH_REMATCH' || BREM='NHC_MATCHES'
 
@@ -24,6 +54,10 @@ PWDATA_UIDS=( )
 PWDATA_USERS=( )
 PWDATA_SYSTEM_USERS=( )
 PWDATA_USERID_MAP=''
+
+# Integer and floating point support constants
+declare -gix MAXINT=9223372036854775807;  # $(( 0x7fffffffffffffff )) == 2^63 - 1, the maximum value of a signed 64-bit integer
+declare ZEROS="000000000000000000000000";
 
 #################### Utility functions ####################
 ### Add one or more elements to the end of the array named in $1
@@ -498,6 +532,261 @@ function nhc_common_get_userid() {
     fi
 }
 
+###############################################################################
+#
+# Fixed-/Floating-Point Math Functions
+#
+### Basic min/max functions for integers
+function min2() { local -i a=$1 b=$2; local V="$3"; printf ${V:+-v$V} '%d' $(( a < b ? a : b )); }
+function max2() { local -i a=$1 b=$2; local V="$3"; printf ${V:+-v$V} '%d' $(( a > b ? a : b )); }
+function min()  { local -i MIN b; MIN=$1; shift; for b in "$@"; do min2 ${MIN} $b MIN; done; printf '%d' "${MIN}"; }
+function max()  { local -i MAX b; MAX=$1; shift; for b in "$@"; do max2 ${MAX} $b MAX; done; printf '%d' "${MAX}"; }
+function vmin() { printf ${1:+-v$1} '%d' $(min "${@:2}"); }
+function vmax() { printf ${1:+-v$1} '%d' $(max "${@:2}"); }
+
+### "Library" functions
+# "Private" function that does the real work for addition, subtraction, and multiplication.
+function _fp_op() {
+    local -;
+    # `INTPART` is the integer portion only;
+    # everything after the decimal is removed
+    local INTPART1="${1%.*}" INTPART2="${3%.*}";
+    # `ASINT` has the decimal point removed; i.e.,
+    # multiply the number by some power of 10
+    local ASINT1="${1/.}" ASINT2="${3/.}";
+    # `FRACLEN` is the number of digits past the
+    # decimal point; i.e., the power of 10 used above
+    local -i FRACLEN1=${#ASINT1}-${#INTPART1} FRACLEN2=${#ASINT2}-${#INTPART2};
+    # Mathematical operation to perform
+    local OPERATOR="${2:-+}" PRECISION="$4";
+    # Decimal places to use and difference between them
+    local -i FRACLEN=0 LENDIFF=0 SHL=0 SHR=0;
+    # The result of the operation
+    local ANSWER='0';
+
+    dbgf 'Expression:  (%s) %s (%s) [%d]     Integer parts:  (%s) (%s)     Place-Shifted Integers:  (%s@10^-%s) (%s@10^-%s)\n' \
+           "$1" "$2" "$3" "${PRECISION}" "${INTPART1}" "${INTPART2}" "${ASINT1}" "${FRACLEN1}" "${ASINT2}" "${FRACLEN2}";
+    if [[ "${OPERATOR}" == '*' ]]; then
+        # For multiplication, we need to shift the result back by the sum of the
+        # decimal places in both numbers to preserve precision
+        FRACLEN=$(( FRACLEN1 + FRACLEN2 ));
+    else
+        # For addition and subtraction, we just need to shift the smaller number
+        # by the difference in decimal places to preserve precision
+        if (( FRACLEN1 > FRACLEN2 )); then
+            # Pad the 2nd number with zeros until the
+            # decimal place count (power of 10) matches
+            FRACLEN=${FRACLEN1};
+            LENDIFF=$(( FRACLEN1 - FRACLEN2 ));
+            ASINT2+="${ZEROS:0:${LENDIFF}}";
+        else
+            # Pad the 1st number with zeros until the
+            # decimal place count (power of 10) matches
+            FRACLEN=${FRACLEN2};
+            LENDIFF=$(( FRACLEN2 - FRACLEN1 ));
+            ASINT1+="${ZEROS:0:${LENDIFF}}";
+        fi;
+    fi;
+
+    dbgf 'Evaluating (%s) %s (%s) using %s decimal places (diff of %s, correction %s)\n' \
+           "${ASINT1}" "${OPERATOR}" "${ASINT2}" "${FRACLEN}" $(( FRACLEN1 - FRACLEN2 )) "${LENDIFF}";
+    if [[ "${ASINT1:0:1}" == '-' ]]; then
+        ASINT1="-10#${ASINT1:1}";
+    else
+        ASINT1="10#${ASINT1}";
+    fi;
+    if [[ "${ASINT2:0:1}" == '-' ]]; then
+        ASINT2="-10#${ASINT2:1}";
+    else
+        ASINT2="10#${ASINT2}";
+    fi;
+    dbgf 'After normalization:  (%s) %s (%s)\n' "${ASINT1}" "${OPERATOR}" "${ASINT2}";
+
+    # Evaluate the operation
+    ANSWER=$(( ${ASINT1} "${OPERATOR}" ${ASINT2} ));
+    LENDIFF=$(( ${#ANSWER} - FRACLEN ));
+    if (( LENDIFF < 0 )); then
+        # If the answer is shorter than the number of decimal places we need, pad it with zeros
+        ANSWER="0.${ZEROS:0: -LENDIFF}${ANSWER}";
+    else
+        # Remove trailing zeros and the decimal point if there are no fractional digits
+        ANSWER="${ANSWER:0:${LENDIFF}}.${ANSWER:${LENDIFF}:${FRACLEN}}";
+    fi;
+    if [[ "${ANSWER:0:1}" == '.' ]]; then
+        ANSWER="0${ANSWER}";
+    fi;
+    if [[ "${ANSWER: -1}" == '.' ]]; then
+        if (( FRACLEN > 0 )); then
+            ANSWER+="${ZEROS:0:${FRACLEN}}";
+        elif (( PRECISION > 0 )); then
+            ANSWER+="${ZEROS:0:${PRECISION}}";
+        else
+            ANSWER="${ANSWER%.}";
+        fi;
+    fi;
+    if [[ -n "${PRECISION}" ]]; then
+        ### FIXME:  This may be too late to be useful....
+        printf "%${PRECISION:+.${PRECISION}}f\n" "${ANSWER}";
+    else
+        printf '%s\n' "${ANSWER}";
+    fi;
+}
+
+# Long division is implemented separately for clarity/readability since it is more complex than the other operations
+# and requires two different shift quantities for the dividend and divisor to preserve precision.
+function _fp_div() {
+    local -;
+    #set -x;
+    local DIVIDEND="$1" DIVISOR="$2" PRECISION="$3";
+    # `INTPART` is the integer portion only; everything after the decimal is removed
+    local DIVIDEND_INTPART="${DIVIDEND%.*}" DIVISOR_INTPART="${DIVISOR%.*}";
+    # `ASINT` has the decimal point removed; i.e., multiply the number by some power of 10
+    local DIVIDEND_ASINT="${DIVIDEND/.}" DIVISOR_ASINT="${DIVISOR/.}";
+    # `FRACLEN` is the number of digits past the decimal point, which is the power of 10
+    # each number was multiplied by to remove the decimal point.
+    local -i DIVIDEND_FRACLEN=${#DIVIDEND_ASINT}-${#DIVIDEND_INTPART} DIVISOR_FRACLEN=${#DIVISOR_ASINT}-${#DIVISOR_INTPART};
+    local -i ALEN=0 DIV_PREC=9 DP_MOVE=0 MAXLEN=${#MAXINT}-1 NEG=0 SHL=0 SHR=0;
+    local ANSWER='0';
+
+    dbgf 'Expression:  (%s) / (%s) [%d]    Place-Shifted Integers:  (%s@10^-%s) (%s@10^-%s)\n' \
+           "${DIVIDEND}" "${DIVISOR}" "${PRECISION}" "${DIVIDEND_ASINT}" "${DIVIDEND_FRACLEN}" "${DIVISOR_ASINT}" "${DIVISOR_FRACLEN}";
+    # For division, we need to do two separate shifts:  First, the divisor must be a whole number, so we shift both numbers
+    # by enough places to make the divisor an integer, adding zeros to the dividend if necessary; then, if the dividend is
+    # not yet an integer, we need to shift it by enough places to make it an integer as well.  Only the second shift will
+    # need to be undone at the end, so we only need to "remember" the second shift amount, but we need to do both shifts
+    # before beginning the division operation.
+    if (( DIVISOR_FRACLEN >= DIVIDEND_FRACLEN )); then
+        # Making the divisor whole will also make the dividend whole but will require more digits than the dividend
+        # currently has, so pad the dividend with as many zeros as required to allow both dividend and divisor to be
+        # shifted by the same amount.  No "un-shifting" will be needed.
+        LENDIFF=$(( DIVISOR_FRACLEN - DIVIDEND_FRACLEN ));
+        if (( LENDIFF > 0 )); then
+            DIVIDEND_ASINT+="${ZEROS:0:LENDIFF}";
+            dbgf 'Divisor %s has more decimal places than dividend %s; shifting both by %d places (dividend padded with %d zeros)\n' \
+                   "${DIVISOR}" "${DIVIDEND}" "${DIVISOR_FRACLEN}" "${LENDIFF}";
+        else
+            dbgf 'Divisor %s and dividend %s have the same number of decimal places; shifting both by %d places (no padding needed)\n' \
+                   "${DIVISOR}" "${DIVIDEND}" "${DIVISOR_FRACLEN}";
+        fi;
+    else
+        # Making the divisor whole will not make the dividend whole, so we need to shift the dividend an additional amount to
+        # make it whole as well.  We will also need to remember how many additional places we shifted the dividend by so that
+        # we can shift the result back by that amount at the end.
+        LENDIFF=$(( DIVIDEND_FRACLEN - DIVISOR_FRACLEN ));
+        DP_MOVE=${LENDIFF};
+        dbgf 'Dividend %s has more decimal places than divisor %s; shifting dividend by an additional %d places (to be undone later)\n' \
+               "${DIVIDEND}" "${DIVISOR}" "${DP_MOVE}";
+    fi;
+    if (( ${PRECISION:=$((DIVIDEND_FRACLEN > DIVISOR_FRACLEN ? DIVIDEND_FRACLEN : DIVISOR_FRACLEN))} > 9 )); then
+        PRECISION=9;
+    elif (( PRECISION < 0 )); then
+        PRECISION=0;
+    fi;
+    if (( DIV_PREC > DP_MOVE && ${#DIVIDEND_ASINT} < MAXLEN )); then
+        # If we need more decimal places in the result for operational precision (as opposed to result precision) than we have
+        # already shifted the dividend by, shift the dividend by the additional amount needed to obtain the desired precision, pad
+        # it with that many zeros, and remember to shift it back at the end.  But don't exceed the maximum length of an integer.
+        (( LENDIFF = MAXLEN - ${#DIVIDEND_ASINT}, SHL = DIV_PREC - DP_MOVE, SHL = LENDIFF < SHL ? LENDIFF : SHL, DP_MOVE += SHL ));
+        DIVIDEND_ASINT+="${ZEROS:0:SHL}";
+    fi;
+
+    if [[ "${DIVIDEND_ASINT:0:1}" == '-' ]]; then
+        DIVIDEND_ASINT="-10#${DIVIDEND_ASINT:1}";
+    else
+        DIVIDEND_ASINT="10#${DIVIDEND_ASINT}";
+    fi;
+    if [[ "${DIVISOR_ASINT:0:1}" == '-' ]]; then
+        DIVISOR_ASINT="-10#${DIVISOR_ASINT:1}";
+    else
+        DIVISOR_ASINT="10#${DIVISOR_ASINT}";
+    fi;
+    dbgf 'Evaluating (%s) / (%s) with shifts of %d and %d decimal places\n' "${DIVIDEND_ASINT}" "${DIVISOR_ASINT}" "${DIVISOR_FRACLEN}" "${DP_MOVE}";
+
+    # Evaluate the operation
+    ANSWER=$(( DIVIDEND_ASINT / DIVISOR_ASINT ));
+    if [[ "${ANSWER:0:1}" == '-' ]]; then
+        ANSWER="${ANSWER:1}";
+        NEG=1;
+    else
+        NEG=0;
+    fi;
+    ALEN=${#ANSWER};
+    LENDIFF=$(( ALEN - DP_MOVE ));
+    dbgf 'Raw result of division:  %s (length %d, difference: %d)\n' "${ANSWER}" "${ALEN}" "${LENDIFF}";
+    if (( LENDIFF < 0 )); then
+        # If the answer is shorter than the number of decimal places we need, pad it with zeros
+        ANSWER="0.${ZEROS:0: -LENDIFF}${ANSWER}";
+        dbgf 'Answer too short; padding with %d zeros gives %s\n' "$((-LENDIFF))" "${ANSWER}";
+    else
+        # Remove trailing zeros and the decimal point if there are no fractional digits
+        ANSWER="${ANSWER:0:LENDIFF}.${ANSWER:LENDIFF:DP_MOVE+PRECISION}";
+        dbgf 'Inserting decimal point gives %s\n' "${ANSWER}";
+    fi;
+    if [[ "${ANSWER:0:1}" == '.' ]]; then
+        ANSWER="0${ANSWER}";
+    fi;
+    if [[ "${ANSWER: -1}" == '.' ]]; then
+        if (( DP_MOVE > 0 )); then
+            ANSWER+="${ZEROS:0:${DP_MOVE}}";
+        elif (( PRECISION > 0 )); then
+            ANSWER+="${ZEROS:0:${PRECISION}}";
+        else
+            ANSWER="${ANSWER%.}";
+        fi;
+    fi;
+    if [[ "${ANSWER}" == *'.-'* ]]; then
+        NEG=1;
+        ANSWER="${ANSWER/.-/.}";
+    fi;
+    if (( NEG )); then
+        ANSWER="-${ANSWER}";
+    fi;
+    dbgf 'Final result after correcting for shifts:  %s\n' "${ANSWER}";
+    if [[ -n "${PRECISION}" ]]; then
+        ### FIXME:  This may be too late to be useful....
+        printf "%${PRECISION:+.${PRECISION}}f\n" "${ANSWER}";
+    else
+        printf '%s\n' "${ANSWER}";
+    fi;
+}
+
+function fp-add() { _fp_op "$1" '+' "$2" ${3:+"$3"}; }
+function fp-sub() { _fp_op "$1" '-' "$2" ${3:+"$3"}; }
+function fp-mul() { _fp_op "$1" '*' "$2" ${3:+"$3"}; }
+function fp-div() { _fp_div "$1"    "$2" ${3:+"$3"}; }
+
+function fp() {
+    local A="$1" OP='' B='' PRECISION='' STMT='';
+    local -i RC=0;
+
+    STMT+="$A";
+    shift;
+    while (( $# > 0 )); do
+        OP="$1" B="$2" PRECISION="$3";
+
+        if (( PRECISION >= 1 && PRECISION <= 9 )); then
+            shift 3;
+        else
+            PRECISION='';
+            shift 2;
+        fi;
+        case "$OP" in
+            '+') A=$(fp-add "$A" "$B" ${PRECISION}) ;;
+            '-') A=$(fp-sub "$A" "$B" ${PRECISION}) ;;
+            '*') A=$(fp-mul "$A" "$B" ${PRECISION}) ;;
+            '/') A=$(fp-div "$A" "$B" ${PRECISION}) ;;
+            *)   errf "${FUNCNAME[0]}:  Invalid/missing operator:  %s %s\n" "$A" "$*" ; (( RC++ )) ;;
+        esac;
+        STMT+=" $OP $B";
+    done;
+    if [[ -t 1 ]]; then
+        printf '%s\n = %s\n' "${STMT}" "${A}";
+    else
+        printf '%s' "${A}";
+    fi;
+    return ${RC};
+}
+
 # Convert text representation of size (e.g., nnnMB or nnnG) into a number of kilobytes.
 function nhc_common_parse_size() {
     local VAL=$1
@@ -526,7 +815,7 @@ function nhc_common_unparse_size() {
     local VAR=$2
     local MULT=${3:-1024}
     local ERRVAR=$4
-    local -a SUFFIXES=( k M G T P E )
+    local -a SUFFIXES=( k M G T P E Z Y R Q )
     local i TMPERR TRUNCERR=0
 
     if [[ -z "$MULT" || "$MULT" -eq 0 ]]; then
@@ -584,7 +873,7 @@ function nhc_common_unparse_count() {
     local VAR=$2
     local MULT=${3:-1000}
     local ERRVAR=$4
-    local -a SUFFIXES=( [0]='' [1]=k M G T P E )
+    local -a SUFFIXES=( [0]='' [1]=k M G T P E Z Y R Q )
     local i TMPERR TRUNCERR=0
 
     if [[ -z "$MULT" || "$MULT" -eq 0 ]]; then

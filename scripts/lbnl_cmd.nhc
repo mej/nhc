@@ -5,7 +5,7 @@
 #
 
 ### Global Variables
-declare -ax NHC_DMESG_CMD
+declare -agx NHC_DMESG_CMD
 (( ${#NHC_DMESG_CMD[*]} > 0 )) || NHC_DMESG_CMD=( 'dmesg' )
 
 # Check `dmesg` output for matching lines.

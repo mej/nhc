@@ -9,7 +9,7 @@ NHC_AUTH_USERS="${NHC_AUTH_USERS:-root nobody}"
 
 # Find all users with jobs currently running on the node.
 function nhc_job_find_users() {
-    local IFS JOBFILE JOBUSER SQUEUE_OUT LINE PBS_XML
+    local IFS JOBFILE JOBUSER SCONTROL_OUT LINE PBS_XML
     local -a JOBLIST USERLIST
 
     dbg "Searching for job files"
@@ -56,9 +56,9 @@ function nhc_job_find_users() {
             ### Remove the redirection from the next line if needed for debugging the parsing loop above.
         done 2>/dev/null || :
     elif [[ "$NHC_RM" == "slurm" ]]; then
-	SQUEUE_OUT=$(${SQUEUE_CMD:-/usr/bin/squeue} ${SQUEUE_NODE:--w ${HOSTNAME_S}} ${SQUEUE_FMT_ARGS:---noheader -o %u})
+        SCONTROL_OUT=$(${SCONTROL_CMD:-/usr/bin/scontrol} getent | grep -F ':*:' | cut -d: -f1 | sort -u)
         IFS=$'\n'
-        USERLIST=( $SQUEUE_OUT )
+        USERLIST=( $SCONTROL_OUT )
         IFS=$' \t\n'
         dbg "Found ${#USERLIST[*]} users running jobs on ${HOSTNAME_S}"
         for JOBUSER in "${USERLIST[@]}" ; do

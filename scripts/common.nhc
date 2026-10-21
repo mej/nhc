@@ -11,8 +11,8 @@ bash-5.1 && BREM='BASH_REMATCH' || BREM='NHC_MATCHES'
 PASSWD_DATA_SRC="${PASSWD_DATA_SRC:-/etc/passwd}"
 LOGIN_DEFS_SRC="${LOGIN_DEFS_SRC:-/etc/login.defs}"
 
-RANGE_MATCH_REGEXP1='^[-a-zA-Z0-9_]+[0-9]+[-\.a-zA-Z0-9]*$'
-RANGE_MATCH_REGEXP2='^([-a-zA-Z0-9_]+)\[([0-9]+)\-([0-9]+)\]([-\.a-zA-Z0-9]*)$'
+RANGE_MATCH_REGEXP1='^[-_[:alnum:]]+[-_\.[:alnum:]]*$'
+RANGE_MATCH_REGEXP2='^([-_[:alnum:]]+)\[([[:xdigit:]]+)\-([[:xdigit:]]+)\]([-_\.[:alnum:]]*)$'
 
 PWUID_USER=( )
 PWUID_GID=( )

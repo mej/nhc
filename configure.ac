@@ -48,11 +48,14 @@ else
 fi
 AC_SUBST([GITRELEASE])
 AC_SUBST([NHC_VERSION])
+AC_SUBST([DATE], [`date -R`])
 
 AC_CONFIG_FILES([
    Makefile
    bench/Makefile
    test/Makefile
    lbnl-nhc.spec
+   debian/changelog
+   debian/control
 ])
 AC_OUTPUT

@@ -22,7 +22,9 @@ if [[ "${OSTYPE,,}" == *'linux'* ]]; then
         SELINUX=''
     fi
 
-    if [[ -n "$SELINUX" && "$SELINUX" != 'disabled' ]]; then
+    # A config file alone is not enough: policycoreutils writes SELINUX=permissive on Debian even when the
+    # kernel has SELinux disabled, and stat %C then fails for every file. Probe the capability itself.
+    if [[ -n "$SELINUX" && "$SELINUX" != 'disabled' ]] && "$STAT_CMD" -c '%C' / >&/dev/null; then
         # Only default to requesting SELinux context data on SELinux-enabled Linux hosts.
         STAT_FMT_STR_DEFAULT+=$'\f%C'
         STAT_FMT_FIELDS_DEFAULT+=( context )

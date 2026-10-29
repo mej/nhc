@@ -45,18 +45,20 @@
 ### Global variable declarations
 
 # The following line gets updated automagically
+declare -gx NHC NHC_VERSION
+NHC="$0"
 NHC_VERSION="1.5.1"
-export NHC_VERSION
 
-# Count how many times `-V` flag was specified
-typeset -i NHC_OPT_VERINFO=0 NHC_FD_OUT=1 NHC_FD_ERR=2
+# Number of times `-V` flag was specified, original stdout & stderr FDs
+declare -gix NHC_OPT_VERINFO=0 NHC_FD_OUT=1 NHC_FD_ERR=2
 
 # TSS (TimeStampSeconds) will remain empty unless NHC_TS is activated.
 # See the _out*() functions below for usage.
-TSS=''
+declare -g TSS=''
 
 # List/Hash Constants that help streamline/simplify output generation.
-readonly -a NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
+declare -agrx \
+    NHC_BOOL_SHELL=( [0]='true' [1]='false' ) \
     NHC_BOOL_CLANG=( [0]='false' [1]='true' ) \
     NHC_BOOL_YESNO=( [0]='no' [1]='yes' ) \
     NHC_BOOL_ONOFF=( [0]='off' [1]='on' ) \
@@ -533,7 +535,7 @@ function nhcmain_version_info() {
         if [[ "$NAME" == 'nhc' ]]; then
             NM="$NAME"
         else
-            NM="${BASH_SOURCE[0]##?(*/)?(-)}(${NAME})"
+            NM="${NHC##?(*/)?(-)}(${NAME})"
         fi
         if (( DETACHED_MODE == 0 )); then
             # If it's false, unset it completely so we can use conditional parameter expansion
@@ -545,7 +547,7 @@ function nhcmain_version_info() {
         printf '%20s  %s running on %s (%s) as %s:%s (real %s:%s) with %d groups\n' \
                 'Runtime Identity:' "$NM[${NHC_PID}]" "$HOSTNAME_S" "$HOSTNAME" "$EUID" "$(id -g)" "$UID" "$(id -gr)" ${#GROUPS[*]}
         printf '%20s  %s-%s for %s %s on %s - Level %d, Subs %d, Depth %d\n' \
-                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$(realpath "${BASH_SOURCE[0]}")" \
+                'Interpreter Info:' "${BASH##*/}" "$BASH_VERSION" "$SHELL" "$NHC" \
                 "$MACHTYPE" "${SHLVL}" "$BASH_SUBSHELL" $(( ${#FUNCNAME[*]} - 1 ))
         printf '%20s  Context "%s" RM "%s" CONFFILE "%s" TIMEOUT=%d  DEBUG=%s SILENT=%s VERBOSE=%s  Detached Mode %s%s%s\n' \
                 "Runtime Config:" "$NAME" "$NHC_RM" "$CONFFILE" "$TIMEOUT" "$DEBUG" "$SILENT" "$VERBOSE" \
@@ -582,6 +584,7 @@ function nhcmain_version_info() {
 function nhcmain_init_env() {
     local _DEF_SCDIR='/etc/sysconfig' _DEF_LEXDIR='/usr/libexec' _DEF_STATEDIR='/var'
     #local -a XTRADIRS=( )     ### FIXME:  Try harder? e.g., $(realpath "<other-nhc-dir>"/../{../,}lib{exec,})
+    local GUESS_PFX=''
     local -i RC=1
 
     unset CONFDIR CONFFILE INCDIR HELPERDIR LOGDIR RUNDIR STATEDIR DEBUG EVAL_LINE LOGFILE RESULTFILE SILENT
@@ -631,16 +634,7 @@ function nhcmain_init_env() {
 
     # Static variables
     PATH="/sbin:/usr/sbin:/bin:/usr/bin"
-    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-${BASH_SOURCE[0]##*/}.main}()]> '
-
-    # To guess or not to guess.  Too complicated, I think.  "Overengineered."
-    #local GUESS_PFX=$(realpath ${BASH_SOURCE[0]%/*}/.)
-    #if [[ "$GUESS_PFX" == *(*/)?(s)bin ]]; then
-    #    GUESS_PFX=$(realpath "$GUESS_PFX"/../.)
-    #fi
-    #if [[ -d "$GUESS_PFX/etc" && (-d "$GUESS_PFX/bin" || -d "$GUESS_PFX/sbin") && (-d "$GUESS_PFX/libexec" || -d "$GUESS_PFX/lib") ]]; then
-    #    export NHC_CFG_PREFIX="$GUESS_PFX"
-    #fi
+    PS4='>[<${BASHPID}.$((BASHPID==$$?0:$$)).${PPID}>{L${SHLVL}/S${BASH_SUBSHELL}/D$((${#FUNCNAME[*]}==0?1:${#FUNCNAME[*]}))/R$?}@${BASH_SOURCE[0]##*/}:${LINENO}:${FUNCNAME[0]:-${BASH_SOURCE[0]##*/}.main}()]> '
 
     # Pre-populate settings based on new global-safe variable names
     if [[ -n "${NHC_CFG_GLOBAL}" ]]; then
@@ -667,16 +661,46 @@ function nhcmain_init_env() {
             RUNDIR="${RUNDIR-$STATEDIR/run/nhc}"
         fi
     fi
+    if [[ -z "$NHC_CFG_PREFIX" ]]; then
+        GUESS_PFX="${NHC%/*}"
+        if [[ -n "$GUESS_PFX" && -d "$GUESS_PFX" ]]; then
+            if [[ "$GUESS_PFX" == *(*/)?(s)bin ]]; then
+                GUESS_PFX=$(${REALPATH} "$GUESS_PFX"/../.)
+            fi
+            if [[ -d "$GUESS_PFX/etc" && (-d "$GUESS_PFX/bin" || -d "$GUESS_PFX/sbin") && (-d "$GUESS_PFX/libexec" || -d "$GUESS_PFX/lib") ]]; then
+                export NHC_CFG_PREFIX="$GUESS_PFX"
+                unset GUESS_PFX
+            fi
+        else
+            unset GUESS_PFX
+        fi
+        if [[ -n "$GUESS_PFX" && -d "$GUESS_PFX" ]]; then
+            if [[ -f "$GUESS_PFX/nhc.conf" ]]; then
+                CONFDIR="$GUESS_PFX"
+            elif [[ -f "$GUESS_PFX/etc/nhc.conf" ]]; then
+                CONFDIR="$GUESS_PFX/etc"
+            elif [[ -f "$GUESS_PFX/etc/nhc/nhc.conf" ]]; then
+                CONFDIR="$GUESS_PFX/etc/nhc"
+            fi
+            if [[ -d "$GUESS_PFX/scripts" ]]; then
+                INCDIR="$GUESS_PFX/scripts"
+            elif [[ -d "$CONFDIR/scripts" ]]; then
+                INCDIR="$CONFDIR/scripts"
+            elif [[ -d "$GUESS_PFX/etc/nhc/scripts" ]]; then
+                INCDIR="$GUESS_PFX/etc/nhc/scripts"
+            fi
+        fi
+    fi
 
     pickdir '$SYSCONFIGDIR' "$NHC_CFG_SYSCONFIGDIR" "$SYSCONFIGDIR" "${NHC_CFG_CONFDIR:+$NHC_CFG_CONFDIR/sysconfig}" \
             "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/sysconfig}" "$_DEF_SCDIR" '/etc/sysconfig' '/etc/default'
-    if [[ -z "$SYSCONFIGDIR" ]]; then
-        if (( EUID == 0 )); then
-            SYSCONFIGDIR="/etc/nhc/sysconfig"
-        else
-            SYSCONFIGDIR="$HOME/.nhc/sysconfig"
-        fi
-    fi
+    #if [[ -z "$SYSCONFIGDIR" ]]; then
+    #    if (( EUID == 0 )); then
+    #        SYSCONFIGDIR="/etc/nhc/sysconfig"
+    #    else
+    #        SYSCONFIGDIR="$HOME/.nhc/sysconfig"
+    #    fi
+    #fi
     ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
     #if [[ ! -d "${SYSCONFIGDIR}" ]]; then
     #    mkdir -p -m 0700 "${SYSCONFIGDIR}" >&/dev/null
@@ -684,36 +708,55 @@ function nhcmain_init_env() {
 
     pickdir '$LIBEXECDIR' "$NHC_CFG_LIBEXECDIR" "$LIBEXECDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/libexec}" \
         "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/lib}" "$_DEF_LEXDIR" '/usr/libexec' '/usr/lib'
-    if [[ -z "$LIBEXECDIR" ]]; then
-        if (( EUID == 0 )); then
-            LIBEXECDIR="$NHC_CFG_PREFIX$_DEF_LEXDIR"
-        else
-            LIBEXECDIR="$HOME/.nhc/libexec"
-        fi
-    fi
+    #if [[ -z "$LIBEXECDIR" ]]; then
+    #    if (( EUID == 0 )); then
+    #        LIBEXECDIR="$NHC_CFG_PREFIX$_DEF_LEXDIR"
+    #    else
+    #        LIBEXECDIR="$HOME/.nhc/libexec"
+    #    fi
+    #fi
     ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
     #if [[ ! -d "${LIBEXECDIR}" ]]; then
     #    mkdir -p -m 0700 "${LIBEXECDIR}" >&/dev/null
     #fi
 
     pickdir '$STATEDIR' "$NHC_CFG_STATEDIR" "${NHC_CFG_PREFIX:+$NHC_CFG_PREFIX/var}" "$STATEDIR" "$_DEF_STATEDIR" '/var'
-    if [[ -z "$STATEDIR" ]]; then
-        if (( EUID == 0 )); then
-            STATEDIR="$NHC_CFG_PREFIX/var"
-        else
-            STATEDIR="$HOME/.nhc/var"
-        fi
-    fi
+    #if [[ -z "$STATEDIR" ]]; then
+    #    if (( EUID == 0 )); then
+    #        STATEDIR="$NHC_CFG_PREFIX/var"
+    #    else
+    #        STATEDIR="$HOME/.nhc/var"
+    #    fi
+    #fi
     ### FIXME:  NHC probably shouldn't be in the directory creation business (unless it's a missing mountpoint).
     #if [[ ! -d "${STATEDIR}" ]]; then
     #    mkdir -p -m 0700 "${STATEDIR}" >&/dev/null
     #fi
 
-    # Using the assorted machinations above, use similar logic to establish locations of configs, checks, and tools, respectively.
-    pickdir '$CONFDIR'   "$NHC_CFG_CONFDIR"   "$CONFDIR"   "$NHC_CFG_PREFIX/etc/nhc" "$NHC_CFG_PREFIX/etc" '/etc/nhc' \
-        || if (( EUID == 0 )); then CONFDIR='/etc/nhc'; else CONFDIR="$HOME/.nhc/etc"; fi
+    # Arguably the most crucial directories to get right since we won't get very far without `common.nhc`
+    pickdir '$CONFDIR' '{ [[ -d "$DIR" && -s "$DIR/nhc.conf" ]] }' \
+            "$NHC_CFG_CONFDIR" "$CONFDIR" "$NHC_CFG_PREFIX/etc/nhc" "$NHC_CFG_PREFIX/etc" '/etc/nhc' \
+            "${NHC%/*}/../etc/nhc" "${NHC%/*}/../etc"
+    #if [[ $? -ne 0 || -z "$CONFDIR" ]]; then
+    #    # This isn't an error situation just yet; the user may still pass values on the commad line.
+    #    if (( EUID == 0 )); then
+    #        CONFDIR='/etc/nhc'
+    #    else
+    #        CONFDIR="$HOME/.nhc/etc"
+    #    fi
+    #fi
+    pickdir '$INCDIR' '{ [[ -d "$DIR" && -s "$DIR/common.nhc" ]] }' \
+            "$NHC_CFG_INCDIR" "$INCDIR" "$CONFDIR/scripts" "${NHC%/*}/scripts"
+    #if [[ $? -ne 0 || -z "$INCDIR" ]]; then
+    #    # This isn't an error situation just yet; the user may still pass values on the commad line.
+    #    INCDIR="$CONFDIR/scripts"
+    #elif [[ -z "$CONFDIR" ]]; then
+    #    # If we found a valid `INCDIR` but not a valid `CONFDIR`, set the latter to the parent of the former.
+    #    CONFDIR="${INCDIR%/*}"
+    #fi
+
+    # The rest of the directories are less critical, but we still want to get them right.
     pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR" "$LIBEXECDIR/nhc"   || HELPERDIR="$LIBEXECDIR/nhc"
-    pickdir '$INCDIR'    "$NHC_CFG_INCDIR"    "$INCDIR"    "$CONFDIR/scripts"  || INCDIR="$CONFDIR/scripts"
     pickdir '$LOGDIR'    "$NHC_CFG_LOGDIR"    "$LOGDIR"    "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
     pickdir '$RUNDIR'    "$NHC_CFG_RUNDIR"    "$RUNDIR"    "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
 
@@ -778,6 +821,7 @@ $UNDERLINE
 -------------------------------------------------------------------------------
  -h                Show command line help (this info)
  -D <confdir>      Use config directory <confdir> (default: /etc/nhc)
+ -I <incdir>       Use include directory <incdir> (default: <confdir>/scripts)
  -V                Display NHC version (add'l -V(s) show more info) and exit
  -a                Run ALL checks; don't exit on 1st failure (NHC_CHECK_ALL=1)
  -c <conffile>     Load config from <conffile> (default: <confdir>/<name>.conf)
@@ -817,12 +861,13 @@ function nhcmain_parse_cmdline() {
     local OPTION SAVE_SCD="$SYSCONFIGDIR"
 
     OPTIND=1
-    while getopts ":D:Vac:de:fhjl:m:n:pqr:t:vx" OPTION ; do
+    while getopts ":D:I:Vac:de:fhjl:m:n:pqr:t:vx" OPTION ; do
         case "$OPTION" in
             'D') CONFDIR="$OPTARG" ; dbg "\$CONFDIR set to $CONFDIR." ;;
+            'I') INCDIR="$OPTARG" ; dbg "\$INCDIR set to $INCDIR." ;;
             'V') ((NHC_OPT_VERINFO++)) ; dbg "Now displaying version info level $NHC_OPT_VERINFO." ;;
             'a') NHC_CHECK_ALL=1 ; dbg "Force running of all checks." ;;
-            'c') CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE." ;;
+            'c') CONFFILE="$OPTARG" ; dbg "\$CONFFILE set to $CONFFILE."; [[ -z "$CONFDIR" ]] && CONFDIR="${CONFFILE%/*}" ;;
             'd') DEBUG=1 ; dbg "Debugging activated via -d option." ;;
             'e') EVAL_LINE="$OPTARG" ; dbg "Evaluating single check line:  $EVAL_LINE" ;;
             'f') NHC_CHECK_FORKED=1 ; dbg "Checks will be run in forked subprocesses." ;;
@@ -859,24 +904,34 @@ function nhcmain_parse_cmdline() {
 function nhcmain_load_sysconfig() {
     # Load global settings from system-wide location if not already loaded
     # via `NHC_CFG_GLOBAL` in `nhcmain_init_env()`.
-    if [[ -r $SYSCONFIGDIR/nhc ]]; then
-        . $SYSCONFIGDIR/nhc
-    fi
-    if [[ "$NAME" != 'nhc' && -r $SYSCONFIGDIR/$NAME ]]; then
-        . $SYSCONFIGDIR/$NAME
+    if [[ -n "$SYSCONFIGDIR" && -d "$SYSCONFIGDIR" ]]; then
+        dbg "Loading global settings from $SYSCONFIGDIR."
+        if [[ -r $SYSCONFIGDIR/nhc ]]; then
+            . $SYSCONFIGDIR/nhc
+        fi
+        if [[ "$NAME" != 'nhc' && -r $SYSCONFIGDIR/$NAME ]]; then
+            . $SYSCONFIGDIR/$NAME
+        fi
     fi
 }
 
 function nhcmain_finalize_env() {
-    # These are now "guaranteed" to be populated by `nhcmain_init_env()`/`pickdir()`,
-    # so this block is (should be?) redundant and obsolete.  Commented out for now
-    # but will be removed in the future.  Eventually.  Maybe.
-    #STATEDIR="${STATEDIR:-/var}"
-    #CONFDIR="${CONFDIR:-/etc/nhc}"
-    #INCDIR="${INCDIR:-$CONFDIR/scripts}"
-    #HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
-    #LOGDIR="${LOGDIR:-$STATEDIR/log}"
-    #RUNDIR="${RUNDIR:-$STATEDIR/run/nhc}"
+    # Ensure once and for all that these are populated.
+    if (( EUID == 0 )); then
+        STATEDIR="${STATEDIR:-/var}"
+        CONFDIR="${CONFDIR:-/etc/nhc}"
+        INCDIR="${INCDIR:-$CONFDIR/scripts}"
+        HELPERDIR="${HELPERDIR:-$LIBEXECDIR/nhc}"
+        LOGDIR="${LOGDIR:-$STATEDIR/log}"
+        RUNDIR="${RUNDIR:-$STATEDIR/run/nhc}"
+    else
+        STATEDIR="${STATEDIR:-$HOME/.nhc/var}"
+        CONFDIR="${CONFDIR:-$HOME/.nhc/etc}"
+        INCDIR="${INCDIR:-$CONFDIR/scripts}"
+        HELPERDIR="${HELPERDIR:-$HOME/.nhc/libexec}"
+        LOGDIR="${LOGDIR:-$STATEDIR/log}"
+        RUNDIR="${RUNDIR:-$STATEDIR/run/nhc}"
+    fi
 
     # The rest of these are either independent or based on a setting above.
     CONFFILE="${CONFFILE:-$CONFDIR/$NAME.conf}"
@@ -969,13 +1024,7 @@ function nhcmain_finalize_env() {
 
     # If timestamps are desired, initialize them here.
     if [[ $NHC_TS -ne 0 ]]; then
-        if (( BASHVER >= 42 )); then
-            # BASH 4.2 and higher don't require executing the `date` command.
-            # FIXME:  Remove this "if" once 4.2 becomes required.
-            printf -v NHC_TS '%(%s)T' -1
-        else
-            NHC_TS=$(date '+%s')
-        fi
+        printf -v NHC_TS '%(%s)T' -1
         ELAPSED_SECONDS=$SECONDS
         SECONDS=$((ELAPSED_SECONDS+NHC_TS))
         NHC_START_TS=$((NHC_TS-ELAPSED_SECONDS))
@@ -987,6 +1036,12 @@ function nhcmain_finalize_env() {
     if (( NHC_OPT_VERINFO > 0 )); then
         nhcmain_version_info $NHC_OPT_VERINFO
         exit 0
+    fi
+
+    # Final sanity check.  Do we want/need this?
+    if [[ ! (-d "$CONFDIR" && -d "$INCDIR") ]]; then
+        die 1 "Unable to locate crucial config/include directories; specify via -D/-I options or in environment"
+        exit 1
     fi
 
     if [[ -n "$NHC_DETACHED" ]]; then
@@ -1044,7 +1099,7 @@ function nhcmain_find_rm() {
     fi
 
     # We should never get here, but...
-    die 1 "Fatal internal error in ${FUNCNAME[0]}() [${BASH_SOURCE[0]} line $LINENO]; NHC_RM is \"$NHC_RM\""
+    die 1 "Fatal internal error in ${FUNCNAME[0]}() [$NHC line $LINENO]; NHC_RM is \"$NHC_RM\""
 }
 
 function nhcmain_redirect_output() {
@@ -1402,8 +1457,10 @@ function nhcmain_finish() {
 }
 
 ### Script guts begin here.
+declare -gx REALPATH=${REALPATH:-$(command -v realpath 2>/dev/null || command -v _builtin_realpath 2>/dev/null)}
+[[ -n "${REALPATH}" && -x "${REALPATH}" ]] && NHC=$(${REALPATH} "${BASH_SOURCE[0]}")
 declare -irx BASHVER="${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}"
-declare -a NHC_ARGV=( "$0" "$@" )
+declare -a NHC_ARGV=( "$NHC" "$@" )
 if [[ -n "$NHC_LOAD_ONLY" ]]; then
     # We're only supposed to define functions, not actually run anything.
     return 0 || exit 0
@@ -1443,7 +1500,7 @@ if [[ "$NHC_RM" == "sge" ]]; then
     if [[ "${NHC_ARGV[*]}" != *NHC_RM=sge* ]]; then
         NHC_ARGV+=( 'NHC_RM=sge' )
     fi
-    exec $0 "${NHC_ARGV[@]}"
+    exec "$NHC" "${NHC_ARGV[@]}"
 else
     nhcmain_load_scripts
     nhcmain_set_watchdog

@@ -376,7 +376,7 @@ function pickdir() {
             fi
         elif [[ "${1:0:1}" == '{' && "${1: -1:1}" == '}' ]]; then
             # Braces surround a conditional to override the default of "always true."
-            COND="$1"
+            COND="${1:1:${#1}-2}"
             shift
         else
             # If it's not any of those, it's our first path.  Start picking!
@@ -385,7 +385,11 @@ function pickdir() {
     done
 
     # Use the brace-enclosed conditional (theirs or ours) as an anonymous function body, and give it a name.
-    eval "function __cond_pick() ${COND}"
+    # Remove the closing brace along with any whitespace or semicolon(s) immediately preceding it, then append
+    # a semicolon, a single space, and a closing brace.  This is to ensure that the given conditional expression
+    # is properly terminated with a semicolon and thus can be safely used as a function body without generating
+    # syntax errors from some (older?) versions of Bash.
+    eval 'function __cond_pick() { '"${COND%%[;[:space:]]}"'; }';
 
     # Check for an empty directory list, delimited string, etc.
     if [[ $# -eq 0 ]]; then

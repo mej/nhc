@@ -761,8 +761,10 @@ function nhcmain_init_env() {
 
     # The rest of the directories are less critical, but we still want to get them right.
     pickdir '$HELPERDIR' "$NHC_CFG_HELPERDIR" "$HELPERDIR" "$LIBEXECDIR/nhc"   || HELPERDIR="$LIBEXECDIR/nhc"
-    pickdir '$LOGDIR'    "$NHC_CFG_LOGDIR"    "$LOGDIR"    "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
-    pickdir '$RUNDIR'    "$NHC_CFG_RUNDIR"    "$RUNDIR"    "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
+
+    # These two directories need to be *writable* too, so supply that as a conditional.
+    pickdir '$LOGDIR' '{[[ -d "$DIR" && -w "$DIR" ]]}' "$NHC_CFG_LOGDIR" "$LOGDIR" "$STATEDIR/log"     || LOGDIR="$STATEDIR/log"
+    pickdir '$RUNDIR' '{[[ -d "$DIR" && -w "$DIR" ]]}' "$NHC_CFG_RUNDIR" "$RUNDIR" "$STATEDIR/run/nhc" || RUNDIR="$STATEDIR/run/nhc"
 
     # Figure out `HOSTNAME` and `HOSTNAME_S` (long and short hostnames, respectively)
     if [[ -n "$NHC_HOST" ]]; then
@@ -1131,9 +1133,20 @@ function nhcmain_check_concurrency() {
         vlog "${FUNCNAME[0]}():  Skipping concurrency check (\"$DIR\" / \"$CONTEXT\")"
         return 0
     elif [[ ! (-r "$DIR" && -w "$DIR" && -x "$DIR") ]]; then
-        warn "Concurrency check disabled; unable to use PID file directory "$DIR" ($RUNDIR): "$'\n'"$(ls -Flaid "$DIR" "$RUNDIR")"
-        unset RUNDIR
-        return 1
+        if [[ "$DIR" == "$RUNDIR" ]]; then
+            warnf 'Concurrency check disabled; unable to use PID file directory "%s" -- %s\n' \
+                "$DIR" "$(ls -Flaid "$DIR" 2>&1)"
+            unset RUNDIR
+            return 1
+        elif [[ -r "$RUNDIR" && -w "$RUNDIR" && -x "$RUNDIR" ]]; then
+            DIR="$RUNDIR"
+            PIDFILE="$DIR/NHC.$CONTEXT.pid"
+        else
+            warnf 'Concurrency check disabled; unable to use PID file directories "%s" or "%s" -- %s\n' \
+                "$DIR" "$RUNDIR" "$(ls -Flaid "$DIR" "$RUNDIR" 2>&1)"
+            unset RUNDIR
+            return 1
+        fi
     fi
 
     # First, does the PID file even exist?  If not, we can skip all the checking

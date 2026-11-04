@@ -27,8 +27,8 @@ NHC_VERSION="${VERSION}"
 
 dnl# Make sure the version setting in the `nhc` script in Git matches the above
 dnl# canonical (i.e., short) version, not the `GITRELEASE` below.
-if ! grep -q '^NHC_VERSION="'${VERSION}'"$' nhc >/dev/null 2>&1 ; then \
-    sed -i -e 's,^NHC_VERSION=".*$,NHC_VERSION="'${VERSION}'",' nhc
+if ! grep -q '^NHC_VERSION="'${VERSION}'"$' ${srcdir}/nhc >/dev/null 2>&1 ; then \
+    sed -i -e 's,^NHC_VERSION=".*$,NHC_VERSION="'${VERSION}'",' ${srcdir}/nhc
 fi
 
 dnl# The following uses m4's esyscmd macro so that the command below runs at

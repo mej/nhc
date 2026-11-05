@@ -3,7 +3,7 @@ m4_define([nhc_version], [1.5.1])
 m4_define([nhc_address], [nhc-devel@lbl.gov])
 
 AC_PREREQ(2.59)
-AC_INIT(defn([nhc_pkgname]), defn([nhc_version]), defn([nhc_address]))
+AC_INIT(nhc_pkgname,nhc_version,nhc_address)
 AC_CONFIG_SRCDIR([.])
 AM_INIT_AUTOMAKE([foreign tar-pax])
 

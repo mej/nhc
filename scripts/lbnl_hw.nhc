@@ -219,9 +219,7 @@ function nhc_hw_kmod_gather_data() {
     local -a FIELD
     local -i RC
 
-    if [[ -n "$1" ]]; then
-        KMOD_FILE="$1"
-    fi
+    KMOD_FILE="${1:-${KMOD_FILE:-${KMOD_FILE_DEFAULT:=/proc/modules}}}"
     if [[ -e "${KMOD_FILE}" && -r "${KMOD_FILE}" ]]; then
         MODDATA=$(< "$KMOD_FILE")
         RC=$?

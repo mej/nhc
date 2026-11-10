@@ -102,6 +102,13 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
                 echo "$0:  Not onlining $HOSTNAME:  No note set."
                 exit 0
             fi
+            # With nextstate=DOWN the node will get marked offline when slurmd starts.
+            # This allows NHC to clear the reboot if NHC passes and the reboot completed
+            if [[ "$OLD_NOTE_LEADER" == "Reboot" && "$OLD_NOTE" == "ASAP"* && "$OLD_NOTE" == *"reboot complete"* ]]; then
+                echo "$0:  Marking $HOSTNAME online and clearing note ($OLD_NOTE_LEADER $OLD_NOTE)"
+                exec $SLURM_SCONTROL $SLURM_SC_ONLINE_ARGS NodeName=$HOSTNAME
+                return 0
+            fi
             # If there IS an old note, but it wasn't set by NHC, do not online the node.
             if [[ "$OLD_NOTE_LEADER" != "none" && "$OLD_NOTE_LEADER" != "$LEADER" ]]; then
                 echo "$0:  Not onlining $HOSTNAME:  Down for non-NHC reason ($OLD_NOTE_LEADER $OLD_NOTE)"

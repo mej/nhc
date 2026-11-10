@@ -439,9 +439,7 @@ function pickdir() {
 # Multi-function Bash version check/comparison and numeric conversion
 function check_bash_version() {
     local -i BLD EXACT=0 MAJ MAX=0 MIN NUM=0 PL RC=0 TRG=0 VAL=0 VER=0;
-    local PAT='' REL='' TARGET='';
-    local -n VAR='VAL';
-    local -;
+    local PAT='' REL='' TARGET='' VAR='';
 
     # Start by getting the version info from the running Bash and save it for later.
     MAJ="${BASH_VERSINFO[0]}";
@@ -459,14 +457,16 @@ function check_bash_version() {
             'm') MAX=1 ;;
             'n') NUM=1 ;;
             'p') PAT="${OPTARG}" ;;
-            'v') local -n VAR="${OPTARG}" ;;
-            'x') set -x ;;
+            'v') VAR="${OPTARG}" ;;
+            'x') if [[ $- != *x* ]]; then set -x ; trap 'set +x' RETURN ; fi ;;
             ':') err "${FUNCNAME[0]}():  Option -${OPTARG} requires an argument." ; ${FUNCNAME[0]} -h ; return 1 ;;
             '?') err "${FUNCNAME[0]}():  Invalid option:  -${OPTARG}" ; ${FUNCNAME[0]} -h ; return 1 ;;
         esac;
     done;
     shift $((OPTIND-1));
-    VAR="${VER}";
+    if [[ -n "$VAR" ]]; then
+        eval "${VAR}"'=${VER}';
+    fi;
 
     if (( $# == 1 )); then
         TARGET="${1//[^.0-9]}";
@@ -486,7 +486,7 @@ function check_bash_version() {
             ${FUNCNAME[0]} -h;
             return 1;
         fi;
-    elif [[ -z "${PAT}" && "${!VAR}" == 'VAL' && ${NUM} -eq 0 ]]; then
+    elif [[ -z "${PAT}" && -z "${VAR}" && ${NUM} -eq 0 ]]; then
         err "${FUNCNAME[0]}():  Expected exactly one non-option argument (version string).";
         ${FUNCNAME[0]} -h;
         return 1;
@@ -495,8 +495,8 @@ function check_bash_version() {
     if (( NUM )); then
         if (( TRG )); then
             printf '%s\n' "${TRG}";
-        elif [[ "${!VAR}" == 'VAL' ]]; then
-            printf '%s\n' "${VAR}";
+        elif [[ -n "${VAR}" ]]; then
+            printf '%s\n' "${!VAR}";
         fi;
         return 0;
     elif [[ -n "${PAT}" ]]; then

@@ -17,10 +17,10 @@
 %:
 	dh $@
 
-override_dh_auto_test:
-	# resolves issue with /bin/sh linking to dash on Debian
-	sed -i "s|/bin/sh -c 'cat <<<|/bin/bash -c 'cat <<<|" test/test_lbnl_cmd.nhc
-	dh_auto_test
+#override_dh_auto_test:
+#	# resolves issue with /bin/sh linking to dash on Debian
+#	sed -i "s|/bin/sh -c 'cat <<<|/bin/bash -c 'cat <<<|" test/test_lbnl_cmd.nhc
+#	dh_auto_test
 
 # dh_make generated override targets.
 # This is an example for Cmake (see <https://bugs.debian.org/641051>).

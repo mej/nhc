@@ -137,6 +137,17 @@ elif [[ "$NHC_RM" == "slurm" ]]; then
             exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
             ;;
         down*)
+            # Mark a node offline with NHC reason if NHC fails after a successful reboot
+            if [[ "$OLD_NOTE_LEADER" == "Reboot" && "$OLD_NOTE" == "ASAP"* && "$OLD_NOTE" == *"reboot complete"* ]]; then
+                exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
+                return 0
+            fi
+            # This handles the state when "Temporarily offlining" NHC message is set
+            # ie: 'NHC: Temporarily offlining <node> after reboot until NHC can online it : reboot complete'
+            if [[ "$OLD_NOTE_LEADER" == "$LEADER" && "$OLD_NOTE" == *"reboot complete"* ]]; then
+                exec $SLURM_SCONTROL $SLURM_SC_OFFLINE_ARGS NodeName=$HOSTNAME Reason="$LEADER $NOTE"
+                return 0
+            fi
             echo "$0:  Not changing state of down node $HOSTNAME."
             ;;
         *)  echo "$0:  Not sure how to handle node state \"$STATUS\" on $HOSTNAME" ;;

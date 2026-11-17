@@ -1,0 +1,15 @@
+name: Run tests
+on: [push, pull_request]
+
+jobs:
+  make_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: run autogen
+        run: ./autogen.sh
+      - name: run configure
+        run: ./configure
+      - name: run tests
+        run: make test

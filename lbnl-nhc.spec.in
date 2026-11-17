@@ -39,6 +39,15 @@
 %{!?nhc_script_dir:%global nhc_script_dir %{_sysconfdir}/%{sname}/scripts}
 %{!?nhc_helper_dir:%global nhc_helper_dir %{_libexecdir}/%{sname}}
 
+### Macro to conditionally include %config(noreplace)
+# If --define 'replace_scripts 1' is used, scripts and sbin files won't have %config(noreplace)
+%{!?replace_scripts:%global replace_scripts 0}
+%if %{replace_scripts}
+%global nhc_config %{nil}
+%else
+%global nhc_config %config(noreplace)
+%endif
+
 ### Build conditional(s)
 # Should NHC be accessible for normal users' use?
 %bcond_without useraccess
@@ -120,8 +129,8 @@ test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 %ghost %dir %{_sysconfdir}/%{sname}/sysconfig/
 %config(noreplace) %{_sysconfdir}/%{sname}/%{sname}.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/%{sname}
-%config(noreplace) %{nhc_script_dir}/*.nhc
-%config(noreplace) %{nhc_helper_dir}/*
-%config(noreplace) %{_sbindir}/%{sname}
-%config(noreplace) %{_sbindir}/%{sname}-genconf
-%config(noreplace) %{_sbindir}/%{sname}-wrapper
+%nhc_config %{nhc_script_dir}/*.nhc
+%nhc_config %{nhc_helper_dir}/*
+%nhc_config %{_sbindir}/%{sname}
+%nhc_config %{_sbindir}/%{sname}-genconf
+%nhc_config %{_sbindir}/%{sname}-wrapper

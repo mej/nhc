@@ -36,15 +36,18 @@ dnl# "autoconf" time, when we're sure to have a Git repo, rather than configure
 dnl# time.  We have to change the m4 quote characters due to the regex we use.
 AC_MSG_CHECKING([for Git version description])
 changequote(<<, >>)dnl
-GITRELEASE=m4_esyscmd(<<git describe --tags HEAD | grep -Fq "^>>nhc_version<<" >&/dev/null && echo -n 1. || echo -n 0. ; git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 | cut -d- -f 2- | tr '-' '.'>>)
+GITRELEASE=m4_esyscmd(<<git describe --tags HEAD | grep -q '^>>nhc_version<<-\|$' >&/dev/null && echo -n 1. || echo -n 0. ; git describe --abbrev=4 --always --tags --long --match '[[:digit:]][[:alnum:].]*[[:alnum:]]' --dirty=.1 | cut -d- -f 2- | tr '-' '.'>>)
 changequote([, ])dnl
 
-if test -n "$GITRELEASE" ; then
+if test -z "$GITRELEASE" ; then
+    GITRELEASE=0.g0
+    AC_MSG_RESULT([unknown, using default $GITRELEASE])
+elif echo "$GITRELEASE" | grep -q '^1\.0\.g....$' ; then
+    GITRELEASE=1
+    AC_MSG_RESULT([$GITRELEASE])
+else
     AC_MSG_RESULT([$GITRELEASE])
     NHC_VERSION="${NHC_VERSION}-${GITRELEASE}"
-else
-    GITRELEASE=0.g0000
-    AC_MSG_RESULT([unknown, using default $GITRELEASE])
 fi
 AC_SUBST([GITRELEASE])
 AC_SUBST([NHC_VERSION])

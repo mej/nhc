@@ -56,7 +56,7 @@ function nhc_job_find_users() {
             ### Remove the redirection from the next line if needed for debugging the parsing loop above.
         done 2>/dev/null || :
     elif [[ "$NHC_RM" == "slurm" ]]; then
-        SCONTROL_OUT=$(${SCONTROL_CMD:-/usr/bin/scontrol} getent | grep -F ':*:' | cut -d: -f1 | sort -u)
+        SCONTROL_OUT=$(${SCONTROL_CMD:-/usr/bin/scontrol} getent | grep -A1 '^User:' | grep -F ':*:' | cut -d: -f1 | sort -u)
         IFS=$'\n'
         USERLIST=( $SCONTROL_OUT )
         IFS=$' \t\n'

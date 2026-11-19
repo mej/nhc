@@ -85,7 +85,12 @@ project home page at https://github.com/mej/nhc
 %install
 umask %{?with_useraccess:0022}%{!?with_useraccess:0077}
 %{__make} install DESTDIR=$RPM_BUILD_ROOT %{?mflags_install}
+install -d -m 0755 $RPM_BUILD_ROOT%{_tmpfilesdir}
+echo "d %{_rundir}/%{sname} 0755 root root -" > $RPM_BUILD_ROOT%{_tmpfilesdir}/%{sname}.conf
 
+
+%post
+%tmpfiles_create_package %{sname} %{_tmpfilesdir}/%{sname}.conf
 
 %check
 %{__make} test
@@ -112,9 +117,10 @@ test "$RPM_BUILD_ROOT" != "/" && %{__rm} -rf $RPM_BUILD_ROOT
 %files
 %defattr(-, root, root)
 %doc COPYING ChangeLog LICENSE nhc.conf contrib/nhc.cron
+%{_tmpfilesdir}/%{sname}.conf
 %dir %{_sysconfdir}/%{sname}/
 %dir %{_localstatedir}/log/
-%dir %{_localstatedir}/run/%{sname}/
+%ghost %dir %{_rundir}/%{sname}/
 %dir %{nhc_script_dir}/
 %dir %{nhc_helper_dir}/
 %ghost %dir %{_sysconfdir}/%{sname}/sysconfig/

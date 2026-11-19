@@ -1,5 +1,23 @@
 # LBNL Node Health Check Release Notes
 
+## Version 1.5.1
+This is a "patch" release to correct some problems found in version 1.5.
+
+### New Features
+- Added `-I` option to set `INCDIR` (the `scripts` directory location, like `/etc/nhc/scripts`) at runtime (included in fix; see commit 00000256)
+
+### Fixes/Improvements
+- Added Debian packaging (#177 by @edingc)
+- Removed features of Bash > 4.2 (#186 from @kcgthb)
+- Fixed Slurm reboot logic for 26.05 (#174 by @treydock)
+- Fixed kernel module data source (#187 from @kcgthb)
+- Fixed running of `check_cmd_dmesg()` unit tests under `/bin/sh` which may not be Bash (#184 by @jmpmachado)
+- Fixed directory selection logic for `LOGDIR` and `RUNDIR` to ensure they are writable (@mej)
+- Fixed problems with validation of auto-detected directory paths; missing/empty `CONFDIR` and `INCDIR` are now fatal (@mej)
+- Fixed range expression syntax for match strings to not require hostnames to end in a number (#180 from @novosirj)
+- Fixed typo in config variable declaration that broke `check_cmd_dmesg()` (@mej)
+
+
 ## Version 1.5
 Significant development time and effort has gone into this new release.  And the truth is, not everything was ready to go out the door by the time the deadline rolled around for 1.5 to finally make it out the door.  So development on 1.5.1 has already started.  Additionally, there will undoubtedly be things I've missed that get caught during the first few days after a new release.  I hope to do a better job of making regular releases and preventing myself from getting too caught up in the notion of getting it "finished" before releasing it.  As we all know, there's no such thing in the software world.
 
